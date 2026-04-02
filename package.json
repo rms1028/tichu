@@ -1,0 +1,16 @@
+{
+  "name": "tichu",
+  "private": true,
+  "workspaces": [
+    "packages/shared",
+    "packages/server",
+    "packages/app"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w packages/shared",
+    "test:shared": "npm test -w packages/shared",
+    "dev:server": "npm run dev -w packages/server",
+    "test:server": "npm test -w packages/server",
+    "test": "npm test --workspaces --if-present"
+  }
+}

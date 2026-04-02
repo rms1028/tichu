@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Tichu",
+    "slug": "tichu",
+    "version": "1.0.0",
+    "orientation": "landscape",
+    "icon": "./assets/icon.png",
+    "scheme": "tichu",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#1a472a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tichu.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1a472a"
+      },
+      "package": "com.tichu.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/icon.png",
+      "name": "TICHU — Ultimate Card Battle",
+      "shortName": "TICHU",
+      "description": "티츄 온라인 멀티플레이어 카드 게임. 친구들과 함께 전략적인 카드 배틀을 즐겨보세요!",
+      "lang": "ko",
+      "themeColor": "#1a472a",
+      "backgroundColor": "#1a472a"
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}

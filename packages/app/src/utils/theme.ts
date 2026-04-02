@@ -1,0 +1,28 @@
+export const COLORS = {
+  bg: '#1a472a',
+  bgDark: '#0f2d1a',
+  bgLight: '#2d6b3f',
+  surface: '#1e5432',
+  surfaceLight: '#2a7a4a',
+  card: '#f5f0e8',
+  cardSelected: '#ffe066',
+  cardBack: '#c0392b',
+  text: '#ffffff',
+  textDim: '#a0c4a0',
+  textDark: '#2c3e50',
+  accent: '#f39c12',
+  danger: '#e74c3c',
+  success: '#2ecc71',
+  team1: '#3498db',
+  team2: '#e67e22',
+  bomb: '#9b59b6',
+  tichu: '#e74c3c',
+};
+
+export const FONT = {
+  sm: 12,
+  md: 14,
+  lg: 18,
+  xl: 24,
+  xxl: 32,
+};

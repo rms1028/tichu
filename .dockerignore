@@ -1,0 +1,7 @@
+node_modules
+packages/app
+packages/shared/dist
+packages/server/dist
+*.md
+.git
+.env*
