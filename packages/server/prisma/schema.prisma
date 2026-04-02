@@ -37,6 +37,7 @@ model User {
   friendsA         Friendship[]     @relation("FriendA")
   friendsB         Friendship[]     @relation("FriendB")
   gameResults      GameResult[]
+  seasonRankings   SeasonRanking[]
 
   @@index([nickname])
 }
@@ -85,4 +86,36 @@ model GameResult {
   createdAt     DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+// ── 시즌 ────────────────────────────────────────────────────
+
+model Season {
+  id        String   @id @default(cuid())
+  number    Int      @unique
+  name      String                       // "시즌 1", "봄 시즌" 등
+  startDate DateTime
+  endDate   DateTime
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  rankings  SeasonRanking[]
+}
+
+model SeasonRanking {
+  id           String   @id @default(cuid())
+  seasonId     String
+  season       Season   @relation(fields: [seasonId], references: [id])
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  ratingPoints Int      @default(1000)   // 시즌 레이팅
+  wins         Int      @default(0)
+  losses       Int      @default(0)
+  gamesPlayed  Int      @default(0)
+  peakRating   Int      @default(1000)
+  rewardClaimed Boolean @default(false)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([seasonId, userId])
+  @@index([seasonId, ratingPoints])
 }

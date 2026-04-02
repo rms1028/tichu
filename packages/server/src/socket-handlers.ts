@@ -33,6 +33,10 @@ import {
   dbSendFriendRequest, dbAcceptFriendRequest, dbRejectFriendRequest,
   dbRemoveFriend, dbGetFriendIds, dbGetPendingRequests,
 } from './db.js';
+import {
+  getSeasonInfo, getSeasonLeaderboard, updateSeasonRating,
+  claimSeasonReward, getOrCreateCurrentSeason,
+} from './season.js';
 
 // ── 방 관리 ──────────────────────────────────────────────────
 
@@ -203,6 +207,44 @@ export function registerSocketHandlers(io: Server): void {
       } catch (err) {
         console.error('[get_leaderboard] error:', err);
       }
+    });
+
+    // ── 시즌 ──────────────────────────────────────────────
+    socket.on('get_season_info', async () => {
+      try {
+        if (!dbUserId) return;
+        const info = await getSeasonInfo(dbUserId);
+        socket.emit('season_info', info);
+      } catch (err) { console.error('[get_season_info]', err); }
+    });
+
+    socket.on('get_season_leaderboard', async () => {
+      try {
+        const season = await getOrCreateCurrentSeason();
+        const lb = await getSeasonLeaderboard(season.id);
+        socket.emit('season_leaderboard', {
+          seasonName: season.name,
+          entries: lb.map(r => ({
+            userId: r.userId,
+            nickname: r.user.nickname,
+            ratingPoints: r.ratingPoints,
+            wins: r.wins,
+            gamesPlayed: r.gamesPlayed,
+          })),
+        });
+      } catch (err) { console.error('[get_season_leaderboard]', err); }
+    });
+
+    socket.on('claim_season_reward', async (data: { seasonId: string }) => {
+      try {
+        if (!dbUserId) return;
+        const result = await claimSeasonReward(dbUserId, data.seasonId);
+        if (result) {
+          socket.emit('season_reward_claimed', result);
+        } else {
+          socket.emit('season_reward_error', { error: 'already_claimed_or_not_found' });
+        }
+      } catch (err) { console.error('[claim_season_reward]', err); }
     });
 
     // ── join_room ──────────────────────────────────────────

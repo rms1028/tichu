@@ -217,9 +217,21 @@ export function useSocket() {
       console.warn('Login error:', data.error);
     });
 
-    // ── 랭킹 ──────────────────────────────────────────────
+    // ── 랭킹 + 시즌 ──────────────────────────────────────
     socket.on('leaderboard', (data: { entries: any[] }) => {
       useGameStore.setState({ leaderboard: data.entries });
+    });
+
+    socket.on('season_info', (data: any) => {
+      useGameStore.setState({ seasonInfo: data });
+    });
+
+    socket.on('season_leaderboard', (data: any) => {
+      useGameStore.setState({ seasonLeaderboard: data });
+    });
+
+    socket.on('season_reward_claimed', (data: any) => {
+      useGameStore.setState({ seasonRewardClaimed: data });
     });
 
     // ── 친구 시스템 ──────────────────────────────────────────
@@ -341,6 +353,18 @@ export function useSocket() {
     socketRef.current?.emit('get_leaderboard');
   }, []);
 
+  const getSeasonInfo = useCallback(() => {
+    socketRef.current?.emit('get_season_info');
+  }, []);
+
+  const getSeasonLeaderboard = useCallback(() => {
+    socketRef.current?.emit('get_season_leaderboard');
+  }, []);
+
+  const claimSeasonReward = useCallback((seasonId: string) => {
+    socketRef.current?.emit('claim_season_reward', { seasonId });
+  }, []);
+
   const friendInit = useCallback((playerId: string, nickname: string) => {
     socketRef.current?.emit('friend_init', { playerId, nickname });
   }, []);
@@ -397,6 +421,9 @@ export function useSocket() {
     guestLogin,
     firebaseLogin,
     getLeaderboard,
+    getSeasonInfo,
+    getSeasonLeaderboard,
+    claimSeasonReward,
     friendInit,
     friendSearch,
     friendRequest,

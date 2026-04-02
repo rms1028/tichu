@@ -80,6 +80,14 @@ export interface GameState {
   friendInvite: { fromNickname: string; roomId: string } | null;
   dbUserId: string | null;
   leaderboard: { id: string; nickname: string; xp: number; wins: number; totalGames: number }[];
+  seasonInfo: {
+    seasonNumber: number; seasonName: string; remainingDays: number;
+    myRating: number; myPeakRating: number; myRank: number;
+    myWins: number; myLosses: number; myGamesPlayed: number;
+    tierName: string; tierIcon: string; tierColor: string;
+  } | null;
+  seasonLeaderboard: { seasonName: string; entries: { userId: string; nickname: string; ratingPoints: number; wins: number; gamesPlayed: number }[] } | null;
+  seasonRewardClaimed: { tier: string; coins: number; xp: number } | null;
 
   // 액션
   setConnection: (connected: boolean) => void;
@@ -156,6 +164,14 @@ const INITIAL_STATE = {
   friendInvite: null as { fromNickname: string; roomId: string } | null,
   dbUserId: null as string | null,
   leaderboard: [] as { id: string; nickname: string; xp: number; wins: number; totalGames: number }[],
+  seasonInfo: null as {
+    seasonNumber: number; seasonName: string; remainingDays: number;
+    myRating: number; myPeakRating: number; myRank: number;
+    myWins: number; myLosses: number; myGamesPlayed: number;
+    tierName: string; tierIcon: string; tierColor: string;
+  } | null,
+  seasonLeaderboard: null as { seasonName: string; entries: { userId: string; nickname: string; ratingPoints: number; wins: number; gamesPlayed: number }[] } | null,
+  seasonRewardClaimed: null as { tier: string; coins: number; xp: number } | null,
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
