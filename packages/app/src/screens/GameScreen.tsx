@@ -209,6 +209,18 @@ export function GameScreen({
     );
   }
 
+  // 딜링 중 (빠른 전환 시 버벅임 방지)
+  if (phase === 'DEALING_8' || phase === 'DEALING_6') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.center}>
+          <Text style={styles.waitTitle}>{'🃏'}</Text>
+          <Text style={styles.waitText}>{phase === 'DEALING_8' ? '카드 배분 중...' : '추가 카드 배분 중...'}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   // 게임 종료
   if (gameOver) {
     const isTeam1Winner = gameOver.winner === 'team1';
