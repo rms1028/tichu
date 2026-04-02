@@ -449,6 +449,10 @@ export function registerSocketHandlers(io: Server): void {
       broadcastEvents(io, room, result.events);
 
       if (allExchangesComplete(room)) {
+        if ((room as any)._exchangeTimer) {
+          clearTimeout((room as any)._exchangeTimer);
+          delete (room as any)._exchangeTimer;
+        }
         const events = finishExchange(room);
         broadcastEvents(io, room, events);
         startTurnTimer(io, room);
@@ -694,6 +698,11 @@ export function registerSocketHandlers(io: Server): void {
     });
 
     function getRoom(): GameRoom | null {
+      // 매칭 시스템에서 설정된 데이터 동기화
+      if (!playerRoomId && (socket as any)._playerRoomId) {
+        playerRoomId = (socket as any)._playerRoomId;
+        playerSeat = (socket as any)._playerSeat;
+      }
       if (!playerRoomId) return null;
       return rooms.get(playerRoomId) ?? null;
     }
@@ -757,7 +766,12 @@ function formAndStartMatch(io: Server): void {
     };
 
     const s = io.sockets.sockets.get(entry.socketId);
-    if (s) s.join(roomId);
+    if (s) {
+      s.join(roomId);
+      // 소켓 핸들러 클로저에서 접근 가능하도록 소켓 데이터에 저장
+      (s as any)._playerRoomId = roomId;
+      (s as any)._playerSeat = seat;
+    }
 
     // 플레이어 목록 구성
     const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};

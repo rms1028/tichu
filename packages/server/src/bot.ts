@@ -160,20 +160,32 @@ export function decideBotExchange(room: GameRoom, seat: number): { left: Card; p
   const partner = getPartnerSeat(seat);
   const partnerTichu = room.tichuDeclarations[partner] !== null;
 
-  // 팀원에게 줄 카드: 가장 강한 카드 (용 > 봉황 > A > K)
-  const sorted = hand.sort((a, b) => cardSortValue(b) - cardSortValue(a));
-  const forPartner = partnerTichu ? sorted[0]! : pickBestForPartner(hand);
+  // 팀원에게: 가장 강한 카드 (용 > 봉황 > A > K)
+  const forPartner = partnerTichu ? pickStrongest(hand) : pickBestForPartner(hand);
 
-  // 상대에게 줄 카드: 가장 약한 카드
+  // 상대에게: 점수 없고 약한 카드 (2~4 우선, 점수 카드(5,10,K) 절대 주지 않음)
   const remaining1 = hand.filter(c => c !== forPartner);
-  const weakSorted = remaining1.sort((a, b) => cardSortValue(a) - cardSortValue(b));
-  const forLeft = weakSorted[0]!;
+  const forEnemies = remaining1
+    .filter(c => isNormalCard(c))
+    .sort((a, b) => {
+      // 점수 카드는 뒤로 (주지 않기)
+      const aScore = isNormalCard(a) ? (a.rank === '5' ? 5 : a.rank === '10' || a.rank === 'K' ? 10 : 0) : 0;
+      const bScore = isNormalCard(b) ? (b.rank === '5' ? 5 : b.rank === '10' || b.rank === 'K' ? 10 : 0) : 0;
+      if (aScore !== bScore) return aScore - bScore; // 점수 없는 것 먼저
+      return cardSortValue(a) - cardSortValue(b); // 약한 것 먼저
+    });
+  const forLeft = forEnemies[0] ?? remaining1[0]!;
   const remaining2 = remaining1.filter(c => c !== forLeft);
-  const forRight = remaining2.sort((a, b) => cardSortValue(a) - cardSortValue(b))[0]!;
+  const forEnemies2 = remaining2
+    .filter(c => isNormalCard(c))
+    .sort((a, b) => cardSortValue(a) - cardSortValue(b));
+  const forRight = forEnemies2[0] ?? remaining2[0]!;
 
-  // seat 기준으로 left/partner/right 매핑
-  // left = (seat+1)%4, partner = (seat+2)%4, right = (seat+3)%4
   return { left: forLeft, partner: forPartner, right: forRight };
+}
+
+function pickStrongest(hand: Card[]): Card {
+  return hand.sort((a, b) => cardSortValue(b) - cardSortValue(a))[0]!;
 }
 
 // ── 리드 전략 ───────────────────────────────────────────────
@@ -184,48 +196,48 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
   const partnerTichu = room.tichuDeclarations[partner] !== null;
   const myTichu = room.tichuDeclarations[seat] !== null;
 
-  // 마지막 1~2장: 가장 강한 카드로 확실히 마무리
-  if (hand.length <= 2) {
+  // 마지막 1장: 그냥 내기
+  if (hand.length === 1) return plays[0]!;
+
+  // 마지막 2장: 강한 카드로 확실히 마무리
+  if (hand.length <= 3) {
+    // 멀티카드 조합으로 한번에 끝낼 수 있으면 최우선
+    const finisher = plays.find(p => p.length === hand.length);
+    if (finisher) return finisher;
     return plays.sort((a, b) => b.value - a.value)[0] ?? plays[0]!;
   }
 
-  // 팀원 티츄 시: 개로 선 넘기기 또는 약한 싱글
+  // 팀원 티츄 시: 개로 선 넘기기
   if (partnerTichu && active.includes(partner)) {
     const dogPlay = plays.find(p => p.cards.length === 1 && isDog(p.cards[0]!));
     if (dogPlay) return dogPlay;
-    const singles = plays.filter(p => p.type === 'single' && p.value <= 6);
-    if (singles.length > 0) return pickWeakest(singles);
   }
 
-  // 개 리드: 파트너 활성이고 카드 많을 때
-  const dogPlay = plays.find(p => p.cards.length === 1 && isDog(p.cards[0]!));
-  if (dogPlay && active.includes(partner) && hand.length > 4) {
-    if (Math.random() < 0.3) return dogPlay;
+  // 개 리드: 파트너 활성이면 선 넘기기 (확률 높게)
+  if (active.includes(partner) && room.hands[partner]!.length <= hand.length) {
+    const dogPlay = plays.find(p => p.cards.length === 1 && isDog(p.cards[0]!));
+    if (dogPlay) return dogPlay;
   }
 
   const nonBombs = plays.filter(p => !isBomb(p) && !p.cards.some(isDog));
   if (nonBombs.length === 0) return plays[0]!;
 
-  // 내 티츄 선언 시: 카드 많이 정리하는 조합 우선
-  if (myTichu) {
-    const biggest = nonBombs.sort((a, b) => b.length - a.length || a.value - b.value);
-    return biggest[0]!;
-  }
+  // 핵심 전략: 카드 수를 가장 많이 줄이는 조합 우선, 같으면 약한 것
+  const scored = nonBombs.map(p => ({
+    play: p,
+    // 점수: 장수 많을수록 좋고, value 낮을수록 좋음 (강한 카드 아끼기)
+    score: p.length * 100 - p.value,
+  }));
+  scored.sort((a, b) => b.score - a.score);
 
-  // 조합 우선 (카드 많이 정리): 스트레이트 > 연속페어 > 풀하우스 > 트리플 > 페어 > 싱글
-  const typeOrder: Record<string, number> = { straight: 6, steps: 5, fullhouse: 4, triple: 3, pair: 2, single: 1 };
-  const byType = nonBombs.sort((a, b) => {
-    const ta = typeOrder[a.type] ?? 0;
-    const tb = typeOrder[b.type] ?? 0;
-    if (ta !== tb) return tb - ta; // 큰 조합 우선
-    return a.value - b.value; // 같은 타입이면 약한 것 먼저
-  });
+  // 용/봉황 싱글은 마지막에 사용 (아끼기)
+  const best = scored.find(s => {
+    if (s.play.type === 'single' && s.play.cards.some(isDragon)) return false;
+    if (s.play.type === 'single' && s.play.value >= 14 && hand.length > 4) return false;
+    return true;
+  }) ?? scored[0]!;
 
-  // 장수 3장 이상인 조합이 있으면 우선
-  const multiCard = byType.filter(p => p.length >= 3);
-  if (multiCard.length > 0) return multiCard[0]!;
-
-  return byType[0]!;
+  return best.play;
 }
 
 // ── 패스 판단 ───────────────────────────────────────────────
@@ -235,26 +247,37 @@ function shouldPass(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: num
 
   const partner = getPartnerSeat(seat);
   const myTichu = room.tichuDeclarations[seat] !== null;
+  const weakest = pickWeakest(plays);
 
   // 내 티츄: 적극적으로 내기
   if (myTichu) return false;
 
-  // 파트너가 이기고 있으면 패스
-  if (room.currentTrick.lastPlayedSeat === partner) return true;
+  // 카드 1~2장: 무조건 내기 (마무리)
+  if (hand.length <= 2) return false;
 
-  // 상대 티츄 시: 적극적으로 내기
+  // 파트너가 이기고 있으면 패스 (파트너가 트릭 가져가게)
+  if (room.currentTrick.lastPlayedSeat === partner) {
+    // 단, 내 카드가 3장 이하이면 내가 내서 빨리 나감
+    if (hand.length <= 3) return false;
+    return true;
+  }
+
+  // 상대 티츄 방해: 적극적으로 내기
   const enemies = [0, 1, 2, 3].filter(s => s !== seat && s !== partner);
   if (enemies.some(s => room.tichuDeclarations[s] !== null)) return false;
 
-  // 카드 적으면 적극적으로 내기
-  if (hand.length <= 4) return false;
-
-  // 이길 수 있는 가장 약한 카드가 너무 강하면 패스 (A, 용 아끼기)
-  const weakest = pickWeakest(plays);
-  if (weakest.value >= 14 && weakest.type === 'single') return true;
-
-  // 약한 카드로 이길 수 있으면 내기
+  // 약한 카드(10 이하)로 이길 수 있으면 항상 내기
   if (weakest.value <= 10) return false;
+
+  // A나 용 싱글은 아끼기 (카드 많을 때)
+  if (weakest.value >= 14 && weakest.type === 'single' && hand.length > 5) return true;
+
+  // 중간 값(J, Q, K): 카드 적으면 내기, 많으면 상황 판단
+  if (hand.length <= 5) return false;
+
+  // 트릭에 점수가 있으면 내기 (5, 10, K)
+  const trickPoints = room.currentTrick.plays.reduce((sum, p) => sum + sumPoints(p.hand.cards), 0);
+  if (trickPoints >= 10) return false;
 
   return false;
 }
