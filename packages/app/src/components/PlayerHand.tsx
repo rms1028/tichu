@@ -203,10 +203,10 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
               style={[styles.bombGroup, gi > 0 && { marginLeft: 8 }]}
             >
               {/* 폭탄 라벨 */}
-              <Animated.View entering={FadeIn.duration(200)} style={[styles.bombLabel, canBomb && styles.bombLabelActive]}>
+              <View style={[styles.bombLabel, canBomb && styles.bombLabelActive]}>
                 <Text style={styles.bombLabelIcon}>{'💣'}</Text>
                 <Text style={[styles.bombLabelText, canBomb && styles.bombLabelTextActive]}>{group.label}</Text>
-              </Animated.View>
+              </View>
 
               {/* 폭탄 카드들 */}
               <View style={styles.bombCards}>

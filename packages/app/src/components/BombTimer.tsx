@@ -41,13 +41,13 @@ export function BombTimer() {
   const sec = (remainingMs / 1000).toFixed(1);
 
   return (
-    <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(150)} style={S.container}>
-      <Animated.View style={[S.inner, pulseStyle]}>
+    <View style={S.container}>
+      <View style={[S.inner, pulseStyle]}>
         <Text style={S.icon}>{'💣'}</Text>
         <Text style={S.timer}>{sec}{'s'}</Text>
-      </Animated.View>
+      </View>
       <Text style={S.label}>{'폭탄 가능'}</Text>
-    </Animated.View>
+    </View>
   );
 }
 

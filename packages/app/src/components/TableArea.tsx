@@ -72,9 +72,9 @@ export function TableArea() {
     <View style={styles.container}>
       {/* 턴 표시 */}
       {phase === 'TRICK_PLAY' && (
-        <Animated.View
+        <View
           key={`turn-${currentTurn}`}
-          entering={FadeIn.duration(200)}
+         
           style={[
             styles.turnBanner,
             isMyTurn && styles.turnBannerMine,
@@ -90,37 +90,37 @@ export function TableArea() {
               <Text style={styles.turnSuffix}>{'의 차례'}</Text>
             </Text>
           )}
-        </Animated.View>
+        </View>
       )}
 
       {/* 소원 표시 */}
       {wish && (
-        <Animated.View entering={FadeIn.duration(300)} style={styles.wishBanner}>
+        <View style={styles.wishBanner}>
           <Text style={styles.wishIcon}>{'\u{1F004}'}</Text>
           <View>
             <Text style={styles.wishLabel}>소원 활성</Text>
             <Text style={styles.wishRank}>{wish}</Text>
           </View>
-        </Animated.View>
+        </View>
       )}
 
       {/* 바닥 카드 - 확대 & 입체적 + 후광 */}
       {tableCards ? (
-        <Animated.View
+        <View
           key={`table-${tableKeyRef.current}`}
-          entering={ZoomIn.duration(300).springify().damping(12)}
+         
         >
           {/* 후광 이펙트 */}
-          <Animated.View style={[
+          <View style={[
             styles.glowRipple,
             isBomb && styles.glowRippleBomb,
             bombGlowStyle,
           ]} />
           <View style={styles.cardsRow}>
             {tableCards.cards.map((card, i) => (
-              <Animated.View
+              <View
                 key={i}
-                entering={FadeIn.delay(i * 40).duration(200)}
+               
                 style={[
                   styles.tableCard,
                   i > 0 && styles.tableCardOverlap,
@@ -129,7 +129,7 @@ export function TableArea() {
                 ]}
               >
                 <CardView card={card} size="large" disabled />
-              </Animated.View>
+              </View>
             ))}
           </View>
           {lastPlay && (
@@ -137,13 +137,13 @@ export function TableArea() {
               {players[lastPlay.seat]?.nickname ?? '?'} {'\u2192'} {valueLabel(lastPlay.hand.value)} {handTypeLabel(lastPlay.hand.type)}
             </Text>
           )}
-        </Animated.View>
+        </View>
       ) : (
-        <Animated.View entering={FadeIn.duration(200)}>
+        <View>
           <Text style={styles.emptyText}>
             {phase === 'TRICK_PLAY' ? '새 트릭' : ''}
           </Text>
-        </Animated.View>
+        </View>
       )}
     </View>
   );

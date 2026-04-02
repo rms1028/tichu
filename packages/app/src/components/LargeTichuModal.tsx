@@ -55,7 +55,7 @@ export function LargeTichuModal({ onDeclare, onPass }: LargeTichuModalProps) {
   return (
     <View style={S.overlay} pointerEvents="box-none">
       <View style={S.backdrop} pointerEvents="auto">
-        <Animated.View entering={ZoomIn.duration(350).springify().damping(10)} style={S.modal}>
+        <View style={S.modal}>
           <View style={S.headerRow}>
             <Text style={S.icon}>{'🔥'}</Text>
             <View style={[S.timerBadge, urgent && S.timerUrgent]}>
@@ -67,9 +67,9 @@ export function LargeTichuModal({ onDeclare, onPass }: LargeTichuModalProps) {
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.cardsScroll}>
             {sorted.map((card, i) => (
-              <Animated.View key={i} entering={FadeIn.delay(i * 60).duration(200)} style={i > 0 ? S.cardOverlap : undefined}>
+              <View key={i} style={i > 0 ? S.cardOverlap : undefined}>
                 <CardView card={card} size="normal" disabled />
-              </Animated.View>
+              </View>
             ))}
           </ScrollView>
 
@@ -87,7 +87,7 @@ export function LargeTichuModal({ onDeclare, onPass }: LargeTichuModalProps) {
               <Text style={S.declareBtnText}>{'🔥 라지 티츄!'}</Text>
             </TouchableOpacity>
           </View>
-        </Animated.View>
+        </View>
       </View>
     </View>
   );

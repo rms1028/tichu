@@ -100,7 +100,7 @@ export function OpponentHand({
       <View style={[styles.partnerRow, finished && styles.finishedContainer]}>
         {/* 좌: 아바타 + 이름 */}
         <View style={styles.partnerLeft}>
-          <Animated.View style={[
+          <View style={[
             styles.avatarOuter,
             { borderColor: teamBorderColor },
             isCurrentTurn && styles.avatarOuterActive,
@@ -111,7 +111,7 @@ export function OpponentHand({
             <View style={[styles.avatarInner, { backgroundColor: avatar.bg }]}>
               <Text style={styles.avatarEmoji}>{avatar.emoji}</Text>
             </View>
-          </Animated.View>
+          </View>
           <Text style={[styles.nickname, !connected && styles.nicknameDimmed, nickColor ? { color: nickColor } : undefined]} numberOfLines={1}>{nickname}</Text>
           {tichu && (
             <View style={[styles.tichuBadge, tichu === 'large' && styles.tichuLarge]}>
@@ -133,9 +133,9 @@ export function OpponentHand({
           <View style={styles.outBadge}><Text style={styles.outText}>OUT</Text></View>
         )}
         {!finished && passed && (
-          <Animated.View entering={FadeIn.duration(200)} style={styles.passBadge}>
+          <View style={styles.passBadge}>
             <Text style={styles.passText}>{'\uD328\uC2A4'}</Text>
-          </Animated.View>
+          </View>
         )}
       </View>
     );
@@ -145,15 +145,15 @@ export function OpponentHand({
     <View style={[styles.container, finished && styles.finishedContainer]}>
       {/* 이모트 말풍선 */}
       {emote && (
-        <Animated.View entering={ZoomIn.duration(200).springify()} style={styles.emoteBubble}>
+        <View style={styles.emoteBubble}>
           <Text style={styles.emoteText}>{emote}</Text>
           <View style={styles.emoteTail} />
-        </Animated.View>
+        </View>
       )}
 
       {/* 아바타 프레임 */}
       <View style={styles.avatarFrame}>
-        <Animated.View style={[
+        <View style={[
           styles.avatarOuter,
           { borderColor: teamBorderColor },
           isCurrentTurn && styles.avatarOuterActive,
@@ -163,7 +163,7 @@ export function OpponentHand({
           <View style={[styles.avatarInner, { backgroundColor: avatar.bg }]}>
             <Text style={styles.avatarEmoji}>{avatar.emoji}</Text>
           </View>
-        </Animated.View>
+        </View>
       </View>
 
       {/* 이름 */}
@@ -191,19 +191,19 @@ export function OpponentHand({
       ) : (
         <>
           {tichu && (
-            <Animated.View
-              entering={ZoomIn.duration(300).springify()}
+            <View
+             
               style={[styles.tichuBadge, tichu === 'large' && styles.tichuLarge]}
             >
               <Text style={styles.tichuText}>
                 {tichu === 'large' ? '🔥 라지!' : '⭐ 스몰'}
               </Text>
-            </Animated.View>
+            </View>
           )}
           {passed && (
-            <Animated.View entering={FadeIn.duration(200)} style={styles.passBadge}>
+            <View style={styles.passBadge}>
               <Text style={styles.passText}>패스</Text>
-            </Animated.View>
+            </View>
           )}
         </>
       )}

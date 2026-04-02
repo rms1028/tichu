@@ -56,12 +56,12 @@ function TichuPulseButton({ onPress }: { onPress: () => void }) {
   }, []);
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }], shadowOpacity: glow.value }));
   return (
-    <Animated.View style={[tichuPulseS.wrap, animStyle]}>
+    <View style={[tichuPulseS.wrap, animStyle]}>
       <TouchableOpacity style={tichuPulseS.btn} onPress={onPress} activeOpacity={0.8}>
         <Text style={tichuPulseS.text}>{'⭐ 스몰 티츄 선언 가능'}</Text>
         <Text style={tichuPulseS.hint}>{'👆 탭하여 선언'}</Text>
       </TouchableOpacity>
-    </Animated.View>
+    </View>
   );
 }
 const tichuPulseS = StyleSheet.create({
@@ -465,9 +465,9 @@ export function GameScreen({
               </Text>
             </View>
           ) : (
-            <Animated.View entering={FadeIn.duration(300)}>
+            <View>
               <TichuPulseButton onPress={() => onDeclareTichu('small')} />
-            </Animated.View>
+            </View>
           )}
           <EmoteButton onSend={() => {}} />
         </View>
@@ -477,13 +477,13 @@ export function GameScreen({
       <View style={styles.bottomArea}>
         {/* 에러 메시지 */}
         {errorMsg && (
-          <Animated.View
-            entering={SlideInUp.duration(200)}
-            exiting={FadeOut.duration(150)}
+          <View
+           
+           
             style={[styles.errorBanner, errorShakeStyle]}
           >
             <Text style={styles.errorText}>{errorMsg}</Text>
-          </Animated.View>
+          </View>
         )}
 
         {/* 턴 + 원형 타이머 + 액션바 통합 */}
@@ -524,32 +524,32 @@ export function GameScreen({
 
       {/* 교환 결과 오버레이 (3초간 표시) */}
       {exchangeReceived && (
-        <Animated.View entering={FadeIn.duration(300)} style={styles.exchangeOverlay}>
-          <Animated.View entering={ZoomIn.duration(350).springify().damping(12)} style={styles.exchangeModal}>
+        <View style={styles.exchangeOverlay}>
+          <View style={styles.exchangeModal}>
             <Text style={styles.exchangeTitle}>받은 카드</Text>
             <View style={styles.exchangeCards}>
-              <Animated.View entering={FadeIn.delay(100).duration(200)} style={styles.exchangeSlot}>
+              <View style={styles.exchangeSlot}>
                 <Text style={styles.exchangeLabel}>{'\u2190'} 왼쪽에서</Text>
                 <CardView card={exchangeReceived.fromLeft} size="normal" />
-              </Animated.View>
-              <Animated.View entering={FadeIn.delay(200).duration(200)} style={styles.exchangeSlot}>
+              </View>
+              <View style={styles.exchangeSlot}>
                 <Text style={styles.exchangeLabel}>{'\u2191'} 파트너에서</Text>
                 <CardView card={exchangeReceived.fromPartner} size="normal" />
-              </Animated.View>
-              <Animated.View entering={FadeIn.delay(300).duration(200)} style={styles.exchangeSlot}>
+              </View>
+              <View style={styles.exchangeSlot}>
                 <Text style={styles.exchangeLabel}>{'\u2192'} 오른쪽에서</Text>
                 <CardView card={exchangeReceived.fromRight} size="normal" />
-              </Animated.View>
+              </View>
             </View>
-          </Animated.View>
-        </Animated.View>
+          </View>
+        </View>
       )}
 
       {/* 트릭 승리 팝업 */}
       {trickWonFlash && (
-        <Animated.View
-          entering={ZoomIn.duration(300).springify().damping(10)}
-          exiting={FadeOut.duration(300)}
+        <View
+         
+         
           style={styles.trickWonOverlay}
           pointerEvents="none"
         >
@@ -560,30 +560,30 @@ export function GameScreen({
               <Text style={styles.trickWonPoints}>+{trickWonFlash.points}점</Text>
             )}
           </View>
-        </Animated.View>
+        </View>
       )}
 
       {/* 패스 팝업 */}
       {passFlash && (
-        <Animated.View
-          entering={FadeIn.duration(150)}
-          exiting={FadeOut.duration(150)}
+        <View
+         
+         
           style={styles.passFlashOverlay}
           pointerEvents="none"
         >
           <Text style={styles.passFlashText}>{passFlash} 패스</Text>
-        </Animated.View>
+        </View>
       )}
 
       {/* 티츄 선언 중앙 폭발 팝업 */}
       {tichuFlash && (
-        <Animated.View
-          entering={ZoomIn.duration(400).springify().damping(8)}
-          exiting={FadeOut.duration(400)}
+        <View
+         
+         
           style={styles.tichuFlashOverlay}
           pointerEvents="none"
         >
-          <Animated.View style={[
+          <View style={[
             styles.tichuFlashBox,
             tichuFlash.type === 'large' && styles.tichuFlashBoxLarge,
           ]}>
@@ -596,8 +596,8 @@ export function GameScreen({
             <Text style={styles.tichuFlashName}>
               {seatName(tichuFlash.seat)}
             </Text>
-          </Animated.View>
-        </Animated.View>
+          </View>
+        </View>
       )}
     </SafeAreaView>
     </View>

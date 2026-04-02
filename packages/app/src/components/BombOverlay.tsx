@@ -102,15 +102,15 @@ export function BombOverlay({ onSubmitBombCards }: BombOverlayProps) {
   const seconds = bombWindow ? (remainingMs / 1000).toFixed(1) : null;
 
   return (
-    <Animated.View
-      entering={FadeIn.duration(200)}
+    <View
+     
       style={styles.container}
     >
       {/* 타이머 뱃지 */}
       {isWindowActive && (
-        <Animated.View entering={FadeIn.duration(150)} style={styles.timerBadge}>
+        <View style={styles.timerBadge}>
           <Text style={styles.timerText}>{seconds}s</Text>
-        </Animated.View>
+        </View>
       )}
 
       {/* 폭탄 칩 목록 */}
@@ -132,7 +132,7 @@ export function BombOverlay({ onSubmitBombCards }: BombOverlayProps) {
           </TouchableOpacity>
         ))}
       </View>
-    </Animated.View>
+    </View>
   );
 }
 

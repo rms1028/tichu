@@ -81,11 +81,11 @@ export function GameEventOverlay() {
   return (
     <View style={S.overlay} pointerEvents="none">
       <ParticleEffect type={event.particleType} count={15} />
-      <Animated.View entering={ZoomIn.duration(400).springify().damping(8)} exiting={FadeOut.duration(400)} style={S.box}>
+      <View style={S.box}>
         <Text style={S.emoji}>{event.emoji}</Text>
         <Text style={[S.title, { color: event.color }]}>{event.title}</Text>
         <Text style={S.subtitle}>{event.subtitle}</Text>
-      </Animated.View>
+      </View>
     </View>
   );
 }
