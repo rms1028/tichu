@@ -287,6 +287,16 @@ export function registerSocketHandlers(io: Server): void {
       // 스냅샷 전송
       socket.emit('game_state_sync', buildClientState(room, seat));
       io.to(data.roomId).emit('player_reconnected', { seat });
+
+      // 현재 턴 정보 재전송
+      if (room.phase === 'TRICK_PLAY' && !room.bombWindow) {
+        const elapsed = Date.now() - room.turnTimer.startedAt;
+        const remaining = Math.max(0, room.turnTimer.duration - elapsed);
+        socket.emit('turn_changed', { seat: room.currentTurn, turnDuration: remaining });
+        if (room.currentTurn === seat) {
+          socket.emit('your_turn', { seat, turnDuration: remaining });
+        }
+      }
     });
 
     // ── declare_tichu ──────────────────────────────────────

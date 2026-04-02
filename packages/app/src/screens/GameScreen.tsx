@@ -122,8 +122,32 @@ export function GameScreen({
     transform: [{ translateX: errorShakeX.value }],
   }));
 
-  // 트릭 승리 효과
+  // 트릭 승리 팝업 (2초 표시)
   const trickWonEvent = useGameStore((s) => s.trickWonEvent);
+  const [trickWonFlash, setTrickWonFlash] = useState<{ winner: string; points: number } | null>(null);
+  useEffect(() => {
+    if (trickWonEvent) {
+      const name = players[trickWonEvent.winningSeat]?.nickname ?? '?';
+      setTrickWonFlash({ winner: name, points: trickWonEvent.points });
+      setTimeout(() => setTrickWonFlash(null), 2000);
+    }
+  }, [trickWonEvent]);
+
+  // 패스 팝업 (1초 표시)
+  const passedSeatsState = useGameStore((s) => s.passedSeats);
+  const [passFlash, setPassFlash] = useState<string | null>(null);
+  const prevPassedRef = useRef<number[]>([]);
+  useEffect(() => {
+    if (passedSeatsState.length > prevPassedRef.current.length) {
+      const newSeat = passedSeatsState[passedSeatsState.length - 1];
+      if (newSeat !== undefined) {
+        const name = players[newSeat]?.nickname ?? '?';
+        setPassFlash(name);
+        setTimeout(() => setPassFlash(null), 1000);
+      }
+    }
+    prevPassedRef.current = passedSeatsState;
+  }, [passedSeatsState]);
 
   // 티츄 선언 중앙 팝업 (2초간 표시)
   const [tichuFlash, setTichuFlash] = useState<{ seat: number; type: 'large' | 'small' } | null>(null);
@@ -510,6 +534,34 @@ export function GameScreen({
         </Animated.View>
       )}
 
+      {/* 트릭 승리 팝업 */}
+      {trickWonFlash && (
+        <Animated.View
+          entering={ZoomIn.duration(300).springify().damping(10)}
+          exiting={FadeOut.duration(300)}
+          style={styles.trickWonOverlay}
+        >
+          <View style={styles.trickWonBox}>
+            <Text style={styles.trickWonIcon}>{'🏆'}</Text>
+            <Text style={styles.trickWonName}>{trickWonFlash.winner}</Text>
+            {trickWonFlash.points > 0 && (
+              <Text style={styles.trickWonPoints}>+{trickWonFlash.points}점</Text>
+            )}
+          </View>
+        </Animated.View>
+      )}
+
+      {/* 패스 팝업 */}
+      {passFlash && (
+        <Animated.View
+          entering={FadeIn.duration(150)}
+          exiting={FadeOut.duration(150)}
+          style={styles.passFlashOverlay}
+        >
+          <Text style={styles.passFlashText}>{passFlash} 패스</Text>
+        </Animated.View>
+      )}
+
       {/* 티츄 선언 중앙 폭발 팝업 */}
       {tichuFlash && (
         <Animated.View
@@ -884,6 +936,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
+  // 트릭 승리 팝업
+  trickWonOverlay: {
+    position: 'absolute', top: '30%', left: 0, right: 0,
+    alignItems: 'center', zIndex: 180,
+  },
+  trickWonBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(16,185,129,0.9)', borderRadius: 16,
+    paddingHorizontal: 20, paddingVertical: 10,
+    shadowColor: '#10b981', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6, shadowRadius: 12, elevation: 10,
+  },
+  trickWonIcon: { fontSize: 20 },
+  trickWonName: { color: '#fff', fontSize: 16, fontWeight: '900' },
+  trickWonPoints: { color: '#A7F3D0', fontSize: 14, fontWeight: '800' },
+
+  // 패스 팝업
+  passFlashOverlay: {
+    position: 'absolute', top: '45%', left: 0, right: 0,
+    alignItems: 'center', zIndex: 170,
+  },
+  passFlashText: {
+    color: 'rgba(255,255,255,0.6)', fontSize: 14, fontWeight: '700',
+    backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 6,
+  },
+
   // 중앙 폭발 팝업
   tichuFlashOverlay: {
     position: 'absolute',
