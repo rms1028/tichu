@@ -78,6 +78,8 @@ export interface GameState {
   friendRequests: { fromId: string; fromNickname: string }[];
   friendSearchResult: { found: boolean; playerId?: string; nickname?: string } | null;
   friendInvite: { fromNickname: string; roomId: string } | null;
+  dbUserId: string | null;
+  leaderboard: { id: string; nickname: string; xp: number; wins: number; totalGames: number }[];
 
   // 액션
   setConnection: (connected: boolean) => void;
@@ -152,6 +154,8 @@ const INITIAL_STATE = {
   friendRequests: [] as { fromId: string; fromNickname: string }[],
   friendSearchResult: null as { found: boolean; playerId?: string; nickname?: string } | null,
   friendInvite: null as { fromNickname: string; roomId: string } | null,
+  dbUserId: null as string | null,
+  leaderboard: [] as { id: string; nickname: string; xp: number; wins: number; totalGames: number }[],
 };
 
 export const useGameStore = create<GameState>((set, get) => ({

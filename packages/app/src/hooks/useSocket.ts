@@ -202,6 +202,26 @@ export function useSocket() {
       store.onGameOver(data.winner, data.scores);
     });
 
+    // ── 로그인 ──────────────────────────────────────────────
+    socket.on('login_success', (data: {
+      userId: string; nickname: string; coins: number; xp: number;
+      totalGames: number; wins: number; losses: number; tichuSuccess: number; winStreak: number;
+    }) => {
+      useGameStore.setState({ dbUserId: data.userId });
+      // userStore 동기화
+      const us = require('../stores/userStore').useUserStore.getState();
+      us.setNickname(data.nickname);
+    });
+
+    socket.on('login_error', (data: { error: string }) => {
+      console.warn('Login error:', data.error);
+    });
+
+    // ── 랭킹 ──────────────────────────────────────────────
+    socket.on('leaderboard', (data: { entries: any[] }) => {
+      useGameStore.setState({ leaderboard: data.entries });
+    });
+
     // ── 친구 시스템 ──────────────────────────────────────────
     socket.on('friend_code', (data: { code: string }) => {
       useGameStore.setState({ friendCode: data.code });
@@ -309,6 +329,18 @@ export function useSocket() {
     socketRef.current?.emit('swap_seat', { targetSeat });
   }, []);
 
+  const guestLogin = useCallback((guestId: string, nickname: string) => {
+    socketRef.current?.emit('guest_login', { guestId, nickname });
+  }, []);
+
+  const firebaseLogin = useCallback((firebaseUid: string, nickname: string) => {
+    socketRef.current?.emit('firebase_login', { firebaseUid, nickname });
+  }, []);
+
+  const getLeaderboard = useCallback(() => {
+    socketRef.current?.emit('get_leaderboard');
+  }, []);
+
   const friendInit = useCallback((playerId: string, nickname: string) => {
     socketRef.current?.emit('friend_init', { playerId, nickname });
   }, []);
@@ -362,6 +394,9 @@ export function useSocket() {
     swapSeat,
     queueMatch,
     cancelMatch,
+    guestLogin,
+    firebaseLogin,
+    getLeaderboard,
     friendInit,
     friendSearch,
     friendRequest,

@@ -1,0 +1,164 @@
+import { PrismaClient } from '@prisma/client';
+
+console.log('[DB] DATABASE_URL:', process.env['DATABASE_URL'] ? 'SET' : 'NOT SET');
+
+export const prisma = new PrismaClient();
+
+// ── 유저 ────────────────────────────────────────────────────
+
+export async function findOrCreateGuestUser(guestId: string, nickname: string) {
+  return prisma.user.upsert({
+    where: { guestId },
+    update: { nickname, updatedAt: new Date() },
+    create: { guestId, nickname },
+  });
+}
+
+export async function findUserByFirebaseUid(uid: string) {
+  return prisma.user.findUnique({ where: { firebaseUid: uid } });
+}
+
+export async function createOrUpdateFirebaseUser(firebaseUid: string, nickname: string) {
+  return prisma.user.upsert({
+    where: { firebaseUid },
+    update: { nickname, updatedAt: new Date() },
+    create: { firebaseUid, nickname },
+  });
+}
+
+export async function getUserProfile(userId: string) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true, nickname: true, avatarId: true, coins: true, xp: true,
+      totalGames: true, wins: true, losses: true,
+      tichuSuccess: true, tichuFail: true, winStreak: true, maxWinStreak: true,
+    },
+  });
+}
+
+// ── 전적 기록 ───────────────────────────────────────────────
+
+export async function recordGameResult(params: {
+  userId: string;
+  roomId: string;
+  won: boolean;
+  team: string;
+  score: number;
+  opponentScore: number;
+  tichuDeclared?: string | null;
+  tichuSuccess: boolean;
+  finishRank: number;
+  roundCount: number;
+}) {
+  const { userId, won, tichuDeclared, tichuSuccess } = params;
+
+  // 게임 결과 저장
+  await prisma.gameResult.create({ data: params });
+
+  // 유저 전적 업데이트
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return;
+
+  const newStreak = won ? user.winStreak + 1 : 0;
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      totalGames: { increment: 1 },
+      wins: won ? { increment: 1 } : undefined,
+      losses: !won ? { increment: 1 } : undefined,
+      tichuSuccess: tichuSuccess ? { increment: 1 } : undefined,
+      tichuFail: tichuDeclared && !tichuSuccess ? { increment: 1 } : undefined,
+      winStreak: newStreak,
+      maxWinStreak: Math.max(newStreak, user.maxWinStreak),
+      xp: { increment: won ? 30 : 10 },
+      coins: { increment: won ? 50 : 20 },
+    },
+  });
+}
+
+// ── 친구 (DB 영구 저장) ─────────────────────────────────────
+
+export async function dbSendFriendRequest(fromId: string, toId: string) {
+  // 이미 친구인지 체크
+  const existing = await prisma.friendship.findFirst({
+    where: {
+      OR: [
+        { userAId: fromId, userBId: toId },
+        { userAId: toId, userBId: fromId },
+      ],
+    },
+  });
+  if (existing) return { ok: false, error: 'already_friends' };
+
+  // 상대가 이미 요청 보낸 경우 → 자동 수락
+  const reverse = await prisma.friendRequest.findUnique({
+    where: { fromId_toId: { fromId: toId, toId: fromId } },
+  });
+  if (reverse) {
+    await prisma.friendRequest.delete({ where: { id: reverse.id } });
+    await prisma.friendship.create({ data: { userAId: fromId, userBId: toId } });
+    return { ok: true, autoAccepted: true };
+  }
+
+  await prisma.friendRequest.upsert({
+    where: { fromId_toId: { fromId, toId } },
+    update: {},
+    create: { fromId, toId },
+  });
+  return { ok: true, autoAccepted: false };
+}
+
+export async function dbAcceptFriendRequest(fromId: string, toId: string) {
+  const req = await prisma.friendRequest.findUnique({
+    where: { fromId_toId: { fromId, toId } },
+  });
+  if (!req) return false;
+
+  await prisma.friendRequest.delete({ where: { id: req.id } });
+  await prisma.friendship.create({ data: { userAId: fromId, userBId: toId } });
+  return true;
+}
+
+export async function dbRejectFriendRequest(fromId: string, toId: string) {
+  await prisma.friendRequest.deleteMany({
+    where: { fromId, toId },
+  });
+}
+
+export async function dbRemoveFriend(userA: string, userB: string) {
+  await prisma.friendship.deleteMany({
+    where: {
+      OR: [
+        { userAId: userA, userBId: userB },
+        { userAId: userB, userBId: userA },
+      ],
+    },
+  });
+}
+
+export async function dbGetFriendIds(userId: string): Promise<string[]> {
+  const friendships = await prisma.friendship.findMany({
+    where: {
+      OR: [{ userAId: userId }, { userBId: userId }],
+    },
+  });
+  return friendships.map(f => f.userAId === userId ? f.userBId : f.userAId);
+}
+
+export async function dbGetPendingRequests(userId: string) {
+  return prisma.friendRequest.findMany({
+    where: { toId: userId },
+    include: { from: { select: { id: true, nickname: true } } },
+  });
+}
+
+// ── 랭킹 ────────────────────────────────────────────────────
+
+export async function getLeaderboard(limit = 20) {
+  return prisma.user.findMany({
+    orderBy: { xp: 'desc' },
+    take: limit,
+    select: { id: true, nickname: true, xp: true, wins: true, totalGames: true },
+  });
+}

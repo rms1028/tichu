@@ -27,6 +27,12 @@ import {
   sendFriendRequest, acceptFriendRequest, rejectFriendRequest, removeFriend,
   getFriendList, getPendingRequests, findPlayerByCode, getPlayerFriendCode,
 } from './friends.js';
+import {
+  findOrCreateGuestUser, createOrUpdateFirebaseUser, getUserProfile,
+  recordGameResult as dbRecordGameResult, getLeaderboard,
+  dbSendFriendRequest, dbAcceptFriendRequest, dbRejectFriendRequest,
+  dbRemoveFriend, dbGetFriendIds, dbGetPendingRequests,
+} from './db.js';
 
 // ── 방 관리 ──────────────────────────────────────────────────
 
@@ -141,6 +147,63 @@ export function registerSocketHandlers(io: Server): void {
   io.on('connection', (socket: Socket) => {
     let playerRoomId: string | null = null;
     let playerSeat: number = -1;
+    let dbUserId: string | null = null;
+
+    // ── 게스트 로그인 (DB 유저 생성/조회) ──────────────────
+    socket.on('guest_login', async (data: { guestId: string; nickname: string }) => {
+      console.log('[guest_login] attempt:', data.guestId, data.nickname);
+      try {
+        const user = await findOrCreateGuestUser(data.guestId, data.nickname);
+        console.log('[guest_login] success:', user.id);
+        dbUserId = user.id;
+        socket.emit('login_success', {
+          userId: user.id,
+          nickname: user.nickname,
+          coins: user.coins,
+          xp: user.xp,
+          totalGames: user.totalGames,
+          wins: user.wins,
+          losses: user.losses,
+          tichuSuccess: user.tichuSuccess,
+          winStreak: user.winStreak,
+        });
+      } catch (err) {
+        console.error('[guest_login] error:', err);
+        socket.emit('login_error', { error: 'db_error' });
+      }
+    });
+
+    // ── Firebase 소셜 로그인 ────────────────────────────────
+    socket.on('firebase_login', async (data: { firebaseUid: string; nickname: string }) => {
+      try {
+        const user = await createOrUpdateFirebaseUser(data.firebaseUid, data.nickname);
+        dbUserId = user.id;
+        socket.emit('login_success', {
+          userId: user.id,
+          nickname: user.nickname,
+          coins: user.coins,
+          xp: user.xp,
+          totalGames: user.totalGames,
+          wins: user.wins,
+          losses: user.losses,
+          tichuSuccess: user.tichuSuccess,
+          winStreak: user.winStreak,
+        });
+      } catch (err) {
+        console.error('[firebase_login] error:', err);
+        socket.emit('login_error', { error: 'db_error' });
+      }
+    });
+
+    // ── 랭킹 조회 ─────────────────────────────────────────
+    socket.on('get_leaderboard', async () => {
+      try {
+        const lb = await getLeaderboard();
+        socket.emit('leaderboard', { entries: lb });
+      } catch (err) {
+        console.error('[get_leaderboard] error:', err);
+      }
+    });
 
     // ── join_room ──────────────────────────────────────────
     socket.on('join_room', (data: { roomId: string; playerId: string; nickname: string }) => {

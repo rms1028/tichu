@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+// ── 유저 ────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(cuid())
+  guestId       String?  @unique           // 게스트 로그인 ID
+  firebaseUid   String?  @unique           // Firebase Auth UID (소셜 로그인)
+  nickname      String
+  avatarId      String   @default("dragon")
+  cardBackId    String   @default("classic")
+  coins         Int      @default(500)
+  xp            Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 전적
+  totalGames    Int      @default(0)
+  wins          Int      @default(0)
+  losses        Int      @default(0)
+  tichuSuccess  Int      @default(0)
+  tichuFail     Int      @default(0)
+  winStreak     Int      @default(0)
+  maxWinStreak  Int      @default(0)
+
+  // 관계
+  sentRequests     FriendRequest[]  @relation("SentRequests")
+  receivedRequests FriendRequest[]  @relation("ReceivedRequests")
+  friendsA         Friendship[]     @relation("FriendA")
+  friendsB         Friendship[]     @relation("FriendB")
+  gameResults      GameResult[]
+
+  @@index([nickname])
+}
+
+// ── 친구 요청 ───────────────────────────────────────────────
+
+model FriendRequest {
+  id        String   @id @default(cuid())
+  fromId    String
+  toId      String
+  from      User     @relation("SentRequests", fields: [fromId], references: [id])
+  to        User     @relation("ReceivedRequests", fields: [toId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([fromId, toId])
+}
+
+// ── 친구 관계 ───────────────────────────────────────────────
+
+model Friendship {
+  id        String   @id @default(cuid())
+  userAId   String
+  userBId   String
+  userA     User     @relation("FriendA", fields: [userAId], references: [id])
+  userB     User     @relation("FriendB", fields: [userBId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userAId, userBId])
+}
+
+// ── 게임 결과 ───────────────────────────────────────────────
+
+model GameResult {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  roomId        String
+  won           Boolean
+  team          String               // "team1" | "team2"
+  score         Int                  // 내 팀 점수
+  opponentScore Int                  // 상대 팀 점수
+  tichuDeclared String?              // "large" | "small" | null
+  tichuSuccess  Boolean  @default(false)
+  finishRank    Int                  // 1~4등
+  roundCount    Int      @default(1)
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt])
+}

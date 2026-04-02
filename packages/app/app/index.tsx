@@ -39,7 +39,20 @@ function AppInner() {
     dragonGive, submitBomb, addBots, swapSeat,
     queueMatch, cancelMatch,
     friendInit, friendSearch, friendRequest, friendAccept, friendReject, friendRemove, friendInvite,
+    guestLogin, firebaseLogin, getLeaderboard,
   } = useSocket();
+
+  const connected = useGameStore((s) => s.connected);
+
+  // 소켓 연결 시 자동 게스트 로그인
+  useEffect(() => {
+    if (connected) {
+      const us = useUserStore.getState();
+      if (us.playerId && us.nickname) {
+        guestLogin(us.playerId, us.nickname);
+      }
+    }
+  }, [connected]);
 
   const [screen, setScreen] = useState<AppScreen>('splash');
   const [matchMode, setMatchMode] = useState<'quick' | 'custom'>('quick');
