@@ -636,10 +636,10 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
   sideOpponent: {
-    width: mob(55, 100),
+    width: mob(65, 100),
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: mob(2, 10),
+    paddingHorizontal: mob(3, 10),
   },
   tableCenter: {
     flex: 1,

@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     flexWrap: 'wrap',
-    maxWidth: 500,
+    maxWidth: mob(280, 500),
   },
   tableCard: {
     shadowColor: '#000',

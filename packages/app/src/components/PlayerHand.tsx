@@ -138,7 +138,7 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
     toggleCard(card);
   };
 
-  const cardOverlap = isMobile ? -26 : -28;
+  const cardOverlap = isMobile ? -22 : -28;
   const bombCardOverlap = isMobile ? -20 : -22;
 
   const normalCount = normalCards.length;
@@ -261,14 +261,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: 4,
     paddingBottom: 6,
+    paddingHorizontal: 6,
+    minWidth: 36,
+    minHeight: 44,
     gap: 2,
   },
   splitToggleIcon: {
-    fontSize: 14,
+    fontSize: 16,
   },
   splitToggleText: {
     color: 'rgba(155,89,182,0.6)',
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '700',
   },
   bombGroup: {

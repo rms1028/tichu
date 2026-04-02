@@ -314,9 +314,9 @@ const styles = StyleSheet.create({
 
   nickname: {
     color: COLORS.text,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
-    maxWidth: 72,
+    maxWidth: 80,
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
