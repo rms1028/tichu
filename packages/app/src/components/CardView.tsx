@@ -1,16 +1,8 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withRepeat,
-  withTiming,
-} from 'react-native-reanimated';
 import type { Card } from '@tichu/shared';
 import { getCardDisplayName, getSuitSymbol, getCardColor, getSuitBgColor, getSpecialIcon } from '../hooks/useGame';
 import { COLORS, FONT } from '../utils/theme';
-import { haptics } from '../utils/haptics';
 
 interface CardViewProps {
   card: Card;
@@ -22,51 +14,12 @@ interface CardViewProps {
   disabled?: boolean;
 }
 
-// AnimatedTouchable은 모바일 웹에서 터치 문제가 있어 분리 처리
-
 export function CardView({
   card, selected = false, isBombCard = false, onPress, size = 'normal', faceDown = false, disabled = false,
 }: CardViewProps) {
   const dims = SIZE_MAP[size];
   const color = getCardColor(card);
   const bgColor = getSuitBgColor(card);
-
-  // Reanimated: 카드 선택 spring
-  const translateY = useSharedValue(0);
-  const selectionScale = useSharedValue(1);
-
-  useEffect(() => {
-    translateY.value = withSpring(selected ? -12 : 0, { damping: 14, stiffness: 200 });
-    selectionScale.value = withSpring(selected ? 1.08 : 1, { damping: 14, stiffness: 200 });
-  }, [selected]);
-
-  const selectedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }, { scale: selectionScale.value }],
-  }));
-
-  // Reanimated: 폭탄 글로우 pulse
-  const glowOpacity = useSharedValue(0);
-
-  useEffect(() => {
-    if (isBombCard) {
-      glowOpacity.value = withRepeat(
-        withTiming(1, { duration: 800 }),
-        -1,
-        true,
-      );
-    } else {
-      glowOpacity.value = withTiming(0, { duration: 200 });
-    }
-  }, [isBombCard]);
-
-  const bombGlowStyle = useAnimatedStyle(() => ({
-    shadowOpacity: 0.3 + glowOpacity.value * 0.5,
-    borderColor: isBombCard ? '#9b59b6' : 'transparent',
-  }));
-
-  const handlePress = () => {
-    onPress?.();
-  };
 
   if (faceDown) {
     return (
@@ -85,32 +38,33 @@ export function CardView({
   const specialBg = isSpecial ? getSpecialCardBg(card) : undefined;
   const specialBorder = isSpecial ? getSpecialBorderColor(card) : undefined;
 
+  // 선택 시 위로 올라가는 효과 (순수 RN style)
+  const selectionStyle = selected ? { transform: [{ translateY: -10 } as any], borderWidth: 3, borderColor: '#ffe066' } : {};
+  const bombStyle = isBombCard ? { borderColor: '#9b59b6', borderWidth: 2 } : {};
+
   if (isSpecial) {
     return (
-      <TouchableOpacity onPress={handlePress} disabled={disabled || !onPress} activeOpacity={0.7}>
-        <Animated.View style={[
+      <TouchableOpacity onPress={onPress} disabled={disabled || !onPress} activeOpacity={0.7}>
+        <View style={[
           styles.card, dims,
           { backgroundColor: specialBg, borderColor: specialBorder },
-          selected && styles.selected,
-          selectedStyle,
+          selectionStyle,
         ]}>
           <Text style={[styles.specialTopName, { color }, size === 'small' && styles.specialTopNameSmall]}>{name}</Text>
           <Text style={[styles.specialIconCenter, size === 'small' && styles.specialIconSmall, size === 'large' && styles.specialIconLarge]}>{specialIcon}</Text>
-        </Animated.View>
+        </View>
       </TouchableOpacity>
     );
   }
 
-  // 일반 카드
-  const cardContent = (
-    <TouchableOpacity onPress={handlePress} disabled={disabled || !onPress} activeOpacity={0.7}>
-      <Animated.View style={[
+  const cardElement = (
+    <TouchableOpacity onPress={onPress} disabled={disabled || !onPress} activeOpacity={0.7}>
+      <View style={[
         styles.card, dims,
         { backgroundColor: bgColor, borderColor: color },
         isBombCard && styles.bombHighlight,
-        selected && styles.selected,
-        selectedStyle,
-        isBombCard && bombGlowStyle,
+        selectionStyle,
+        bombStyle,
       ]}>
         <View style={styles.cardInsetTop} />
         <View style={styles.topLeft}>
@@ -121,19 +75,19 @@ export function CardView({
         {isBombCard && (
           <View style={styles.bombBadge}><Text style={styles.bombBadgeText}>B</Text></View>
         )}
-      </Animated.View>
+      </View>
     </TouchableOpacity>
   );
 
   if (isBombCard) {
     return (
-      <Animated.View style={[styles.bombGlow, bombGlowStyle]}>
-        {cardContent}
-      </Animated.View>
+      <View style={styles.bombGlow}>
+        {cardElement}
+      </View>
     );
   }
 
-  return cardContent;
+  return cardElement;
 }
 
 function getSpecialCardBg(card: Card): string {
@@ -150,7 +104,7 @@ function getSpecialBorderColor(card: Card): string {
   if (card.type !== 'special') return '#ccc';
   switch (card.specialType) {
     case 'mahjong': return '#4caf50';
-    case 'dog': return '#78909c';
+    case 'dog': return '#607d8b';
     case 'phoenix': return '#ff9800';
     case 'dragon': return '#f44336';
   }
@@ -181,6 +135,88 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
+  faceDown: {
+    backgroundColor: COLORS.cardBack,
+    borderColor: '#8e2020',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backPattern: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backText: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: FONT.lg,
+    fontWeight: '900',
+  },
+  topLeft: {
+    position: 'absolute',
+    top: 3,
+    left: 4,
+  },
+  rank: {
+    fontSize: FONT.md,
+    fontWeight: '900',
+    lineHeight: 16,
+  },
+  rankSmall: {
+    fontSize: 10,
+    lineHeight: 12,
+  },
+  rankLarge: {
+    fontSize: FONT.lg,
+    lineHeight: 20,
+  },
+  suitTop: {
+    fontSize: 8,
+    lineHeight: 10,
+    marginTop: -1,
+  },
+  suitTopSmall: {
+    fontSize: 6,
+  },
+  suitCenter: {
+    position: 'absolute',
+    bottom: '20%',
+    alignSelf: 'center',
+    fontSize: 24,
+    textShadowColor: 'rgba(0,0,0,0.15)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  suitCenterSmall: {
+    fontSize: 16,
+  },
+  suitCenterLarge: {
+    fontSize: 32,
+  },
+  specialTopName: {
+    position: 'absolute',
+    top: 4,
+    left: 5,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  specialTopNameSmall: {
+    fontSize: 7,
+  },
+  specialIconCenter: {
+    flex: 1,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    fontSize: 28,
+    lineHeight: 50,
+  },
+  specialIconSmall: {
+    fontSize: 18,
+    lineHeight: 36,
+  },
+  specialIconLarge: {
+    fontSize: 38,
+    lineHeight: 70,
+  },
   cardInsetTop: {
     position: 'absolute',
     top: 0,
@@ -196,12 +232,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   bombGlow: {
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: '#9b59b6',
     shadowColor: '#9b59b6',
-    shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
     elevation: 8,
   },
   bombBadge: {
@@ -221,106 +255,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   selected: {
-    borderWidth: 3,
-    borderColor: '#ffe066',
-    shadowColor: '#ffe066',
-    shadowOpacity: 0.7,
-    shadowRadius: 10,
-  },
-  faceDown: {
-    backgroundColor: COLORS.cardBack,
-    borderColor: '#8b0000',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backPattern: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    borderRadius: 8,
-  },
-  backText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: FONT.lg,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  topLeft: {
-    position: 'absolute',
-    top: 3,
-    left: 5,
-    alignItems: 'center',
-  },
-  rank: {
-    fontWeight: '800',
-    fontSize: 18,
-    lineHeight: 20,
-    textShadowColor: 'rgba(0,0,0,0.08)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 1,
-  },
-  rankSmall: {
-    fontSize: 13,
-    lineHeight: 15,
-  },
-  rankLarge: {
-    fontSize: 22,
-    lineHeight: 24,
-  },
-  suitTop: {
-    fontSize: 16,
-    lineHeight: 18,
-  },
-  suitTopSmall: {
-    fontSize: 12,
-  },
-  suitCenter: {
-    position: 'absolute',
-    bottom: 5,
-    right: 5,
-    fontSize: 32,
-  },
-  suitCenterSmall: {
-    fontSize: 20,
-    bottom: 3,
-    right: 3,
-  },
-  suitCenterLarge: {
-    fontSize: 40,
-    bottom: 6,
-    right: 6,
-  },
-  specialTopName: {
-    position: 'absolute',
-    top: 3,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    fontWeight: '900',
-    fontSize: 14,
-    textShadowColor: 'rgba(0,0,0,0.15)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  specialTopNameSmall: {
-    fontSize: 10,
-    top: 2,
-  },
-  specialIconCenter: {
-    fontSize: 36,
-    textAlign: 'center',
-    marginTop: 24,
-  },
-  specialIconSmall: {
-    fontSize: 26,
-    marginTop: 18,
-  },
-  specialIconLarge: {
-    fontSize: 48,
-    marginTop: 26,
+    // handled by selectionStyle inline
   },
 });
