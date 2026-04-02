@@ -73,6 +73,11 @@ export interface GameState {
   matchmakingStatus: 'idle' | 'queued' | 'matched' | 'cancelled';
   matchmakingPosition: number;
   matchmakingQueueSize: number;
+  friendCode: string;
+  friendList: { playerId: string; nickname: string; online: boolean; status: string }[];
+  friendRequests: { fromId: string; fromNickname: string }[];
+  friendSearchResult: { found: boolean; playerId?: string; nickname?: string } | null;
+  friendInvite: { fromNickname: string; roomId: string } | null;
 
   // 액션
   setConnection: (connected: boolean) => void;
@@ -142,6 +147,11 @@ const INITIAL_STATE = {
   matchmakingStatus: 'idle' as 'idle' | 'queued' | 'matched' | 'cancelled',
   matchmakingPosition: 0,
   matchmakingQueueSize: 0,
+  friendCode: '',
+  friendList: [] as { playerId: string; nickname: string; online: boolean; status: string }[],
+  friendRequests: [] as { fromId: string; fromNickname: string }[],
+  friendSearchResult: null as { found: boolean; playerId?: string; nickname?: string } | null,
+  friendInvite: null as { fromNickname: string; roomId: string } | null,
 };
 
 export const useGameStore = create<GameState>((set, get) => ({

@@ -202,6 +202,30 @@ export function useSocket() {
       store.onGameOver(data.winner, data.scores);
     });
 
+    // ── 친구 시스템 ──────────────────────────────────────────
+    socket.on('friend_code', (data: { code: string }) => {
+      useGameStore.setState({ friendCode: data.code });
+    });
+    socket.on('friend_list', (data: { friends: any[] }) => {
+      useGameStore.setState({ friendList: data.friends });
+    });
+    socket.on('friend_requests', (data: { requests: any[] }) => {
+      useGameStore.setState({ friendRequests: data.requests });
+    });
+    socket.on('friend_request_received', (data: { fromId: string; fromNickname: string }) => {
+      const prev = useGameStore.getState().friendRequests;
+      useGameStore.setState({ friendRequests: [...prev, data] });
+    });
+    socket.on('friend_search_result', (data: { found: boolean; playerId?: string; nickname?: string }) => {
+      useGameStore.setState({ friendSearchResult: data });
+    });
+    socket.on('friend_invite_received', (data: { fromNickname: string; roomId: string }) => {
+      useGameStore.setState({ friendInvite: data });
+    });
+    socket.on('friend_request_sent', () => {
+      useGameStore.setState({ friendSearchResult: null });
+    });
+
     // ── 매칭 ────────────────────────────────────────────────
     socket.on('matchmaking_status', (data: { status: 'queued' | 'matched' | 'cancelled'; position?: number; queueSize?: number; roomId?: string; seat?: number }) => {
       useGameStore.setState({
@@ -285,6 +309,34 @@ export function useSocket() {
     socketRef.current?.emit('swap_seat', { targetSeat });
   }, []);
 
+  const friendInit = useCallback((playerId: string, nickname: string) => {
+    socketRef.current?.emit('friend_init', { playerId, nickname });
+  }, []);
+
+  const friendSearch = useCallback((code: string, myPlayerId: string) => {
+    socketRef.current?.emit('friend_search', { code, myPlayerId });
+  }, []);
+
+  const friendRequest = useCallback((fromId: string, fromNickname: string, toId: string) => {
+    socketRef.current?.emit('friend_request', { fromId, fromNickname, toId });
+  }, []);
+
+  const friendAccept = useCallback((fromId: string, myId: string) => {
+    socketRef.current?.emit('friend_accept', { fromId, myId });
+  }, []);
+
+  const friendReject = useCallback((fromId: string, myId: string) => {
+    socketRef.current?.emit('friend_reject', { fromId, myId });
+  }, []);
+
+  const friendRemove = useCallback((myId: string, friendId: string) => {
+    socketRef.current?.emit('friend_remove', { myId, friendId });
+  }, []);
+
+  const friendInvite = useCallback((fromNickname: string, toId: string, roomId: string) => {
+    socketRef.current?.emit('friend_invite', { fromNickname, toId, roomId });
+  }, []);
+
   const queueMatch = useCallback((playerId: string, nickname: string) => {
     store.setPlayerInfo(playerId, nickname);
     useGameStore.setState({ matchmakingStatus: 'queued' });
@@ -310,5 +362,12 @@ export function useSocket() {
     swapSeat,
     queueMatch,
     cancelMatch,
+    friendInit,
+    friendSearch,
+    friendRequest,
+    friendAccept,
+    friendReject,
+    friendRemove,
+    friendInvite,
   };
 }

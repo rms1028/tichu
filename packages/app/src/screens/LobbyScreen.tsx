@@ -12,6 +12,13 @@ import { RulesScreen } from './RulesScreen';
 interface LobbyScreenProps {
   onJoin: (roomId: string, playerId: string, nickname: string) => void;
   onTutorial?: () => void;
+  onFriendInit?: (playerId: string, nickname: string) => void;
+  onFriendSearch?: (code: string, myPlayerId: string) => void;
+  onFriendRequest?: (fromId: string, fromNickname: string, toId: string) => void;
+  onFriendAccept?: (fromId: string, myId: string) => void;
+  onFriendReject?: (fromId: string, myId: string) => void;
+  onFriendRemove?: (myId: string, friendId: string) => void;
+  onFriendInvite?: (fromNickname: string, toId: string, roomId: string) => void;
 }
 
 // 티어
@@ -38,15 +45,7 @@ const ATTENDANCE = [
 ];
 const TODAY = 5;
 
-// 친구
-const FRIENDS = [
-  { name: 'Alex', avatar: '\uD83E\uDD81', online: true, status: '\uB85C\uBE44' },
-  { name: 'Mina', avatar: '\uD83D\uDC3B', online: true, status: '\uAC8C\uC784 \uC911' },
-  { name: 'Sora', avatar: '\uD83D\uDC2F', online: true, status: '\uB85C\uBE44' },
-  { name: 'Jay', avatar: '\uD83E\uDD8A', online: false, last: '2\uC2DC\uAC04 \uC804' },
-  { name: 'Haru', avatar: '\uD83E\uDD89', online: false, last: '1\uC77C \uC804' },
-];
-const onlineCount = FRIENDS.filter(f => f.online).length;
+// 친구 (실제 데이터는 gameStore에서 가져옴)
 
 import { useUserStore, getTier, SHOP_AVATARS } from '../stores/userStore';
 import { RankingScreen } from './RankingScreen';
@@ -65,7 +64,7 @@ function FloatingSymbol({ symbol, x, delay }: { symbol: string; x: number; delay
   return <Animated.Text style={[{ position: 'absolute', left: `${x}%` as any, top: `${20 + delay * 7}%` as any, fontSize: 22, color: '#fff', opacity: 0.04 }, s]}>{symbol}</Animated.Text>;
 }
 
-export function LobbyScreen({ onJoin, onTutorial }: LobbyScreenProps) {
+export function LobbyScreen({ onJoin, onTutorial, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite }: LobbyScreenProps) {
   const savedNickname = useUserStore((s) => s.nickname);
   const savedPlayerId = useUserStore((s) => s.playerId);
   const userSetNickname = useUserStore((s) => s.setNickname);
@@ -76,6 +75,23 @@ export function LobbyScreen({ onJoin, onTutorial }: LobbyScreenProps) {
   const [showRoom, setShowRoom] = useState(false);
   const [showNickEdit, setShowNickEdit] = useState(!savedNickname);
   const [showAttendance, setShowAttendance] = useState(() => useUserStore.getState().checkAttendance());
+  const [searchCode, setSearchCode] = useState('');
+
+  // 친구 데이터 (gameStore)
+  const friendCode = useGameStore((s) => s.friendCode);
+  const friendList = useGameStore((s) => s.friendList);
+  const friendRequests = useGameStore((s) => s.friendRequests);
+  const friendSearchResult = useGameStore((s) => s.friendSearchResult);
+
+  // 로비 진입 시 친구 초기화
+  useEffect(() => {
+    if (savedNickname && savedPlayerId && onFriendInit) {
+      onFriendInit(savedPlayerId, savedNickname);
+    }
+  }, [savedNickname, savedPlayerId]);
+
+  const onlineFriends = friendList.filter(f => f.online);
+  const offlineFriends = friendList.filter(f => !f.online);
   const [roomCode, setRoomCode] = useState('');
   const [matching, setMatching] = useState(false);
   const [matchSec, setMatchSec] = useState(0);
@@ -272,7 +288,7 @@ export function LobbyScreen({ onJoin, onTutorial }: LobbyScreenProps) {
           <TouchableOpacity style={S.topIconBtn} onPress={() => setPage('shop')}><Text style={S.topIconText}>{'🛒'}</Text></TouchableOpacity>
           <TouchableOpacity style={S.topIconBtn} onPress={() => setShowFriends(true)}>
             <Text style={S.topIconText}>{'\uD83D\uDC65'}</Text>
-            {onlineCount > 0 && <View style={S.badge}><Text style={S.badgeText}>{onlineCount}</Text></View>}
+            {(onlineFriends.length > 0 || friendRequests.length > 0) && <View style={S.badge}><Text style={S.badgeText}>{onlineFriends.length + friendRequests.length}</Text></View>}
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -341,23 +357,93 @@ export function LobbyScreen({ onJoin, onTutorial }: LobbyScreenProps) {
         <Pressable style={S.overlay} onPress={() => setShowFriends(false)}>
           <Animated.View entering={SlideInRight.duration(300)} style={S.fp}>
             <Pressable style={{ flex: 1 }} onPress={e => e.stopPropagation()}>
-              <View style={S.fpHead}><Text style={S.fpTitle}>{'\uCE5C\uAD6C \uBAA9\uB85D'}</Text><TouchableOpacity onPress={() => setShowFriends(false)}><Text style={S.fpX}>{'\u2715'}</Text></TouchableOpacity></View>
-              <TouchableOpacity style={S.fpAddBtn} onPress={() => { setFriendMsg('친구 추가 기능은 준비 중입니다!'); setTimeout(() => setFriendMsg(''), 2000); }}><Text style={S.fpAddText}>{'➕ 친구 추가'}</Text></TouchableOpacity>
+              <View style={S.fpHead}><Text style={S.fpTitle}>{'친구 목록'}</Text><TouchableOpacity onPress={() => setShowFriends(false)}><Text style={S.fpX}>{'\u2715'}</Text></TouchableOpacity></View>
+
+              {/* 내 친구 코드 */}
+              {friendCode ? (
+                <View style={{ alignItems: 'center', marginBottom: 10 }}>
+                  <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>내 친구 코드</Text>
+                  <Text style={{ color: '#F59E0B', fontSize: 18, fontWeight: '900', letterSpacing: 3 }}>{friendCode}</Text>
+                </View>
+              ) : null}
+
+              {/* 친구 코드로 검색 */}
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8, paddingHorizontal: 4 }}>
+                <TextInput
+                  style={[S.mInput, { flex: 1, paddingVertical: 6, fontSize: 13 }]}
+                  value={searchCode}
+                  onChangeText={setSearchCode}
+                  placeholder={'친구 코드 입력'}
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  maxLength={6}
+                />
+                <TouchableOpacity
+                  style={[S.fpAddBtn, { marginBottom: 0, paddingHorizontal: 12, paddingVertical: 6 }]}
+                  onPress={() => { if (searchCode.trim() && onFriendSearch) onFriendSearch(searchCode.trim(), savedPlayerId); }}
+                >
+                  <Text style={S.fpAddText}>{'검색'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* 검색 결과 */}
+              {friendSearchResult && friendSearchResult.found && (
+                <View style={[S.fpRow, { backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 8, marginBottom: 6 }]}>
+                  <View style={{ flex: 1 }}><Text style={S.fpN}>{friendSearchResult.nickname}</Text></View>
+                  <TouchableOpacity style={S.fpInv} onPress={() => {
+                    if (onFriendRequest && friendSearchResult.playerId) {
+                      onFriendRequest(savedPlayerId, name, friendSearchResult.playerId);
+                      setFriendMsg('친구 요청을 보냈습니다!');
+                      setTimeout(() => setFriendMsg(''), 2000);
+                    }
+                  }}><Text style={S.fpInvT}>{'추가'}</Text></TouchableOpacity>
+                </View>
+              )}
+              {friendSearchResult && !friendSearchResult.found && (
+                <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, textAlign: 'center', marginBottom: 6 }}>{'플레이어를 찾을 수 없습니다'}</Text>
+              )}
+
               {friendMsg ? <Text style={{ color: '#F59E0B', fontSize: 11, textAlign: 'center', marginBottom: 6 }}>{friendMsg}</Text> : null}
+
+              {/* 친구 요청 */}
+              {friendRequests.length > 0 && (
+                <>
+                  <Text style={S.fpSec}>{'📩 친구 요청 (' + friendRequests.length + ')'}</Text>
+                  {friendRequests.map((r, i) => (
+                    <View key={i} style={S.fpRow}>
+                      <View style={{ flex: 1 }}><Text style={S.fpN}>{r.fromNickname}</Text></View>
+                      <TouchableOpacity style={[S.fpInv, { backgroundColor: 'rgba(16,185,129,0.15)', borderColor: '#10b981' }]} onPress={() => onFriendAccept?.(r.fromId, savedPlayerId)}>
+                        <Text style={[S.fpInvT, { color: '#10b981' }]}>{'수락'}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[S.fpInv, { backgroundColor: 'rgba(239,68,68,0.15)', borderColor: '#ef4444', marginLeft: 4 }]} onPress={() => onFriendReject?.(r.fromId, savedPlayerId)}>
+                        <Text style={[S.fpInvT, { color: '#ef4444' }]}>{'거절'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </>
+              )}
+
               <ScrollView showsVerticalScrollIndicator={false}>
-                <Text style={S.fpSec}>{'\uC628\uB77C\uC778'}</Text>
-                {FRIENDS.filter(f => f.online).map((f, i) => (
+                {/* 온라인 친구 */}
+                <Text style={S.fpSec}>{'온라인 (' + onlineFriends.length + ')'}</Text>
+                {onlineFriends.length === 0 && <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, textAlign: 'center', paddingVertical: 8 }}>{'온라인 친구가 없습니다'}</Text>}
+                {onlineFriends.map((f, i) => (
                   <View key={i} style={S.fpRow}>
-                    <View style={S.fpAW}><Text style={S.fpAv}>{f.avatar}</Text><View style={S.fpDotOn} /></View>
-                    <View style={{ flex: 1 }}><Text style={S.fpN}>{f.name}</Text><Text style={S.fpSt}>{f.status}</Text></View>
-                    {f.status === '\uB85C\uBE44' && <TouchableOpacity style={S.fpInv} onPress={() => { setFriendMsg(`${f.name}님에게 초대를 보냈습니다!`); setTimeout(() => setFriendMsg(''), 2000); }}><Text style={S.fpInvT}>{'초대'}</Text></TouchableOpacity>}
+                    <View style={S.fpAW}><Text style={S.fpAv}>{'🐲'}</Text><View style={S.fpDotOn} /></View>
+                    <View style={{ flex: 1 }}><Text style={S.fpN}>{f.nickname}</Text><Text style={S.fpSt}>{f.status === 'lobby' ? '로비' : f.status === 'matching' ? '매칭 중' : '게임 중'}</Text></View>
+                    {f.status === 'lobby' && (
+                      <TouchableOpacity style={S.fpInv} onPress={() => { setFriendMsg(`${f.nickname}님에게 초대를 보냈습니다!`); setTimeout(() => setFriendMsg(''), 2000); }}>
+                        <Text style={S.fpInvT}>{'초대'}</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ))}
-                <Text style={[S.fpSec, { marginTop: 10 }]}>{'\uC624\uD504\uB77C\uC778'}</Text>
-                {FRIENDS.filter(f => !f.online).map((f, i) => (
+
+                {/* 오프라인 친구 */}
+                <Text style={[S.fpSec, { marginTop: 10 }]}>{'오프라인 (' + offlineFriends.length + ')'}</Text>
+                {offlineFriends.map((f, i) => (
                   <View key={i} style={[S.fpRow, { opacity: 0.5 }]}>
-                    <View style={S.fpAW}><Text style={S.fpAv}>{f.avatar}</Text><View style={S.fpDotOff} /></View>
-                    <View style={{ flex: 1 }}><Text style={S.fpN}>{f.name}</Text><Text style={S.fpSt}>{'\uB9C8\uC9C0\uB9C9 \uC811\uC18D: '}{(f as any).last}</Text></View>
+                    <View style={S.fpAW}><Text style={S.fpAv}>{'🐲'}</Text><View style={S.fpDotOff} /></View>
+                    <View style={{ flex: 1 }}><Text style={S.fpN}>{f.nickname}</Text></View>
                   </View>
                 ))}
               </ScrollView>

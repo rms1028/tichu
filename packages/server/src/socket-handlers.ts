@@ -22,6 +22,11 @@ import {
   addToQueue, removeFromQueue, getQueuePosition, getQueueSize,
   pullPlayers, checkMatchReady, broadcastQueueUpdate,
 } from './matchmaking.js';
+import {
+  playerOnline, playerOffline, setPlayerStatus, getOnlinePlayer,
+  sendFriendRequest, acceptFriendRequest, rejectFriendRequest, removeFriend,
+  getFriendList, getPendingRequests, findPlayerByCode, getPlayerFriendCode,
+} from './friends.js';
 
 // ── 방 관리 ──────────────────────────────────────────────────
 
@@ -171,6 +176,9 @@ export function registerSocketHandlers(io: Server): void {
       }
 
       socket.emit('room_joined', { seat, roomId: data.roomId, players: playersInfo });
+
+      // 온라인 상태 등록
+      playerOnline({ playerId: data.playerId, nickname: data.nickname, socketId: socket.id, status: 'ingame', roomId: data.roomId });
 
       // 다른 플레이어에게 새 참가자 알림
       socket.to(data.roomId).emit('player_joined', {
@@ -451,6 +459,7 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── queue_match (자동 매칭 큐 참가) ─────────────────────
     socket.on('queue_match', (data: { playerId: string; nickname: string }) => {
+      playerOnline({ playerId: data.playerId, nickname: data.nickname, socketId: socket.id, status: 'matching' });
       addToQueue({
         playerId: data.playerId,
         nickname: data.nickname,
@@ -476,11 +485,95 @@ export function registerSocketHandlers(io: Server): void {
       broadcastQueueUpdate(io);
     });
 
+    // ── 친구 시스템 ──────────────────────────────────────────
+
+    // 로비 진입 시 온라인 등록 + 친구 목록/요청 전송
+    socket.on('friend_init', (data: { playerId: string; nickname: string }) => {
+      playerOnline({ playerId: data.playerId, nickname: data.nickname, socketId: socket.id, status: 'lobby' });
+      const code = getPlayerFriendCode(data.playerId);
+      socket.emit('friend_code', { code });
+      socket.emit('friend_list', { friends: getFriendList(data.playerId) });
+      socket.emit('friend_requests', { requests: getPendingRequests(data.playerId) });
+    });
+
+    // 친구 코드로 검색
+    socket.on('friend_search', (data: { code: string; myPlayerId: string }) => {
+      const found = findPlayerByCode(data.code);
+      if (!found || found.playerId === data.myPlayerId) {
+        socket.emit('friend_search_result', { found: false });
+      } else {
+        socket.emit('friend_search_result', { found: true, playerId: found.playerId, nickname: found.nickname });
+      }
+    });
+
+    // 친구 요청 보내기
+    socket.on('friend_request', (data: { fromId: string; fromNickname: string; toId: string }) => {
+      const result = sendFriendRequest(data.fromId, data.fromNickname, data.toId);
+      if (!result.ok) {
+        socket.emit('friend_error', { error: result.error });
+        return;
+      }
+      // 상대에게 실시간 알림
+      const target = getOnlinePlayer(data.toId);
+      if (target) {
+        io.to(target.socketId).emit('friend_request_received', { fromId: data.fromId, fromNickname: data.fromNickname });
+        // 자동 수락된 경우 (상대가 이미 요청 보낸 상태) 양쪽에 친구 목록 갱신
+        const myFriends = getFriendList(data.fromId);
+        const theirFriends = getFriendList(data.toId);
+        if (myFriends.some(f => f.playerId === data.toId)) {
+          socket.emit('friend_list', { friends: myFriends });
+          io.to(target.socketId).emit('friend_list', { friends: theirFriends });
+        }
+      }
+      socket.emit('friend_request_sent', { toId: data.toId });
+    });
+
+    // 친구 요청 수락
+    socket.on('friend_accept', (data: { fromId: string; myId: string }) => {
+      if (acceptFriendRequest(data.fromId, data.myId)) {
+        socket.emit('friend_list', { friends: getFriendList(data.myId) });
+        socket.emit('friend_requests', { requests: getPendingRequests(data.myId) });
+        // 상대에게도 친구 목록 갱신
+        const from = getOnlinePlayer(data.fromId);
+        if (from) {
+          io.to(from.socketId).emit('friend_list', { friends: getFriendList(data.fromId) });
+        }
+      }
+    });
+
+    // 친구 요청 거절
+    socket.on('friend_reject', (data: { fromId: string; myId: string }) => {
+      rejectFriendRequest(data.fromId, data.myId);
+      socket.emit('friend_requests', { requests: getPendingRequests(data.myId) });
+    });
+
+    // 친구 삭제
+    socket.on('friend_remove', (data: { myId: string; friendId: string }) => {
+      removeFriend(data.myId, data.friendId);
+      socket.emit('friend_list', { friends: getFriendList(data.myId) });
+      const friend = getOnlinePlayer(data.friendId);
+      if (friend) {
+        io.to(friend.socketId).emit('friend_list', { friends: getFriendList(data.friendId) });
+      }
+    });
+
+    // 친구 방 초대
+    socket.on('friend_invite', (data: { fromNickname: string; toId: string; roomId: string }) => {
+      const target = getOnlinePlayer(data.toId);
+      if (target) {
+        io.to(target.socketId).emit('friend_invite_received', { fromNickname: data.fromNickname, roomId: data.roomId });
+      }
+    });
+
     // ── disconnect ─────────────────────────────────────────
     socket.on('disconnect', () => {
-      // 매칭 큐에서 제거
+      // 매칭 큐 + 온라인 목록에서 제거
       removeFromQueue(socket.id);
       broadcastQueueUpdate(io);
+      // playerId 찾아서 offline 처리
+      const room2 = playerRoomId ? rooms.get(playerRoomId) : null;
+      const pid = room2?.players[playerSeat]?.playerId;
+      if (pid) playerOffline(pid);
 
       if (!playerRoomId) return;
       const room = rooms.get(playerRoomId);

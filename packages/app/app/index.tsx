@@ -38,6 +38,7 @@ function AppInner() {
     exchangeCards, playCards, passTurn,
     dragonGive, submitBomb, addBots, swapSeat,
     queueMatch, cancelMatch,
+    friendInit, friendSearch, friendRequest, friendAccept, friendReject, friendRemove, friendInvite,
   } = useSocket();
 
   const [screen, setScreen] = useState<AppScreen>('splash');
@@ -95,6 +96,13 @@ function AppInner() {
           }
         }}
         onTutorial={() => setShowTutorial(true)}
+        onFriendInit={friendInit}
+        onFriendSearch={friendSearch}
+        onFriendRequest={friendRequest}
+        onFriendAccept={friendAccept}
+        onFriendReject={friendReject}
+        onFriendRemove={friendRemove}
+        onFriendInvite={friendInvite}
       />
       <TutorialModal visible={showTutorial} onClose={() => setShowTutorial(false)} />
       </>
