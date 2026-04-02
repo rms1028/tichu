@@ -55,14 +55,10 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
     return () => clearInterval(iv);
   }, []);
 
-  // 빠른 매칭: 자동으로 봇 채우기
-  useEffect(() => {
-    if (mode !== 'quick') return;
-    const timer = setTimeout(() => {
-      onAddBots();
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [mode]);
+  // 빠른 매칭: 서버에서 자동 매칭 (큐 시스템)
+  const matchmakingStatus = useGameStore((s) => s.matchmakingStatus);
+  const matchmakingPosition = useGameStore((s) => s.matchmakingPosition);
+  const matchmakingQueueSize = useGameStore((s) => s.matchmakingQueueSize);
 
   // 4인 채워지면 카운트다운
   useEffect(() => {
@@ -185,7 +181,11 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
             <Text style={S.elapsed}>{fmt(elapsed)}</Text>
             <Animated.Text style={[S.spinSymbol, spinStyle]}>{'\u2665'}</Animated.Text>
           </View>
-          <Text style={S.playerCount}>{filledCount}/4 명 참가</Text>
+          <Text style={S.playerCount}>
+            {mode === 'quick' && matchmakingStatus === 'queued'
+              ? `대기열 ${matchmakingPosition}/${matchmakingQueueSize}명`
+              : `${filledCount}/4 명 참가`}
+          </Text>
         </View>
 
         {/* 슬롯 */}

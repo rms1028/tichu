@@ -70,6 +70,9 @@ export interface GameState {
   } | null;
   gameOver: { winner: string; scores: { team1: number; team2: number } } | null;
   errorMsg: string | null;
+  matchmakingStatus: 'idle' | 'queued' | 'matched' | 'cancelled';
+  matchmakingPosition: number;
+  matchmakingQueueSize: number;
 
   // 액션
   setConnection: (connected: boolean) => void;
@@ -136,6 +139,9 @@ const INITIAL_STATE = {
   roundResult: null as GameState['roundResult'],
   gameOver: null as { winner: string; scores: { team1: number; team2: number } } | null,
   errorMsg: null as string | null,
+  matchmakingStatus: 'idle' as 'idle' | 'queued' | 'matched' | 'cancelled',
+  matchmakingPosition: 0,
+  matchmakingQueueSize: 0,
 };
 
 export const useGameStore = create<GameState>((set, get) => ({

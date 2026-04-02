@@ -66,12 +66,15 @@ function FloatingSymbol({ symbol, x, delay }: { symbol: string; x: number; delay
 }
 
 export function LobbyScreen({ onJoin, onTutorial }: LobbyScreenProps) {
-  const [nick, setNick] = useState('');
+  const savedNickname = useUserStore((s) => s.nickname);
+  const savedPlayerId = useUserStore((s) => s.playerId);
+  const userSetNickname = useUserStore((s) => s.setNickname);
+  const [nick, setNick] = useState(savedNickname);
   const [friendMsg, setFriendMsg] = useState('');
   const [page, setPage] = useState<Page>('main');
   const [showFriends, setShowFriends] = useState(false);
   const [showRoom, setShowRoom] = useState(false);
-  const [showNickEdit, setShowNickEdit] = useState(false);
+  const [showNickEdit, setShowNickEdit] = useState(!savedNickname);
   const [showAttendance, setShowAttendance] = useState(() => useUserStore.getState().checkAttendance());
   const [roomCode, setRoomCode] = useState('');
   const [matching, setMatching] = useState(false);
@@ -86,21 +89,20 @@ export function LobbyScreen({ onJoin, onTutorial }: LobbyScreenProps) {
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const connected = useGameStore((s) => s.connected);
   const userCoins = useUserStore((s) => s.coins);
-  const name = nick.trim() || 'Guest';
+  const name = nick.trim() || savedNickname || 'Guest';
 
   useEffect(() => {
     if (!matching) return;
     setMatchSec(0);
     timer.current = setInterval(() => setMatchSec(s => s + 1), 1000);
     const auto = setTimeout(() => {
-      const pid = `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      onJoin(`std_${Date.now().toString(36)}`, pid, name);
+      onJoin(`std_${Date.now().toString(36)}`, savedPlayerId, name);
     }, 3000);
     return () => { clearInterval(timer.current!); clearTimeout(auto); };
   }, [matching]);
 
-  const joinRoom = () => { if (!roomCode.trim()) return; const pid = `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`; onJoin(roomCode.trim(), pid, name); };
-  const newRoom = () => { const pid = `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`; onJoin(`room_${Date.now().toString(36)}`, pid, name); };
+  const joinRoom = () => { if (!roomCode.trim()) return; onJoin(roomCode.trim(), savedPlayerId, name); };
+  const newRoom = () => { onJoin(`room_${Date.now().toString(36)}`, savedPlayerId, name); };
 
   // 로고 glow pulse
   const logoGlow = useSharedValue(0.3);
@@ -390,7 +392,7 @@ export function LobbyScreen({ onJoin, onTutorial }: LobbyScreenProps) {
         <View style={S.mOvl}><View style={S.mBox}>
           <Text style={S.mTitle}>{'✏️ 닉네임 변경'}</Text>
           <TextInput style={S.mInput} value={nick} onChangeText={setNick} placeholder={'닉네임 입력'} placeholderTextColor="rgba(255,255,255,0.3)" maxLength={12} />
-          <TouchableOpacity style={S.mOk} onPress={() => setShowNickEdit(false)}><Text style={S.mOkT}>{'확인'}</Text></TouchableOpacity>
+          <TouchableOpacity style={[S.mOk, !nick.trim() && { opacity: 0.4 }]} onPress={() => { if (nick.trim()) { userSetNickname(nick.trim()); setShowNickEdit(false); } }} disabled={!nick.trim()}><Text style={S.mOkT}>{'확인'}</Text></TouchableOpacity>
         </View></View>
       </Modal>
 

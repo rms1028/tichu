@@ -202,6 +202,25 @@ export function useSocket() {
       store.onGameOver(data.winner, data.scores);
     });
 
+    // ── 매칭 ────────────────────────────────────────────────
+    socket.on('matchmaking_status', (data: { status: 'queued' | 'matched' | 'cancelled'; position?: number; queueSize?: number; roomId?: string; seat?: number }) => {
+      useGameStore.setState({
+        matchmakingStatus: data.status,
+        matchmakingPosition: data.position ?? 0,
+        matchmakingQueueSize: data.queueSize ?? 0,
+      });
+      if (data.status === 'matched' && data.roomId !== undefined && data.seat !== undefined) {
+        useGameStore.getState().setRoomInfo(data.roomId, data.seat);
+      }
+    });
+
+    socket.on('matchmaking_update', (data: { position: number; queueSize: number }) => {
+      useGameStore.setState({
+        matchmakingPosition: data.position,
+        matchmakingQueueSize: data.queueSize,
+      });
+    });
+
     // ── 좌석 교환 ──────────────────────────────────────────
     socket.on('seats_updated', (data: { players: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> }) => {
       useGameStore.setState({ players: data.players });
@@ -266,6 +285,17 @@ export function useSocket() {
     socketRef.current?.emit('swap_seat', { targetSeat });
   }, []);
 
+  const queueMatch = useCallback((playerId: string, nickname: string) => {
+    store.setPlayerInfo(playerId, nickname);
+    useGameStore.setState({ matchmakingStatus: 'queued' });
+    socketRef.current?.emit('queue_match', { playerId, nickname });
+  }, []);
+
+  const cancelMatch = useCallback(() => {
+    useGameStore.setState({ matchmakingStatus: 'idle', matchmakingPosition: 0, matchmakingQueueSize: 0 });
+    socketRef.current?.emit('cancel_match');
+  }, []);
+
   return {
     socket: socketRef,
     joinRoom,
@@ -278,5 +308,7 @@ export function useSocket() {
     submitBomb,
     addBots,
     swapSeat,
+    queueMatch,
+    cancelMatch,
   };
 }

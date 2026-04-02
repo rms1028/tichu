@@ -75,6 +75,7 @@ export const SHOP_CARDBACKS: ShopItem[] = [
 // 스토어 타입
 interface UserState {
   // 기본 정보
+  playerId: string;
   coins: number;
   xp: number;
   nickname: string;
@@ -122,6 +123,8 @@ interface UserState {
   equipCardBack: (id: string) => void;
   setNickname: (name: string) => void;
   setSetting: (key: 'soundOn' | 'musicOn' | 'notifyOn' | 'friendNotify' | 'gameNotify', value: boolean) => void;
+  setPlayerId: (id: string) => void;
+  isGuest: () => boolean;
 }
 
 // MMKV는 웹에서 안 되므로 웹에서는 메모리만 사용
@@ -144,7 +147,7 @@ function loadState(): Partial<UserState> {
 function saveState(state: Partial<UserState>) {
   if (!storage) return;
   try {
-    const { addCoins, addXp, recordGameResult, checkAttendance, claimAttendance, updateMissionProgress, claimMission, resetDailyMissions, buyItem, equipAvatar, equipCardBack, setNickname, ...data } = state as any;
+    const { addCoins, addXp, recordGameResult, checkAttendance, claimAttendance, updateMissionProgress, claimMission, resetDailyMissions, buyItem, equipAvatar, equipCardBack, setNickname, setSetting, setPlayerId, isGuest, ...data } = state as any;
     storage.set('userStore', JSON.stringify(data));
   } catch { /* */ }
 }
@@ -152,10 +155,13 @@ function saveState(state: Partial<UserState>) {
 const saved = loadState();
 const today = new Date().toISOString().slice(0, 10);
 
+const generatePlayerId = () => `guest_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
 export const useUserStore = create<UserState>((set, get) => ({
+  playerId: saved.playerId ?? generatePlayerId(),
   coins: saved.coins ?? 500,
   xp: saved.xp ?? 0,
-  nickname: saved.nickname ?? 'Guest',
+  nickname: saved.nickname ?? '',
   totalGames: saved.totalGames ?? 0,
   wins: saved.wins ?? 0,
   losses: saved.losses ?? 0,
@@ -275,6 +281,8 @@ export const useUserStore = create<UserState>((set, get) => ({
   equipCardBack: (id) => set(s => { const ns = { ...s, equippedCardBack: id }; saveState(ns); return ns; }),
   setNickname: (name) => set(s => { const ns = { ...s, nickname: name }; saveState(ns); return ns; }),
   setSetting: (key, value) => set(s => { const ns = { ...s, [key]: value }; saveState(ns); return ns; }),
+  setPlayerId: (id) => set(s => { const ns = { ...s, playerId: id }; saveState(ns); return ns; }),
+  isGuest: () => get().playerId.startsWith('guest_'),
 }));
 
 function isYesterday(dateStr: string): boolean {

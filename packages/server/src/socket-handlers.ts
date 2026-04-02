@@ -18,6 +18,10 @@ import {
 import type { GameEvent } from './game-engine.js';
 import { startBombWindow, submitBomb, resolveBombWindow, afterBombWindowResolved } from './bomb-window.js';
 import { decideBotAction, decideBotBomb, decideBotTichu, decideBotExchange } from './bot.js';
+import {
+  addToQueue, removeFromQueue, getQueuePosition, getQueueSize,
+  pullPlayers, checkMatchReady, broadcastQueueUpdate,
+} from './matchmaking.js';
 
 // ── 방 관리 ──────────────────────────────────────────────────
 
@@ -435,8 +439,39 @@ export function registerSocketHandlers(io: Server): void {
       startBombWindowResolveTimer(io, room);
     });
 
+    // ── queue_match (자동 매칭 큐 참가) ─────────────────────
+    socket.on('queue_match', (data: { playerId: string; nickname: string }) => {
+      addToQueue({
+        playerId: data.playerId,
+        nickname: data.nickname,
+        socketId: socket.id,
+        joinedAt: Date.now(),
+      });
+      socket.emit('matchmaking_status', {
+        status: 'queued',
+        position: getQueuePosition(socket.id),
+        queueSize: getQueueSize(),
+      });
+      broadcastQueueUpdate(io);
+      // 4명 모이면 즉시 매칭
+      if (checkMatchReady() === 'full') {
+        formAndStartMatch(io);
+      }
+    });
+
+    // ── cancel_match (매칭 취소) ──────────────────────────
+    socket.on('cancel_match', () => {
+      removeFromQueue(socket.id);
+      socket.emit('matchmaking_status', { status: 'cancelled' });
+      broadcastQueueUpdate(io);
+    });
+
     // ── disconnect ─────────────────────────────────────────
     socket.on('disconnect', () => {
+      // 매칭 큐에서 제거
+      removeFromQueue(socket.id);
+      broadcastQueueUpdate(io);
+
       if (!playerRoomId) return;
       const room = rooms.get(playerRoomId);
       if (!room || playerSeat < 0) return;
@@ -454,6 +489,73 @@ export function registerSocketHandlers(io: Server): void {
       return rooms.get(playerRoomId) ?? null;
     }
   });
+
+  // ── 매칭 타이머 (1초마다 체크) ──────────────────────────────
+  setInterval(() => {
+    const status = checkMatchReady();
+    if (status === 'full' || status === 'timeout') {
+      formAndStartMatch(io);
+    }
+  }, 1000);
+}
+
+// ── 매칭 성사 → 방 생성 + 게임 시작 ─────────────────────────────
+
+function formAndStartMatch(io: Server): void {
+  const players = pullPlayers(4);
+  if (players.length === 0) return;
+
+  const roomId = `match_${Date.now().toString(36)}`;
+  const room = getOrCreateRoom(roomId);
+
+  // 실제 플레이어 배치
+  let seat = 0;
+  for (const entry of players) {
+    room.players[seat] = {
+      playerId: entry.playerId,
+      nickname: entry.nickname,
+      socketId: entry.socketId,
+      connected: true,
+      isBot: false,
+    };
+
+    const s = io.sockets.sockets.get(entry.socketId);
+    if (s) s.join(roomId);
+
+    // 플레이어 목록 구성
+    const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
+    for (let i = 0; i < 4; i++) {
+      const p = room.players[i];
+      playersInfo[i] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
+    }
+
+    io.to(entry.socketId).emit('matchmaking_status', { status: 'matched', roomId, seat });
+    io.to(entry.socketId).emit('room_joined', { seat, roomId, players: playersInfo });
+    seat++;
+  }
+
+  // 빈 좌석 봇으로 채우기
+  const botNames = ['Bot-A', 'Bot-B', 'Bot-C'];
+  let botIdx = 0;
+  for (let s = seat; s < 4; s++) {
+    room.players[s] = {
+      playerId: `bot_${s}_${Date.now()}`,
+      nickname: botNames[botIdx++] ?? `Bot-${s}`,
+      socketId: '',
+      connected: true,
+      isBot: true,
+    };
+    io.to(roomId).emit('player_joined', {
+      seat: s,
+      player: { nickname: room.players[s]!.nickname, connected: true, isBot: true },
+    });
+  }
+
+  // 게임 시작
+  const events = startRound(room);
+  broadcastEvents(io, room, events);
+  scheduleBotLargeTichu(io, room);
+  startLargeTichuTimer(io, room);
 }
 
 // ── 타이머 관리 ──────────────────────────────────────────────

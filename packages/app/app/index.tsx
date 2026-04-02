@@ -37,6 +37,7 @@ function AppInner() {
     joinRoom, declareTichu, passTichu,
     exchangeCards, playCards, passTurn,
     dragonGive, submitBomb, addBots, swapSeat,
+    queueMatch, cancelMatch,
   } = useSocket();
 
   const [screen, setScreen] = useState<AppScreen>('splash');
@@ -79,17 +80,19 @@ function AppInner() {
         <LobbyScreen
           onJoin={(room, playerId, nick) => {
           setNickname(nick);
-          // 매칭 대기실을 거쳐서 입장
           if (room.startsWith('std_')) {
+            // 빠른매칭 → 서버 큐에 참가
             setMatchMode('quick');
             setMatchRoomCode('');
+            setScreen('matchmaking');
+            queueMatch(playerId, nick);
           } else {
+            // 커스텀 → 직접 방 참가
             setMatchMode('custom');
             setMatchRoomCode(room);
+            setScreen('matchmaking');
+            joinRoom(room, playerId, nick);
           }
-          setScreen('matchmaking');
-          // 실제 서버 연결
-          joinRoom(room, playerId, nick);
         }}
         onTutorial={() => setShowTutorial(true)}
       />
@@ -106,6 +109,7 @@ function AppInner() {
         roomCode={matchRoomCode}
         nickname={nickname}
         onCancel={() => {
+          if (matchMode === 'quick') cancelMatch();
           useGameStore.getState().reset();
           setScreen('lobby');
         }}
@@ -180,8 +184,7 @@ function AppInner() {
           useGameStore.getState().reset();
           setScreen('matchmaking');
           setMatchMode('quick');
-          const pid = `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-          joinRoom(`std_${Date.now().toString(36)}`, pid, nickname);
+          queueMatch(useUserStore.getState().playerId, nickname);
         }}
         onLobby={() => {
           resultRecorded.current = false;
