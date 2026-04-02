@@ -170,17 +170,15 @@ export function afterBombWindowResolved(room: GameRoom): GameEvent[] {
     return events;
   }
 
-  // Edge #35: 폭탄 승자가 트릭 주도권 획득 + 턴 순서 재설정
-  if (active.includes(lastSeat)) {
-    room.currentTurn = lastSeat;
-  } else {
-    // 폭탄 승자가 나갔으면 다음 활성 플레이어
-    const next = (lastSeat + 1) % 4;
-    let nextActive = next;
-    while (!active.includes(nextActive)) {
-      nextActive = (nextActive + 1) % 4;
+  // 폭탄 후: 폭탄 낸 사람 다음 플레이어에게 턴
+  // 나머지가 모두 패스하면 트릭 종료 → 폭탄 낸 사람이 리드권 획득
+  {
+    let next = (lastSeat + 1) % 4;
+    while (!active.includes(next)) {
+      next = (next + 1) % 4;
+      if (next === lastSeat) break; // 안전장치
     }
-    room.currentTurn = nextActive;
+    room.currentTurn = next;
   }
 
   events.push({ type: 'your_turn', seat: room.currentTurn });

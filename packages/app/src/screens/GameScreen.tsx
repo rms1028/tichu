@@ -24,7 +24,7 @@ import { ScoreBoard } from '../components/ScoreBoard';
 import { DragonGiveModal } from '../components/DragonGiveModal';
 import { LargeTichuModal } from '../components/LargeTichuModal';
 import { ExchangeView } from '../components/ExchangeView';
-import { BombOverlay } from '../components/BombOverlay';
+
 import { BombTimer } from '../components/BombTimer';
 import { GameEventOverlay } from '../components/GameEventOverlay';
 import { ScreenShake } from '../components/ParticleEffect';
@@ -42,6 +42,7 @@ interface GameScreenProps {
   onExchange: (left: Card, partner: Card, right: Card) => void;
   onDragonGive: (targetSeat: number) => void;
   onSubmitBomb: () => void;
+  onSubmitBombCards?: (cards: Card[]) => void;
   onAddBots: () => void;
   onBackToLobby?: () => void;
 }
@@ -72,7 +73,7 @@ const tichuPulseS = StyleSheet.create({
 
 export function GameScreen({
   onPlay, onPass, onDeclareTichu, onPassTichu,
-  onExchange, onDragonGive, onSubmitBomb, onAddBots, onBackToLobby,
+  onExchange, onDragonGive, onSubmitBomb, onSubmitBombCards, onAddBots, onBackToLobby,
 }: GameScreenProps) {
   const phase = useGameStore((s) => s.phase);
   const players = useGameStore((s) => s.players);
@@ -91,10 +92,15 @@ export function GameScreen({
   const turnDuration = useGameStore((s) => s.turnDuration);
   const canDeclareTichu = useGameStore((s) => s.canDeclareTichu);
   const bombWindow = useGameStore((s) => s.bombWindow);
+  const lastPlayEvent = useGameStore((s) => s.lastPlayEvent);
   const [bombShake, setBombShake] = useState(false);
+  // 폭탄이 실제로 플레이됐을 때만 화면 흔들림
   useEffect(() => {
-    if (bombWindow) { setBombShake(true); setTimeout(() => setBombShake(false), 500); }
-  }, [bombWindow]);
+    if (lastPlayEvent?.hand?.type === 'four_bomb' || lastPlayEvent?.hand?.type === 'straight_flush_bomb') {
+      setBombShake(true);
+      setTimeout(() => setBombShake(false), 500);
+    }
+  }, [lastPlayEvent]);
   const scores = useGameStore((s) => s.scores);
   const reset = useGameStore((s) => s.reset);
   const { leftOpponent, rightOpponent, partnerSeat } = useTeamInfo();
@@ -340,8 +346,10 @@ export function GameScreen({
     );
   }
 
-  // 현재 턴 플레이어 이름
-  const currentPlayerName = isMyTurn ? '내 차례' : (players[currentTurn]?.nickname ?? '...');
+  // 플레이어별 색상
+  const SEAT_COLORS = ['#22d3ee', '#f472b6', '#a78bfa', '#fb923c'];
+  const currentPlayerNick = isMyTurn ? '' : (players[currentTurn]?.nickname ?? '...');
+  const currentSeatColor = SEAT_COLORS[currentTurn] ?? '#22d3ee';
 
   // 메인 게임 화면 (landscape layout)
   return (
@@ -386,6 +394,7 @@ export function GameScreen({
             passed={passedSeats.includes(leftOpponent)}
             connected={players[leftOpponent]?.connected ?? true}
             isPartner={false}
+            nickColor="#A3E635"
           />
         </View>
 
@@ -406,6 +415,7 @@ export function GameScreen({
             passed={passedSeats.includes(rightOpponent)}
             connected={players[rightOpponent]?.connected ?? true}
             isPartner={false}
+            nickColor="#C084FC"
           />
         </View>
       </View>
@@ -450,8 +460,9 @@ export function GameScreen({
               <CircleTimer
                 remainingSec={remainingSec}
                 totalSec={Math.ceil(turnDuration / 1000)}
-                playerName={isMobile ? '' : currentPlayerName}
+                playerName={currentPlayerNick}
                 isMyTurn={isMyTurn}
+                seatColor={currentSeatColor}
               />
             )}
 
@@ -462,12 +473,11 @@ export function GameScreen({
                 onPass={onPass}
                 onDeclareTichu={(type) => onDeclareTichu(type)}
               />
-              <BombOverlay onSubmitBomb={onSubmitBomb} />
             </View>
           </View>
         </View>
 
-        <PlayerHand />
+        <PlayerHand onSubmitBombCards={onSubmitBombCards} />
       </View>
 
       {/* 모달 */}

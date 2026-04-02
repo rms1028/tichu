@@ -182,68 +182,79 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
   const partner = getPartnerSeat(seat);
   const active = getActivePlayers(room);
   const partnerTichu = room.tichuDeclarations[partner] !== null;
+  const myTichu = room.tichuDeclarations[seat] !== null;
 
-  // 마지막 1~2장: 강한 카드로 선 잡고 마무리
+  // 마지막 1~2장: 가장 강한 카드로 확실히 마무리
   if (hand.length <= 2) {
-    const singles = plays.filter(p => p.type === 'single');
-    const strongest = singles.sort((a, b) => b.value - a.value)[0];
-    if (strongest) return strongest;
+    return plays.sort((a, b) => b.value - a.value)[0] ?? plays[0]!;
   }
 
   // 팀원 티츄 시: 개로 선 넘기기 또는 약한 싱글
   if (partnerTichu && active.includes(partner)) {
     const dogPlay = plays.find(p => p.cards.length === 1 && isDog(p.cards[0]!));
     if (dogPlay) return dogPlay;
-    // 약한 싱글로 팀원이 쉽게 이기도록
     const singles = plays.filter(p => p.type === 'single' && p.value <= 6);
     if (singles.length > 0) return pickWeakest(singles);
   }
 
   // 개 리드: 파트너 활성이고 카드 많을 때
   const dogPlay = plays.find(p => p.cards.length === 1 && isDog(p.cards[0]!));
-  if (dogPlay && active.includes(partner) && hand.length > 4 && difficulty !== 'easy') {
-    if (Math.random() < 0.25) return dogPlay;
+  if (dogPlay && active.includes(partner) && hand.length > 4) {
+    if (Math.random() < 0.3) return dogPlay;
   }
 
-  // 비폭탄, 비개
   const nonBombs = plays.filter(p => !isBomb(p) && !p.cards.some(isDog));
   if (nonBombs.length === 0) return plays[0]!;
 
-  // 조합 우선 (카드 많이 정리): 풀하우스, 스트레이트, 연속페어 등
-  const multiCard = nonBombs.filter(p => p.length >= 3);
-  if (multiCard.length > 0 && difficulty !== 'easy') {
-    return pickWeakest(multiCard);
+  // 내 티츄 선언 시: 카드 많이 정리하는 조합 우선
+  if (myTichu) {
+    const biggest = nonBombs.sort((a, b) => b.length - a.length || a.value - b.value);
+    return biggest[0]!;
   }
 
-  // 약한 카드부터 정리
-  return pickWeakest(nonBombs);
+  // 조합 우선 (카드 많이 정리): 스트레이트 > 연속페어 > 풀하우스 > 트리플 > 페어 > 싱글
+  const typeOrder: Record<string, number> = { straight: 6, steps: 5, fullhouse: 4, triple: 3, pair: 2, single: 1 };
+  const byType = nonBombs.sort((a, b) => {
+    const ta = typeOrder[a.type] ?? 0;
+    const tb = typeOrder[b.type] ?? 0;
+    if (ta !== tb) return tb - ta; // 큰 조합 우선
+    return a.value - b.value; // 같은 타입이면 약한 것 먼저
+  });
+
+  // 장수 3장 이상인 조합이 있으면 우선
+  const multiCard = byType.filter(p => p.length >= 3);
+  if (multiCard.length > 0) return multiCard[0]!;
+
+  return byType[0]!;
 }
 
 // ── 패스 판단 ───────────────────────────────────────────────
 
 function shouldPass(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: number, difficulty: string): boolean {
   if (plays.length === 0) return true;
-  if (difficulty === 'easy') return false;
 
   const partner = getPartnerSeat(seat);
+  const myTichu = room.tichuDeclarations[seat] !== null;
+
+  // 내 티츄: 적극적으로 내기
+  if (myTichu) return false;
 
   // 파트너가 이기고 있으면 패스
-  if (room.currentTrick.lastPlayedSeat === partner) {
-    if (difficulty === 'medium') return Math.random() < 0.8;
-    return true;
-  }
+  if (room.currentTrick.lastPlayedSeat === partner) return true;
 
-  // 상대 티츄 시: 적극적으로 내기 (패스 안 함)
+  // 상대 티츄 시: 적극적으로 내기
   const enemies = [0, 1, 2, 3].filter(s => s !== seat && s !== partner);
   if (enemies.some(s => room.tichuDeclarations[s] !== null)) return false;
 
+  // 카드 적으면 적극적으로 내기
+  if (hand.length <= 4) return false;
+
   // 이길 수 있는 가장 약한 카드가 너무 강하면 패스 (A, 용 아끼기)
   const weakest = pickWeakest(plays);
-  if (hand.length > 4 && weakest.value >= 14 && weakest.type === 'single') {
-    // A나 용을 싱글로 낭비하지 않음
-    if (difficulty === 'hard') return true;
-    if (difficulty === 'medium') return Math.random() < 0.5;
-  }
+  if (weakest.value >= 14 && weakest.type === 'single') return true;
+
+  // 약한 카드로 이길 수 있으면 내기
+  if (weakest.value <= 10) return false;
 
   return false;
 }

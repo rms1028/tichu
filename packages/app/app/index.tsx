@@ -36,7 +36,7 @@ function AppInner() {
   const {
     joinRoom, declareTichu, passTichu,
     exchangeCards, playCards, passTurn,
-    dragonGive, submitBomb, addBots,
+    dragonGive, submitBomb, addBots, swapSeat,
   } = useSocket();
 
   const [screen, setScreen] = useState<AppScreen>('splash');
@@ -48,12 +48,7 @@ function AppInner() {
   const [emoteMsg, setEmoteMsg] = useState<{ emoji: string; label: string } | null>(null);
   const resultRecorded = useRef(false);
 
-  // roomId 변경 시 게임 화면으로
-  useEffect(() => {
-    if (roomId && screen === 'matchmaking') {
-      setScreen('game');
-    }
-  }, [roomId]);
+  // roomId는 매칭 대기실에서 이미 설정됨 — 게임 전환은 MatchmakingScreen의 onStart에서 처리
 
   // gameOver 시 결과 화면으로
   useEffect(() => {
@@ -115,9 +110,10 @@ function AppInner() {
           setScreen('lobby');
         }}
         onStart={() => {
-          addBots();
           setScreen('game');
         }}
+        onAddBots={addBots}
+        onSwapSeat={swapSeat}
       />
     );
   }
@@ -213,6 +209,9 @@ function AppInner() {
           submitBomb(selected);
           useGameStore.getState().clearSelection();
         }
+      }}
+      onSubmitBombCards={(cards) => {
+        submitBomb(cards);
       }}
       onBackToLobby={() => {
         useGameStore.getState().reset();

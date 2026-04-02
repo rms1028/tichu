@@ -83,7 +83,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   bombWindowDuration: 3_000,
   targetScore: 1_000,
   allowSpectators: false,
-  botDifficulty: 'medium',
+  botDifficulty: 'hard',
 };
 
 // ── 교환 대기 ────────────────────────────────────────────────

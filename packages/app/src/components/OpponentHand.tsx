@@ -24,6 +24,7 @@ interface OpponentHandProps {
   position: 'left' | 'top' | 'right';
   connected?: boolean;
   isPartner?: boolean;
+  nickColor?: string;
 }
 
 // 동물 아바타 매핑 (이름 해시 기반)
@@ -47,7 +48,7 @@ function getAvatar(name: string) {
 }
 
 export function OpponentHand({
-  cardCount, nickname, tichu, isCurrentTurn, finished, passed, position, connected = true, isPartner = false,
+  cardCount, nickname, tichu, isCurrentTurn, finished, passed, position, connected = true, isPartner = false, nickColor,
 }: OpponentHandProps) {
   const [emote, setEmote] = useState<string | null>(null);
 
@@ -111,7 +112,7 @@ export function OpponentHand({
               <Text style={styles.avatarEmoji}>{avatar.emoji}</Text>
             </View>
           </Animated.View>
-          <Text style={[styles.nickname, !connected && styles.nicknameDimmed]} numberOfLines={1}>{nickname}</Text>
+          <Text style={[styles.nickname, !connected && styles.nicknameDimmed, nickColor ? { color: nickColor } : undefined]} numberOfLines={1}>{nickname}</Text>
           {tichu && (
             <View style={[styles.tichuBadge, tichu === 'large' && styles.tichuLarge]}>
               <Text style={styles.tichuText}>{tichu === 'large' ? '🔥' : '⭐'}</Text>
@@ -166,7 +167,7 @@ export function OpponentHand({
       </View>
 
       {/* 이름 */}
-      <Text style={[styles.nickname, !connected && styles.nicknameDimmed]} numberOfLines={1}>
+      <Text style={[styles.nickname, !connected && styles.nicknameDimmed, nickColor ? { color: nickColor } : undefined]} numberOfLines={1}>
         {nickname}
       </Text>
 

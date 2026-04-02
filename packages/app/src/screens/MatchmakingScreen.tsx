@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Clipboard, Platform } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence,
   Easing, ZoomIn, FadeIn,
 } from 'react-native-reanimated';
 import { COLORS } from '../utils/theme';
 import { BackgroundWatermark } from '../components/BackgroundWatermark';
+import { useGameStore } from '../stores/gameStore';
 
 interface Props {
   mode: 'quick' | 'custom';
@@ -13,21 +14,40 @@ interface Props {
   nickname: string;
   onCancel: () => void;
   onStart: () => void;
+  onAddBots: () => void;
+  onSwapSeat?: (targetSeat: number) => void;
 }
 
-interface Slot { name: string | null; avatar: string; tier: string; ready: boolean; }
+interface Slot { name: string | null; avatar: string; tier: string; ready: boolean; isBot: boolean; }
 
-export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart }: Props) {
+export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart, onAddBots, onSwapSeat }: Props) {
   const [elapsed, setElapsed] = useState(0);
-  const [slots, setSlots] = useState<Slot[]>([
-    { name: nickname || 'Guest', avatar: '\uD83D\uDC32', tier: '\uD83E\uDD48', ready: false },
-    { name: null, avatar: '', tier: '', ready: false },
-    { name: null, avatar: '', tier: '', ready: false },
-    { name: null, avatar: '', tier: '', ready: false },
-  ]);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [myReady, setMyReady] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // 서버에서 받은 실제 플레이어 정보 구독
+  const players = useGameStore((s) => s.players);
+  const phase = useGameStore((s) => s.phase);
+  const mySeat = useGameStore((s) => s.mySeat);
+
+  // 서버 플레이어 정보를 슬롯으로 변환
+  const avatars = ['🐲', '🦁', '🐻', '🦊'];
+  const slots: Slot[] = [0, 1, 2, 3].map(seat => {
+    const p = players[seat];
+    if (p) {
+      return {
+        name: p.nickname,
+        avatar: avatars[seat] ?? '🐲',
+        tier: p.isBot ? '🤖' : '🥈',
+        ready: true,
+        isBot: p.isBot,
+      };
+    }
+    return { name: null, avatar: '', tier: '', ready: false, isBot: false };
+  });
+
+  const filledCount = slots.filter(s => s.name !== null).length;
+  const humanCount = slots.filter(s => s.name !== null && !s.isBot).length;
 
   // 경과 시간
   useEffect(() => {
@@ -35,25 +55,21 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart 
     return () => clearInterval(iv);
   }, []);
 
-  // 빠른 매칭: 봇 순차 채워짐
+  // 빠른 매칭: 자동으로 봇 채우기
   useEffect(() => {
     if (mode !== 'quick') return;
-    const bots = [
-      { name: 'Bot-A', avatar: '\uD83E\uDD81', tier: '\uD83E\uDD49' },
-      { name: 'Bot-B', avatar: '\uD83D\uDC3B', tier: '\uD83E\uDD48' },
-      { name: 'Bot-C', avatar: '\uD83E\uDD8A', tier: '\uD83E\uDD49' },
-    ];
-    const timers = bots.map((b, i) => setTimeout(() => {
-      setSlots(prev => { const n = [...prev]; n[i + 1] = { ...b, ready: true }; return n; });
-    }, 1200 + i * 900));
-    return () => timers.forEach(clearTimeout);
+    const timer = setTimeout(() => {
+      onAddBots();
+    }, 2000);
+    return () => clearTimeout(timer);
   }, [mode]);
 
-  // 전원 채워지면 카운트다운
+  // 4인 채워지면 카운트다운
   useEffect(() => {
-    const allFilled = slots.every(s => s.name !== null);
-    if (allFilled && countdown === null) setCountdown(3);
-  }, [slots]);
+    if (filledCount === 4 && countdown === null) {
+      setCountdown(3);
+    }
+  }, [filledCount]);
 
   useEffect(() => {
     if (countdown === null) return;
@@ -61,6 +77,14 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart 
     const t = setTimeout(() => setCountdown(countdown - 1), 1000);
     return () => clearTimeout(t);
   }, [countdown]);
+
+  // 게임이 시작되면 (TRICK_PLAY 등) 자동 전환
+  useEffect(() => {
+    if (phase && phase !== 'WAITING_FOR_PLAYERS') {
+      // 이미 게임 진행 중이면 바로 전환
+      if (countdown === null) setCountdown(3);
+    }
+  }, [phase]);
 
   // 스피너
   const spin = useSharedValue(0);
@@ -74,35 +98,59 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart 
 
   const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
-  const toggleReady = () => {
-    setMyReady(!myReady);
-    setSlots(prev => { const n = [...prev]; n[0] = { ...n[0]!, ready: !myReady }; return n; });
+  const handleCopy = () => {
+    if (roomCode) {
+      try { Clipboard.setString(roomCode); } catch {}
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
-  const handleCopy = () => { setCopied(true); setTimeout(() => setCopied(false), 1500); };
+  const handleSlotPress = (idx: number) => {
+    if (mode !== 'custom') return;
+    if (idx === mySeat) return;
+    if (onSwapSeat) onSwapSeat(idx);
+  };
 
   const renderSlot = (slot: Slot, idx: number) => {
-    const isTeam1 = idx < 2;
+    // teams: seat 0,2 = team1, seat 1,3 = team2
+    const isTeam1 = idx === 0 || idx === 2;
+    const isMe = idx === mySeat;
     const teamColor = isTeam1 ? 'rgba(59,130,246,0.08)' : 'rgba(239,68,68,0.08)';
-    const borderColor = slot.name ? (isTeam1 ? 'rgba(59,130,246,0.3)' : 'rgba(239,68,68,0.3)') : 'rgba(255,255,255,0.1)';
+    const borderColor = isMe
+      ? '#F59E0B'
+      : slot.name ? (isTeam1 ? 'rgba(59,130,246,0.3)' : 'rgba(239,68,68,0.3)') : 'rgba(255,255,255,0.1)';
+    const canSwap = mode === 'custom' && !isMe && filledCount < 4;
 
-    return (
-      <Animated.View key={idx} entering={slot.name ? ZoomIn.delay(idx * 200).duration(350).springify() : undefined} style={[S.slot, { backgroundColor: teamColor, borderColor }]}>
+    const content = (
+      <Animated.View key={idx} entering={slot.name ? ZoomIn.delay(idx * 200).duration(350).springify() : undefined} style={[S.slot, { backgroundColor: teamColor, borderColor, borderStyle: isMe ? 'solid' : 'dashed' }]}>
+        {isMe && <View style={S.meBadge}><Text style={S.meBadgeText}>나</Text></View>}
         {slot.name ? (
           <>
             <Text style={S.slotAvatar}>{slot.avatar}</Text>
             <Text style={S.slotName} numberOfLines={1}>{slot.name}</Text>
             <Text style={S.slotTier}>{slot.tier}</Text>
+            {slot.isBot && <View style={S.botBadge}><Text style={S.botBadgeText}>BOT</Text></View>}
             {slot.ready && <View style={S.readyMark}><Text style={S.readyMarkText}>{'\u2713'}</Text></View>}
           </>
         ) : (
           <>
             <View style={S.emptyCircle}><Animated.Text style={[S.emptyDots, dotStyle]}>...</Animated.Text></View>
-            <Text style={S.emptyText}>{'\uC0C1\uB300\uB97C \uCC3E\uB294 \uC911...'}</Text>
+            <Text style={S.emptyText}>{'상대를 찾는 중...'}</Text>
+            {canSwap && <Text style={S.swapHint}>{'탭하여 이동'}</Text>}
           </>
         )}
       </Animated.View>
     );
+
+    if (mode === 'custom' && !isMe) {
+      return (
+        <TouchableOpacity key={idx} onPress={() => handleSlotPress(idx)} activeOpacity={0.7}>
+          {content}
+        </TouchableOpacity>
+      );
+    }
+    return <View key={idx}>{content}</View>;
   };
 
   return (
@@ -117,18 +165,19 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart 
       )}
       {countdown !== null && countdown <= 0 && (
         <Animated.View entering={ZoomIn.duration(300).springify()} style={S.cdOverlay}>
-          <Text style={S.cdGo}>{'\uAC8C\uC784 \uC2DC\uC791!'}</Text>
+          <Text style={S.cdGo}>{'게임 시작!'}</Text>
         </Animated.View>
       )}
 
       <View style={S.content}>
         {/* 상단 */}
         <View style={S.header}>
-          <Text style={S.headerTitle}>{mode === 'quick' ? '\uB9E4\uCE6D \uC911...' : '\uCEE4\uC2A4\uD140 \uB9E4\uCE58'}</Text>
+          <Text style={S.headerTitle}>{mode === 'quick' ? '매칭 중...' : '커스텀 매치'}</Text>
           {mode === 'custom' && roomCode && (
             <TouchableOpacity style={S.codeBox} onPress={handleCopy} activeOpacity={0.7}>
+              <Text style={S.codeLabel}>방 코드</Text>
               <Text style={S.codeText}>{roomCode}</Text>
-              <Text style={S.codeCopy}>{copied ? '\u2713 \uBCF5\uC0AC\uB428' : '\uD83D\uDCCB'}</Text>
+              <Text style={S.codeCopy}>{copied ? '✓ 복사됨' : '📋 복사'}</Text>
             </TouchableOpacity>
           )}
           <View style={S.timerRow}>
@@ -136,6 +185,7 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart 
             <Text style={S.elapsed}>{fmt(elapsed)}</Text>
             <Animated.Text style={[S.spinSymbol, spinStyle]}>{'\u2665'}</Animated.Text>
           </View>
+          <Text style={S.playerCount}>{filledCount}/4 명 참가</Text>
         </View>
 
         {/* 슬롯 */}
@@ -153,15 +203,13 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart 
 
         {/* 하단 */}
         <View style={S.bottom}>
-          {mode === 'custom' && (
-            <View style={S.customBtns}>
-              <TouchableOpacity style={[S.readyBtn, myReady && S.readyBtnOn]} onPress={toggleReady}>
-                <Text style={S.readyBtnText}>{myReady ? '\u2713 \uC900\uBE44 \uC644\uB8CC' : '\uC900\uBE44'}</Text>
-              </TouchableOpacity>
-            </View>
+          {mode === 'custom' && filledCount < 4 && (
+            <TouchableOpacity style={S.botFillBtn} onPress={onAddBots}>
+              <Text style={S.botFillText}>{'🤖 봇으로 채우기'}</Text>
+            </TouchableOpacity>
           )}
           <TouchableOpacity style={S.cancelBtn} onPress={onCancel}>
-            <Text style={S.cancelText}>{mode === 'quick' ? '\uB9E4\uCE6D \uCDE8\uC18C' : '\uB098\uAC00\uAE30'}</Text>
+            <Text style={S.cancelText}>{mode === 'quick' ? '매칭 취소' : '나가기'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -178,10 +226,12 @@ const S = StyleSheet.create({
   headerTitle: { color: '#fff', fontSize: 26, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   timerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   spinSymbol: { color: 'rgba(255,255,255,0.2)', fontSize: 18 },
-  elapsed: { color: 'rgba(255,255,255,0.5)', fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  codeBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8 },
-  codeText: { color: '#F59E0B', fontSize: 22, fontWeight: '900', letterSpacing: 4 },
-  codeCopy: { color: 'rgba(255,255,255,0.5)', fontSize: 14 },
+  elapsed: { color: 'rgba(255,255,255,0.5)', fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] as any },
+  playerCount: { color: 'rgba(255,255,255,0.4)', fontSize: 14, fontWeight: '600' },
+  codeBox: { alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)' },
+  codeLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '600' },
+  codeText: { color: '#F59E0B', fontSize: 24, fontWeight: '900', letterSpacing: 4 },
+  codeCopy: { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
 
   // 슬롯
   slotsArea: { flex: 1, justifyContent: 'center' },
@@ -204,9 +254,14 @@ const S = StyleSheet.create({
   slotTier: { fontSize: 14, marginTop: 2 },
   readyMark: { position: 'absolute', top: 6, right: 6, backgroundColor: '#10b981', borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
   readyMarkText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  botBadge: { position: 'absolute', top: 6, left: 6, backgroundColor: 'rgba(99,102,241,0.3)', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
+  botBadgeText: { color: '#818CF8', fontSize: 9, fontWeight: '800' },
   emptyCircle: { width: 50, height: 50, borderRadius: 25, borderWidth: 2, borderColor: 'rgba(255,255,255,0.1)', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
   emptyDots: { color: 'rgba(255,255,255,0.3)', fontSize: 20, fontWeight: '900' },
   emptyText: { color: 'rgba(255,255,255,0.2)', fontSize: 10, marginTop: 6, textAlign: 'center' },
+  swapHint: { color: 'rgba(245,158,11,0.5)', fontSize: 9, marginTop: 4 },
+  meBadge: { position: 'absolute', top: 6, left: 6, backgroundColor: 'rgba(245,158,11,0.3)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 },
+  meBadgeText: { color: '#F59E0B', fontSize: 9, fontWeight: '800' },
 
   // 카운트다운
   cdOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 50 },
@@ -215,10 +270,8 @@ const S = StyleSheet.create({
 
   // 하단
   bottom: { alignItems: 'center', gap: 10 },
-  customBtns: { flexDirection: 'row', gap: 10 },
-  readyBtn: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 10 },
-  readyBtnOn: { backgroundColor: 'rgba(16,185,129,0.15)', borderWidth: 1, borderColor: '#10b981' },
-  readyBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  botFillBtn: { backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)' },
+  botFillText: { color: '#818CF8', fontSize: 15, fontWeight: '700' },
   cancelBtn: { borderRadius: 12, paddingHorizontal: 28, paddingVertical: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   cancelText: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '600' },
 });

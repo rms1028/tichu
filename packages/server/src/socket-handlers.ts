@@ -222,6 +222,46 @@ export function registerSocketHandlers(io: Server): void {
       }
     });
 
+    // ── swap_seat (대기 중 좌석 교환 → 팀 변경) ──────────
+    socket.on('swap_seat', (data: { targetSeat: number }) => {
+      const room = getRoom();
+      if (!room) return;
+      if (room.phase !== 'WAITING_FOR_PLAYERS') {
+        socket.emit('invalid_play', { reason: 'game_already_started' });
+        return;
+      }
+      const target = data.targetSeat;
+      if (target < 0 || target > 3 || target === playerSeat) return;
+
+      // 두 좌석의 플레이어 교환
+      const myPlayer = room.players[playerSeat];
+      const targetPlayer = room.players[target];
+
+      room.players[playerSeat] = targetPlayer ?? null;
+      room.players[target] = myPlayer ?? null;
+
+      // 교환 상대가 실제 플레이어이면 그 소켓의 playerSeat도 갱신해야 함
+      // → seats_swapped 이벤트로 클라이언트에서 처리
+
+      // 내 좌석 갱신
+      const oldSeat = playerSeat;
+      playerSeat = target;
+
+      // 전체 플레이어 목록 브로드캐스트
+      const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
+      for (let s = 0; s < 4; s++) {
+        const p = room.players[s];
+        playersInfo[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
+      }
+      io.to(room.roomId).emit('seats_updated', { players: playersInfo, swapped: [oldSeat, target] });
+
+      // 교환 상대에게 좌석 변경 알림
+      if (targetPlayer?.socketId) {
+        io.to(targetPlayer.socketId).emit('my_seat_changed', { seat: oldSeat });
+      }
+      socket.emit('my_seat_changed', { seat: target });
+    });
+
     // ── rejoin_room ────────────────────────────────────────
     socket.on('rejoin_room', (data: { roomId: string; playerId: string }) => {
       const room = rooms.get(data.roomId);
@@ -335,9 +375,32 @@ export function registerSocketHandlers(io: Server): void {
     socket.on('submit_bomb', (data: { cards: Card[] }) => {
       const room = getRoom();
       if (!room) return;
+      if (room.phase !== 'TRICK_PLAY') {
+        socket.emit('invalid_play', { reason: 'wrong_phase' });
+        return;
+      }
 
-      // 내 차례이고 bombWindow가 없으면 play_cards로 폭탄 제출
-      if (!room.bombWindow && room.currentTurn === playerSeat && room.phase === 'TRICK_PLAY') {
+      // bombWindow 활성 시 기존 로직
+      if (room.bombWindow) {
+        const result = submitBomb(room, playerSeat, data.cards);
+        if (!result.ok) { socket.emit('invalid_play', { reason: result.error }); return; }
+        broadcastEvents(io, room, result.events);
+        return;
+      }
+
+      // bombWindow 없이 트릭 진행 중 폭탄 인터럽트
+      // 테이블에 카드가 있어야 하고, 나간 플레이어가 아니어야 함
+      if (!room.tableCards) {
+        socket.emit('invalid_play', { reason: 'no_table_cards' });
+        return;
+      }
+      if (room.finishOrder.includes(playerSeat)) {
+        socket.emit('invalid_play', { reason: 'already_finished' });
+        return;
+      }
+
+      // 내 턴이면 play_cards로 처리
+      if (room.currentTurn === playerSeat) {
         const result = playCards(room, playerSeat, data.cards);
         if (!result.ok) { socket.emit('invalid_play', { reason: result.error }); return; }
         broadcastEvents(io, room, result.events);
@@ -349,9 +412,27 @@ export function registerSocketHandlers(io: Server): void {
         return;
       }
 
+      // 내 턴이 아닌데 폭탄 인터럽트
+      // bombWindow를 먼저 생성한 뒤 submitBomb 호출
+      const topPlay = room.tableCards;
+      const lastSeat = room.currentTrick.lastPlayedSeat;
+
+      // 턴 타이머 정지 + bombWindow 생성
+      const bwEvents = startBombWindow(room, lastSeat, topPlay);
+      broadcastEvents(io, room, bwEvents);
+
+      // 이제 bombWindow가 있으므로 submitBomb 가능
       const result = submitBomb(room, playerSeat, data.cards);
-      if (!result.ok) { socket.emit('invalid_play', { reason: result.error }); return; }
+      if (!result.ok) {
+        // 실패 시 bombWindow 롤백
+        room.bombWindow = null;
+        socket.emit('invalid_play', { reason: result.error });
+        return;
+      }
       broadcastEvents(io, room, result.events);
+
+      // bombWindow 해소 타이머 시작
+      startBombWindowResolveTimer(io, room);
     });
 
     // ── disconnect ─────────────────────────────────────────
@@ -397,7 +478,7 @@ function scheduleBotLargeTichu(io: Server, room: GameRoom): void {
     if (allLargeTichuResponded(room)) {
       finishLargeTichuPhase(io, room);
     }
-  }, 500);
+  }, 200);
 }
 
 function scheduleBotExchange(io: Server, room: GameRoom): void {
@@ -407,7 +488,8 @@ function scheduleBotExchange(io: Server, room: GameRoom): void {
       const player = room.players[s];
       if (player?.isBot && room.pendingExchanges[s] === null) {
         const exchange = decideBotExchange(room, s);
-        submitExchange(room, s, exchange.left, exchange.partner, exchange.right);
+        const result = submitExchange(room, s, exchange.left, exchange.partner, exchange.right);
+        if (result.ok) broadcastEvents(io, room, result.events);
       }
     }
     if (allExchangesComplete(room)) {
@@ -419,7 +501,7 @@ function scheduleBotExchange(io: Server, room: GameRoom): void {
       broadcastEvents(io, room, events);
       startTurnTimer(io, room);
     }
-  }, 500);
+  }, 200);
 }
 
 function startLargeTichuTimer(io: Server, room: GameRoom): void {
@@ -507,7 +589,7 @@ function startTurnTimer(io: Server, room: GameRoom): void {
 }
 
 function scheduleBotAction(io: Server, room: GameRoom, seat: number, turnId: number): void {
-  const delay = 800 + Math.random() * 700;
+  const delay = 200 + Math.random() * 300;
   setTimeout(() => {
     if (room.turnTimer.turnId !== turnId) return;
     if (room.currentTurn !== seat) return;
@@ -569,18 +651,17 @@ function startBombWindowPhase(io: Server, room: GameRoom): void {
       startBombWindowResolveTimer(io, room);
       scheduleBotBombWindow(io, room);
     } else if (hadBombs) {
-      // Bombs resolved, afterBombWindowResolved sets new turn
+      // 폭탄이 있었을 때만 턴 재설정
       const afterEvents = afterBombWindowResolved(room);
       broadcastEvents(io, room, afterEvents);
 
-      // BUG FIX: If trick ended after bomb resolution, resolve the trick
       if (afterEvents.length === 0 && room.phase === 'TRICK_PLAY') {
         const trickEvents = resolveTrickWon(room);
         broadcastEvents(io, room, trickEvents);
       }
       handlePostPlay(io, room);
     } else {
-      // No bombs — playCards already set the correct turn, just continue
+      // 폭탄 없음 — playCards에서 이미 advanceTurn 완료, 그대로 진행
       handlePostPlay(io, room);
     }
   }, room.settings.bombWindowDuration);
@@ -598,24 +679,21 @@ function startBombWindowResolveTimer(io: Server, room: GameRoom): void {
   const timerId = setTimeout(() => {
     if (!room.bombWindow || room.bombWindow.windowId !== windowId) return;
 
-    const hadBombs = room.bombWindow.pendingBombs.length > 0;
     const resolveEvents = resolveBombWindow(room);
     broadcastEvents(io, room, resolveEvents);
 
     if (room.bombWindow && room.bombWindow.windowId !== windowId) {
       startBombWindowResolveTimer(io, room);
       scheduleBotBombWindow(io, room);
-    } else if (hadBombs) {
+    } else {
+      // 폭탄 해소 완료 — 턴 정리
       const afterEvents = afterBombWindowResolved(room);
       broadcastEvents(io, room, afterEvents);
 
-      // BUG FIX: If trick ended after bomb resolution, resolve the trick
       if (afterEvents.length === 0 && room.phase === 'TRICK_PLAY') {
         const trickEvents = resolveTrickWon(room);
         broadcastEvents(io, room, trickEvents);
       }
-      handlePostPlay(io, room);
-    } else {
       handlePostPlay(io, room);
     }
   }, room.settings.bombWindowDuration);
@@ -643,7 +721,7 @@ function scheduleBotBombWindow(io: Server, room: GameRoom): void {
         }
       }
     }
-  }, 800);
+  }, 200);
 }
 
 function handlePostPlay(io: Server, room: GameRoom): void {

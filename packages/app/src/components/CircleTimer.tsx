@@ -10,11 +10,20 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 
+// 좌석별 고유 색상 (시인성 좋은 4색)
+const SEAT_COLORS = [
+  '#22d3ee', // seat 0: 시안
+  '#f472b6', // seat 1: 핑크
+  '#a78bfa', // seat 2: 보라
+  '#fb923c', // seat 3: 오렌지
+];
+
 interface CircleTimerProps {
   remainingSec: number;
   totalSec: number;
   playerName: string;
   isMyTurn: boolean;
+  seatColor?: string;
 }
 
 // 시간 비율에 따라 색상을 연속적으로 변화
@@ -25,7 +34,9 @@ function getTimerColor(ratio: number): string {
   return '#ef4444';                    // 빨강 (긴급)
 }
 
-export function CircleTimer({ remainingSec, totalSec, playerName, isMyTurn }: CircleTimerProps) {
+export { SEAT_COLORS };
+
+export function CircleTimer({ remainingSec, totalSec, playerName, isMyTurn, seatColor }: CircleTimerProps) {
   const ratio = totalSec > 0 ? remainingSec / totalSec : 0;
   const color = getTimerColor(ratio);
 
@@ -103,9 +114,14 @@ export function CircleTimer({ remainingSec, totalSec, playerName, isMyTurn }: Ci
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.playerName, isMyTurn && styles.playerNameMine]}>
-        {playerName}
-      </Text>
+      {isMyTurn ? (
+        <Text style={styles.playerNameMine}>{'내 차례'}</Text>
+      ) : playerName ? (
+        <Text style={styles.playerName}>
+          <Text style={{ color: '#fff', fontWeight: '900', textShadowColor: seatColor ?? '#000', textShadowRadius: 6, textShadowOffset: { width: 0, height: 0 } }}>{playerName}</Text>
+          <Text style={{ color: 'rgba(255,255,255,0.45)', fontWeight: '600' }}>{'의 차례'}</Text>
+        </Text>
+      ) : null}
 
       <Animated.View style={[
         styles.outerRing,

@@ -66,17 +66,17 @@ const mS = StyleSheet.create({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.bgDark,
-    borderRadius: 16, paddingHorizontal: 20, paddingVertical: 12, gap: 10,
+    borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, gap: 6,
     shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.4, shadowRadius: 6, elevation: 6,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
   },
-  teamBlock: { alignItems: 'center', minWidth: 80, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
+  teamBlock: { alignItems: 'center', minWidth: 50, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8 },
   myTeamBlock: { backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1.5, borderColor: COLORS.accent },
-  label: { fontSize: 16, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
-  score: { fontSize: 46, fontWeight: '900', lineHeight: 50, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  label: { fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+  score: { fontSize: 22, fontWeight: '900', lineHeight: 26, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   centerCol: { alignItems: 'center' },
-  separator: { color: COLORS.textDim, fontSize: 36, fontWeight: 'bold' },
-  target: { color: COLORS.textDim, fontSize: 14, fontWeight: '700', opacity: 0.8 },
+  separator: { color: COLORS.textDim, fontSize: 18, fontWeight: 'bold' },
+  target: { color: COLORS.textDim, fontSize: 10, fontWeight: '700', opacity: 0.8 },
   barBg: { width: '100%', height: 5, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 3, marginTop: 5, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 3 },
 });

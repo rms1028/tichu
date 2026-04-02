@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
 import Animated, { ZoomIn, FadeIn } from 'react-native-reanimated';
 import { useGameStore } from '../stores/gameStore';
 import { COLORS } from '../utils/theme';
@@ -17,22 +17,44 @@ export function LargeTichuModal({ onDeclare, onPass }: LargeTichuModalProps) {
   const phase = useGameStore((s) => s.phase);
   const myHand = useGameStore((s) => s.myHand);
   const [remaining, setRemaining] = useState(LARGE_TICHU_TIMEOUT);
+  const [responded, setResponded] = useState(false);
 
   useEffect(() => {
-    if (phase !== 'LARGE_TICHU_WINDOW') { setRemaining(LARGE_TICHU_TIMEOUT); return; }
+    if (phase !== 'LARGE_TICHU_WINDOW') { setRemaining(LARGE_TICHU_TIMEOUT); setResponded(false); return; }
     setRemaining(LARGE_TICHU_TIMEOUT);
+    setResponded(false);
     const iv = setInterval(() => setRemaining(r => { if (r <= 1) { clearInterval(iv); return 0; } return r - 1; }), 1000);
     return () => clearInterval(iv);
   }, [phase]);
 
-  if (phase !== 'LARGE_TICHU_WINDOW') return null;
+  // 타임아웃 시 자동 패스
+  useEffect(() => {
+    if (remaining <= 0 && phase === 'LARGE_TICHU_WINDOW' && !responded) {
+      setResponded(true);
+      onPass();
+    }
+  }, [remaining, phase, responded]);
+
+  if (phase !== 'LARGE_TICHU_WINDOW' || responded) return null;
 
   const sorted = sortHand(myHand);
   const urgent = remaining <= 5;
 
+  const handleDeclare = () => {
+    if (responded) return;
+    setResponded(true);
+    onDeclare();
+  };
+
+  const handlePass = () => {
+    if (responded) return;
+    setResponded(true);
+    onPass();
+  };
+
   return (
-    <Modal transparent animationType="fade" visible>
-      <View style={S.overlay}>
+    <View style={S.overlay} pointerEvents="box-none">
+      <View style={S.backdrop} pointerEvents="auto">
         <Animated.View entering={ZoomIn.duration(350).springify().damping(10)} style={S.modal}>
           <View style={S.headerRow}>
             <Text style={S.icon}>{'🔥'}</Text>
@@ -58,21 +80,28 @@ export function LargeTichuModal({ onDeclare, onPass }: LargeTichuModalProps) {
           </View>
 
           <View style={S.btnRow}>
-            <TouchableOpacity style={S.passBtn} onPress={onPass} activeOpacity={0.8}>
+            <TouchableOpacity style={S.passBtn} onPress={handlePass} activeOpacity={0.7}>
               <Text style={S.passBtnText}>{'패스'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={S.declareBtn} onPress={onDeclare} activeOpacity={0.8}>
+            <TouchableOpacity style={S.declareBtn} onPress={handleDeclare} activeOpacity={0.7}>
               <Text style={S.declareBtnText}>{'🔥 라지 티츄!'}</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
       </View>
-    </Modal>
+    </View>
   );
 }
 
 const S = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 12 },
+  overlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 999,
+  },
+  backdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center', alignItems: 'center', paddingHorizontal: 12,
+  },
   modal: { backgroundColor: COLORS.bgDark, borderRadius: 22, padding: 24, alignItems: 'center', width: '100%', maxWidth: 540, borderWidth: 2, borderColor: 'rgba(231,76,60,0.4)', shadowColor: '#e74c3c', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 16 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
   icon: { fontSize: 36 },

@@ -63,6 +63,11 @@ export function TableArea() {
 
   const turnName = players[currentTurn]?.nickname ?? '...';
 
+  // 상대팀 이름 색상: 좌측 상대=노랑, 우측 상대=시안 (빨간 배경 위에서 잘 보이는 색)
+  const leftEnemy = (mySeat + 1) % 4;
+  const rightEnemy = (mySeat + 3) % 4;
+  const enemyNameColor = currentTurn === leftEnemy ? '#A3E635' : '#C084FC'; // 라임 / 보라
+
   return (
     <View style={styles.container}>
       {/* 턴 표시 */}
@@ -77,9 +82,14 @@ export function TableArea() {
             isEnemyTurn && styles.turnBannerEnemy,
           ]}
         >
-          <Text style={[styles.turnText, !isEnemyTurn && styles.turnTextWhite]}>
-            {isMyTurn ? '\uB0B4 \uCC28\uB840!' : `${turnName}\uC758 \uCC28\uB840`}
-          </Text>
+          {isMyTurn ? (
+            <Text style={[styles.turnText, styles.turnTextWhite]}>{'내 차례!'}</Text>
+          ) : (
+            <Text style={styles.turnText}>
+              <Text style={[styles.turnNameHighlight, isEnemyTurn && { color: enemyNameColor }]}>{turnName}</Text>
+              <Text style={styles.turnSuffix}>{'의 차례'}</Text>
+            </Text>
+          )}
         </Animated.View>
       )}
 
@@ -219,6 +229,16 @@ const styles = StyleSheet.create({
   },
   turnTextWhite: {
     color: '#fff',
+  },
+  turnNameHighlight: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: mob(17, 24),
+  },
+  turnSuffix: {
+    color: 'rgba(255,255,255,0.5)',
+    fontWeight: '600',
+    fontSize: mob(14, 18),
   },
   glowRipple: {
     position: 'absolute',

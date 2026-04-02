@@ -202,6 +202,15 @@ export function useSocket() {
       store.onGameOver(data.winner, data.scores);
     });
 
+    // ── 좌석 교환 ──────────────────────────────────────────
+    socket.on('seats_updated', (data: { players: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> }) => {
+      useGameStore.setState({ players: data.players });
+    });
+
+    socket.on('my_seat_changed', (data: { seat: number }) => {
+      useGameStore.setState({ mySeat: data.seat });
+    });
+
     // ── 에러 ───────────────────────────────────────────────
     socket.on('invalid_play', (data: { reason: string }) => {
       console.warn('Invalid play:', data.reason);
@@ -253,6 +262,10 @@ export function useSocket() {
     socketRef.current?.emit('add_bots');
   }, []);
 
+  const swapSeat = useCallback((targetSeat: number) => {
+    socketRef.current?.emit('swap_seat', { targetSeat });
+  }, []);
+
   return {
     socket: socketRef,
     joinRoom,
@@ -264,5 +277,6 @@ export function useSocket() {
     dragonGive,
     submitBomb,
     addBots,
+    swapSeat,
   };
 }
