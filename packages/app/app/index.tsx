@@ -14,8 +14,10 @@ import { useAchievementStore } from '../src/stores/achievementStore';
 import { AchievementPopup } from '../src/components/AchievementPopup';
 import { SplashScreen } from '../src/screens/SplashScreen';
 import { DisconnectOverlay } from '../src/components/DisconnectOverlay';
+import { LoginScreen } from '../src/screens/LoginScreen';
+import { signInWithGoogle, signInAsGuest, signOutUser } from '../src/utils/firebase';
 
-type AppScreen = 'splash' | 'lobby' | 'matchmaking' | 'game' | 'result';
+type AppScreen = 'splash' | 'login' | 'lobby' | 'matchmaking' | 'game' | 'result';
 
 export default function App() {
   return (
@@ -44,21 +46,24 @@ function AppInner() {
 
   const connected = useGameStore((s) => s.connected);
 
-  // 소켓 연결 시 자동 게스트 로그인
-  useEffect(() => {
-    if (connected) {
-      const us = useUserStore.getState();
-      if (us.playerId && us.nickname) {
-        guestLogin(us.playerId, us.nickname);
-      }
-    }
-  }, [connected]);
-
   const [screen, setScreen] = useState<AppScreen>('splash');
   const [matchMode, setMatchMode] = useState<'quick' | 'custom'>('quick');
   const [matchRoomCode, setMatchRoomCode] = useState('');
   const [nickname, setNickname] = useState('');
   const [showTutorial, setShowTutorial] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  // 이미 로그인된 사용자 체크 (닉네임 있으면 스킵)
+  useEffect(() => {
+    const us = useUserStore.getState();
+    if (us.nickname && us.playerId) {
+      // 이미 게스트/소셜 로그인 상태
+      if (connected) {
+        guestLogin(us.playerId, us.nickname);
+      }
+    }
+  }, [connected]);
   const [firstVisit, setFirstVisit] = useState(true);
   const [emoteMsg, setEmoteMsg] = useState<{ emoji: string; label: string } | null>(null);
   const resultRecorded = useRef(false);
@@ -82,9 +87,55 @@ function AppInner() {
     }
   };
 
+  // 로그인 핸들러
+  const handleGuestLogin = (nick: string) => {
+    setLoginLoading(true);
+    setLoginError(null);
+    const us = useUserStore.getState();
+    us.setNickname(nick);
+    setNickname(nick);
+    guestLogin(us.playerId, nick);
+    setLoginLoading(false);
+    setScreen('lobby');
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoginLoading(true);
+    setLoginError(null);
+    try {
+      const user = await signInWithGoogle();
+      const nick = user.displayName || user.email?.split('@')[0] || 'Player';
+      const us = useUserStore.getState();
+      us.setNickname(nick);
+      setNickname(nick);
+      firebaseLogin(user.uid, nick);
+      setScreen('lobby');
+    } catch (err: any) {
+      console.error('Google login error:', err);
+      setLoginError('Google 로그인에 실패했습니다');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
   // 스플래시
   if (screen === 'splash') {
-    return <SplashScreen onFinish={() => setScreen('lobby')} />;
+    return <SplashScreen onFinish={() => {
+      const us = useUserStore.getState();
+      setScreen(us.nickname ? 'lobby' : 'login');
+    }} />;
+  }
+
+  // 로그인
+  if (screen === 'login') {
+    return (
+      <LoginScreen
+        onGuestLogin={handleGuestLogin}
+        onGoogleLogin={handleGoogleLogin}
+        loading={loginLoading}
+        error={loginError}
+      />
+    );
   }
 
   // 로비
