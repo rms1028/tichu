@@ -20,7 +20,7 @@ interface BombOverlayProps {
   onSubmitBombCards: (cards: Card[]) => void;
 }
 
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+// AnimatedTouchable removed - causes touch issues on mobile web
 
 function bombLabel(bomb: PlayedHand): string {
   if (bomb.type === 'four_bomb') {
@@ -116,12 +116,11 @@ export function BombOverlay({ onSubmitBombCards }: BombOverlayProps) {
       {/* 폭탄 칩 목록 */}
       <View style={styles.chipList}>
         {availableBombs.map((bomb, i) => (
-          <AnimatedTouchable
+          <TouchableOpacity
             key={i}
             style={[
               styles.chip,
               isWindowActive && styles.chipActive,
-              isWindowActive && pulseStyle,
             ]}
             onPress={() => handleBomb(bomb)}
             activeOpacity={0.7}
@@ -130,7 +129,7 @@ export function BombOverlay({ onSubmitBombCards }: BombOverlayProps) {
             <Text style={[styles.chipLabel, isWindowActive && styles.chipLabelActive]}>
               {bombLabel(bomb)}
             </Text>
-          </AnimatedTouchable>
+          </TouchableOpacity>
         ))}
       </View>
     </Animated.View>

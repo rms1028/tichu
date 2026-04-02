@@ -22,7 +22,7 @@ interface CardViewProps {
   disabled?: boolean;
 }
 
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+// AnimatedTouchable은 모바일 웹에서 터치 문제가 있어 분리 처리
 
 export function CardView({
   card, selected = false, isBombCard = false, onPress, size = 'normal', faceDown = false, disabled = false,
@@ -87,73 +87,42 @@ export function CardView({
 
   if (isSpecial) {
     return (
-      <AnimatedTouchable
-        onPress={handlePress}
-        disabled={disabled || !onPress}
-        activeOpacity={0.7}
-        style={[
-          styles.card,
-          dims,
+      <TouchableOpacity onPress={handlePress} disabled={disabled || !onPress} activeOpacity={0.7}>
+        <Animated.View style={[
+          styles.card, dims,
           { backgroundColor: specialBg, borderColor: specialBorder },
           selected && styles.selected,
           selectedStyle,
-        ]}
-      >
-        <Text style={[
-          styles.specialTopName,
-          { color },
-          size === 'small' && styles.specialTopNameSmall,
         ]}>
-          {name}
-        </Text>
-        <Text style={[
-          styles.specialIconCenter,
-          size === 'small' && styles.specialIconSmall,
-          size === 'large' && styles.specialIconLarge,
-        ]}>
-          {specialIcon}
-        </Text>
-      </AnimatedTouchable>
+          <Text style={[styles.specialTopName, { color }, size === 'small' && styles.specialTopNameSmall]}>{name}</Text>
+          <Text style={[styles.specialIconCenter, size === 'small' && styles.specialIconSmall, size === 'large' && styles.specialIconLarge]}>{specialIcon}</Text>
+        </Animated.View>
+      </TouchableOpacity>
     );
   }
 
   // 일반 카드
   const cardContent = (
-    <AnimatedTouchable
-      onPress={handlePress}
-      disabled={disabled || !onPress}
-      activeOpacity={0.7}
-      style={[
-        styles.card,
-        dims,
+    <TouchableOpacity onPress={handlePress} disabled={disabled || !onPress} activeOpacity={0.7}>
+      <Animated.View style={[
+        styles.card, dims,
         { backgroundColor: bgColor, borderColor: color },
         isBombCard && styles.bombHighlight,
         selected && styles.selected,
         selectedStyle,
         isBombCard && bombGlowStyle,
-      ]}
-    >
-      {/* 상단 inset 효과 */}
-      <View style={styles.cardInsetTop} />
-
-      <View style={styles.topLeft}>
-        <Text style={[styles.rank, { color }, size === 'small' && styles.rankSmall, size === 'large' && styles.rankLarge]}>
-          {name}
-        </Text>
-        <Text style={[styles.suitTop, { color }, size === 'small' && styles.suitTopSmall]}>
-          {suit}
-        </Text>
-      </View>
-
-      <Text style={[styles.suitCenter, { color }, size === 'small' && styles.suitCenterSmall, size === 'large' && styles.suitCenterLarge]}>
-        {suit}
-      </Text>
-      {isBombCard && (
-        <View style={styles.bombBadge}>
-          <Text style={styles.bombBadgeText}>B</Text>
+      ]}>
+        <View style={styles.cardInsetTop} />
+        <View style={styles.topLeft}>
+          <Text style={[styles.rank, { color }, size === 'small' && styles.rankSmall, size === 'large' && styles.rankLarge]}>{name}</Text>
+          <Text style={[styles.suitTop, { color }, size === 'small' && styles.suitTopSmall]}>{suit}</Text>
         </View>
-      )}
-    </AnimatedTouchable>
+        <Text style={[styles.suitCenter, { color }, size === 'small' && styles.suitCenterSmall, size === 'large' && styles.suitCenterLarge]}>{suit}</Text>
+        {isBombCard && (
+          <View style={styles.bombBadge}><Text style={styles.bombBadgeText}>B</Text></View>
+        )}
+      </Animated.View>
+    </TouchableOpacity>
   );
 
   if (isBombCard) {

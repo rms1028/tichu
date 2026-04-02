@@ -391,7 +391,6 @@ export function GameScreen({
   return (
     <View style={styles.outerBg}>
       <BackgroundWatermark ingame />
-    <ScreenShake active={bombShake}>
     <SafeAreaView style={styles.container}>
       {/* 폭탄 타이머 (우상단) */}
       <BombTimer />
@@ -552,6 +551,7 @@ export function GameScreen({
           entering={ZoomIn.duration(300).springify().damping(10)}
           exiting={FadeOut.duration(300)}
           style={styles.trickWonOverlay}
+          pointerEvents="none"
         >
           <View style={styles.trickWonBox}>
             <Text style={styles.trickWonIcon}>{'🏆'}</Text>
@@ -569,6 +569,7 @@ export function GameScreen({
           entering={FadeIn.duration(150)}
           exiting={FadeOut.duration(150)}
           style={styles.passFlashOverlay}
+          pointerEvents="none"
         >
           <Text style={styles.passFlashText}>{passFlash} 패스</Text>
         </Animated.View>
@@ -580,6 +581,7 @@ export function GameScreen({
           entering={ZoomIn.duration(400).springify().damping(8)}
           exiting={FadeOut.duration(400)}
           style={styles.tichuFlashOverlay}
+          pointerEvents="none"
         >
           <Animated.View style={[
             styles.tichuFlashBox,
@@ -598,7 +600,6 @@ export function GameScreen({
         </Animated.View>
       )}
     </SafeAreaView>
-    </ScreenShake>
     </View>
   );
 }
