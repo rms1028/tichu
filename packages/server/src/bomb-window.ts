@@ -170,14 +170,15 @@ export function afterBombWindowResolved(room: GameRoom): GameEvent[] {
     return events;
   }
 
-  // 폭탄 후: 폭탄 낸 사람 다음 플레이어에게 턴
-  // 나머지가 모두 패스하면 트릭 종료 → 폭탄 낸 사람이 리드권 획득
+  // 폭탄 후: 폭탄 낸 사람 다음 활성 플레이어에게 턴
   {
     let next = (lastSeat + 1) % 4;
-    while (!active.includes(next)) {
+    let loopCount = 0;
+    while (!active.includes(next) && loopCount < 4) {
       next = (next + 1) % 4;
-      if (next === lastSeat) break; // 안전장치
+      loopCount++;
     }
+    if (!active.includes(next)) return events; // 활성 플레이어 없으면 트릭 종료
     room.currentTurn = next;
   }
 

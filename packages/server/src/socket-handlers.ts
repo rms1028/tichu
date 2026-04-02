@@ -540,8 +540,8 @@ export function registerSocketHandlers(io: Server): void {
       }
 
       // 내 턴이 아닌데 폭탄 인터럽트
-      // bombWindow를 먼저 생성한 뒤 submitBomb 호출
       const topPlay = room.tableCards;
+      if (!topPlay) { socket.emit('invalid_play', { reason: 'no_table_cards' }); return; }
       const lastSeat = room.currentTrick.lastPlayedSeat;
 
       // 턴 타이머 정지 + bombWindow 생성
@@ -551,8 +551,9 @@ export function registerSocketHandlers(io: Server): void {
       // 이제 bombWindow가 있으므로 submitBomb 가능
       const result = submitBomb(room, playerSeat, data.cards);
       if (!result.ok) {
-        // 실패 시 bombWindow 롤백
+        // 실패 시 bombWindow 롤백 + 턴 타이머 복원
         room.bombWindow = null;
+        startTurnTimer(io, room);
         socket.emit('invalid_play', { reason: result.error });
         return;
       }
@@ -698,13 +699,41 @@ export function registerSocketHandlers(io: Server): void {
     }
   });
 
-  // ── 매칭 타이머 (1초마다 체크) ──────────────────────────────
-  setInterval(() => {
-    const status = checkMatchReady();
-    if (status === 'full' || status === 'timeout') {
-      formAndStartMatch(io);
-    }
-  }, 1000);
+  // ── 매칭 타이머 (1초마다 체크, 한 번만 등록) ─────────────────
+  if (!(globalThis as any).__matchmakingTimer) {
+    (globalThis as any).__matchmakingTimer = setInterval(() => {
+      const status = checkMatchReady();
+      if (status === 'full' || status === 'timeout') {
+        formAndStartMatch(io);
+      }
+    }, 1000);
+  }
+
+  // ── 방 정리 타이머 (60초마다, 끝난 방 삭제) ─────────────────
+  if (!(globalThis as any).__roomCleanupTimer) {
+    (globalThis as any).__roomCleanupTimer = setInterval(() => {
+      const now = Date.now();
+      for (const [id, room] of rooms) {
+        if (room.phase === 'GAME_OVER') {
+          rooms.delete(id);
+          continue;
+        }
+        // 모든 플레이어 끊긴 지 5분 지난 방 삭제
+        const allDisconnected = [0, 1, 2, 3].every(s => {
+          const p = room.players[s];
+          return !p || !p.connected;
+        });
+        if (allDisconnected) {
+          const lastDisconnect = [0, 1, 2, 3]
+            .map(s => room.players[s]?.disconnectedAt ?? 0)
+            .reduce((a, b) => Math.max(a, b), 0);
+          if (lastDisconnect > 0 && now - lastDisconnect > 300_000) {
+            rooms.delete(id);
+          }
+        }
+      }
+    }, 60_000);
+  }
 }
 
 // ── 매칭 성사 → 방 생성 + 게임 시작 ─────────────────────────────
