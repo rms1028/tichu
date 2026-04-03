@@ -2,7 +2,7 @@ import type { Server, Socket } from 'socket.io';
 import type { Card, Rank, PlayedHand } from '@tichu/shared';
 import {
   isNormalCard, isBomb,
-  getAvailableBombs,
+  getAvailableBombs, validateHand, canBeat,
 } from '@tichu/shared';
 import type { GameRoom, PlayerInfo } from './game-room.js';
 import {
@@ -753,7 +753,6 @@ export function registerSocketHandlers(io: Server): void {
       if (!topPlay) { socket.emit('invalid_play', { reason: 'no_table_cards' }); return; }
 
       // 폭탄 검증 + 적용
-      const { validateHand, canBeat } = require('@tichu/shared');
       const hand = validateHand(data.cards);
       if (!hand || (hand.type !== 'four_bomb' && hand.type !== 'straight_flush_bomb')) {
         socket.emit('invalid_play', { reason: 'not_a_bomb' });
