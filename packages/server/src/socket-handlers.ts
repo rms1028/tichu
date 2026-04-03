@@ -507,16 +507,16 @@ export function registerSocketHandlers(io: Server): void {
       }
     });
 
-    // ── add_bot_to_seat (특정 자리에 봇 추가) ─────────────
+    // ── add_bot_to_seat (특정 자리에 봇 추가 — 방장만) ─────
     socket.on('add_bot_to_seat', (data: { seat: number }) => {
       if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
       if (!isValidSeat(data.seat)) { socket.emit('error', { message: 'invalid_seat' }); return; }
-      console.log(`[add_bot_to_seat] seat=${data.seat}, playerRoomId=${playerRoomId}, playerSeat=${playerSeat}`);
       const room = getRoom();
-      if (!room) { console.log('[add_bot_to_seat] no room'); return; }
-      if (room.phase !== 'WAITING_FOR_PLAYERS') { console.log('[add_bot_to_seat] wrong phase:', room.phase); return; }
+      if (!room) return;
+      if (room.phase !== 'WAITING_FOR_PLAYERS') return;
+      if (room.settings.isCustom && playerSeat !== 0) { socket.emit('error', { message: 'not_room_host' }); return; }
       const s = data.seat;
-      if (room.players[s] !== null) { console.log('[add_bot_to_seat] seat occupied'); return; }
+      if (room.players[s] !== null) return;
 
       const botNames = ['봇 A', '봇 B', '봇 C', '봇 D'];
       room.players[s] = {
@@ -526,20 +526,24 @@ export function registerSocketHandlers(io: Server): void {
         connected: true,
         isBot: true,
       };
-      io.to(room.roomId).emit('player_joined', {
-        seat: s,
-        player: { nickname: room.players[s]!.nickname, connected: true, isBot: true },
-      });
+      // seats_updated로 전체 상태 브로드캐스트 (player_joined보다 확실)
+      const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
+      for (let i = 0; i < 4; i++) {
+        const p = room.players[i];
+        playersInfo[i] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
+      }
+      io.to(room.roomId).emit('seats_updated', { players: playersInfo, swapped: [] });
     });
 
-    // ── remove_bot (봇 제거) ────────────────────────────────
+    // ── remove_bot (봇 제거 — 방장만) ───────────────────────
     socket.on('remove_bot', (data: { seat: number }) => {
       if (!isValidSeat(data.seat)) { socket.emit('error', { message: 'invalid_seat' }); return; }
       const room = getRoom();
       if (!room) return;
       if (room.phase !== 'WAITING_FOR_PLAYERS') return;
+      if (room.settings.isCustom && playerSeat !== 0) { socket.emit('error', { message: 'not_room_host' }); return; }
       const s = data.seat;
-      if (!room.players[s]?.isBot) return; // 봇이 아님
+      if (!room.players[s]?.isBot) return;
 
       room.players[s] = null;
       const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
@@ -550,7 +554,7 @@ export function registerSocketHandlers(io: Server): void {
       io.to(room.roomId).emit('seats_updated', { players: playersInfo, swapped: [] });
     });
 
-    // ── swap_seat (대기 중 좌석 교환 → 팀 변경) ──────────
+    // ── swap_seat (대기 중 좌석 교환 — 방장만) ─────────────
     socket.on('swap_seat', (data: { targetSeat: number }) => {
       if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
       if (!isValidSeat(data.targetSeat)) { socket.emit('error', { message: 'invalid_seat' }); return; }
@@ -558,6 +562,11 @@ export function registerSocketHandlers(io: Server): void {
       if (!room) return;
       if (room.phase !== 'WAITING_FOR_PLAYERS') {
         socket.emit('invalid_play', { reason: 'game_already_started' });
+        return;
+      }
+      // 커스텀 방: 방장만 자리 교환 가능
+      if (room.settings.isCustom && playerSeat !== 0) {
+        socket.emit('error', { message: 'not_room_host' });
         return;
       }
       const target = data.targetSeat;

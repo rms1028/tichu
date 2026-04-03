@@ -140,7 +140,7 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
     const borderColor = isMe
       ? '#F59E0B'
       : slot.name ? (isTeam1 ? 'rgba(59,130,246,0.3)' : 'rgba(239,68,68,0.3)') : 'rgba(255,255,255,0.1)';
-    const canSwap = mode === 'custom' && !isMe;
+    const canSwap = mode === 'custom' && !isMe && isHost;
 
     const content = (
       <Animated.View key={idx} entering={slot.name ? ZoomIn.delay(idx * 200).duration(350).springify() : undefined} style={[S.slot, { backgroundColor: teamColor, borderColor, borderStyle: isMe ? 'solid' : 'dashed' }]}>
@@ -165,7 +165,7 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
       </Animated.View>
     );
 
-    if (mode === 'custom' && !isMe) {
+    if (mode === 'custom' && !isMe && isHost) {
       return (
         <TouchableOpacity key={idx} onPress={() => handleSlotPress(idx)} activeOpacity={0.7}>
           {content}
