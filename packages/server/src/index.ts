@@ -23,7 +23,7 @@ const httpServer = http.createServer((req, res) => {
 
 const allowedOrigins = process.env['CORS_ORIGINS']
   ? process.env['CORS_ORIGINS'].split(',').map(o => o.trim())
-  : ['http://localhost:3000', 'http://localhost:8081', 'http://localhost:19006', 'https://tichu-app.vercel.app'];
+  : ['http://localhost:3000', 'http://localhost:8081', 'http://localhost:19006', 'https://tichu-app.vercel.app', 'https://app-rust-gamma.vercel.app'];
 
 const io = new Server(httpServer, {
   cors: {
