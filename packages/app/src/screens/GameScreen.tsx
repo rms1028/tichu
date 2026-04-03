@@ -514,18 +514,13 @@ export function GameScreen({
       <Animated.View style={[styles.bottomArea, bottomGlowStyle, urgencyStyle]}>
         {/* 에러 메시지 */}
         {errorMsg && (
-          <View
-           
-           
-            style={[styles.errorBanner, errorShakeStyle]}
-          >
+          <View style={[styles.errorBanner, errorShakeStyle]}>
             <Text style={styles.errorText}>{errorMsg}</Text>
           </View>
         )}
 
         {/* 턴 + 원형 타이머 + 액션바 통합 */}
         <View style={styles.turnAndActions}>
-
           <View style={styles.timerAndButtonsRow}>
             {/* 원형 타이머 */}
             {phase === 'TRICK_PLAY' && remainingSec > 0 && (
@@ -586,12 +581,7 @@ export function GameScreen({
 
       {/* 티츄 선언 중앙 폭발 팝업 */}
       {tichuFlash && (
-        <View
-         
-         
-          style={styles.tichuFlashOverlay}
-          pointerEvents="none"
-        >
+        <View style={styles.tichuFlashOverlay} pointerEvents="none">
           <View style={[
             styles.tichuFlashBox,
             tichuFlash.type === 'large' && styles.tichuFlashBoxLarge,
