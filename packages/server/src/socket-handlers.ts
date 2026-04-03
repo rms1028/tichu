@@ -604,7 +604,7 @@ export function registerSocketHandlers(io: Server): void {
     // ── rejoin_room ────────────────────────────────────────
     socket.on('rejoin_room', (data: { roomId: string; playerId: string }) => {
       const room = rooms.get(data.roomId);
-      if (!room) { socket.emit('error', { message: 'room_not_found' }); return; }
+      if (!room) { socket.emit('rejoin_failed', { reason: 'room_not_found' }); return; }
 
       const seat = [0, 1, 2, 3].find(s =>
         room.players[s]?.playerId === data.playerId

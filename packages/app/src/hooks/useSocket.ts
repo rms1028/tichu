@@ -23,15 +23,17 @@ export function useSocket() {
     socketRef.current = socket;
 
     // ── 연결 상태 ──────────────────────────────────────────
+    let hasLoggedIn = false;
     socket.on('connect', () => {
       store.setConnection(true);
 
-      // 재접속 시 로그인 + rejoin
-      const { roomId, playerId, nickname } = useGameStore.getState();
+      // 재접속 시 로그인 (1회만) + rejoin
       const us = require('../stores/userStore').useUserStore.getState();
-      if (us.playerId && us.nickname) {
+      if (!hasLoggedIn && us.playerId && us.nickname) {
         socket.emit('guest_login', { guestId: us.playerId, nickname: us.nickname });
+        hasLoggedIn = true;
       }
+      const { roomId, playerId } = useGameStore.getState();
       if (roomId && playerId) {
         socket.emit('rejoin_room', { roomId, playerId });
       }
@@ -39,6 +41,12 @@ export function useSocket() {
 
     socket.on('disconnect', () => {
       store.setConnection(false);
+    });
+
+    // rejoin 실패 → 게임 방이 사라짐 (서버 재시작 등)
+    socket.on('rejoin_failed', () => {
+      console.warn('[rejoin_failed] room lost, resetting');
+      store.reset();
     });
 
     // ── 방 참가 ────────────────────────────────────────────
