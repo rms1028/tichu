@@ -106,7 +106,6 @@ export function TableArea() {
             )}
           </Animated.View>
         )}
-
         {/* 소원 표시 */}
       {wish && (
         <Animated.View entering={ZoomIn.duration(300).springify()} style={styles.wishBanner}>
@@ -117,7 +116,6 @@ export function TableArea() {
           </View>
         </Animated.View>
       )}
-
       {/* 바닥 카드 - 등장 애니메이션 */}
       {tableCards ? (
         <Animated.View

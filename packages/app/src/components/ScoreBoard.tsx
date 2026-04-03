@@ -25,7 +25,6 @@ export function ScoreBoard() {
       </View>
     );
   }
-
   // 데스크탑: 기존 풀 디자인
   return (
     <View style={styles.container}>
@@ -50,7 +49,6 @@ export function ScoreBoard() {
     </View>
   );
 }
-
 // 모바일 스타일
 const mS = StyleSheet.create({
   container: {
@@ -61,7 +59,6 @@ const mS = StyleSheet.create({
   sep: { color: 'rgba(255,255,255,0.4)', fontSize: 14, fontWeight: '700' },
   target: { color: 'rgba(255,255,255,0.25)', fontSize: 10, marginLeft: 2 },
 });
-
 // 데스크탑 스타일
 const styles = StyleSheet.create({
   container: {

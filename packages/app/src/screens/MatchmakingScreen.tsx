@@ -71,12 +71,10 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
     const iv = setInterval(() => setElapsed(s => s + 1), 1000);
     return () => clearInterval(iv);
   }, []);
-
   // 빠른 매칭: 서버에서 자동 매칭 (큐 시스템)
   const matchmakingStatus = useGameStore((s) => s.matchmakingStatus);
   const matchmakingPosition = useGameStore((s) => s.matchmakingPosition);
   const matchmakingQueueSize = useGameStore((s) => s.matchmakingQueueSize);
-
   // 빠른매칭: 4인 채워지면 카운트다운 (커스텀은 방장 시작)
   useEffect(() => {
     if (mode === 'quick' && filledCount === 4 && countdown === null) {
@@ -90,7 +88,6 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
     const t = setTimeout(() => setCountdown(countdown - 1), 1000);
     return () => clearTimeout(t);
   }, [countdown]);
-
   // 게임이 시작되면 (TRICK_PLAY 등) 자동 전환
   useEffect(() => {
     if (phase && phase !== 'WAITING_FOR_PLAYERS') {
@@ -98,12 +95,10 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
       if (countdown === null) setCountdown(3);
     }
   }, [phase]);
-
   // 스피너
   const spin = useSharedValue(0);
   useEffect(() => { spin.value = withRepeat(withTiming(360, { duration: 2500, easing: Easing.linear }), -1, false); }, []);
   const spinStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value}deg` }] }));
-
   // 로딩 dots
   const dotOpacity = useSharedValue(0.3);
   useEffect(() => { dotOpacity.value = withRepeat(withSequence(withTiming(1, { duration: 600 }), withTiming(0.3, { duration: 600 })), -1, false); }, []);
@@ -194,7 +189,6 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
           <Text style={S.cdGo}>{'게임 시작!'}</Text>
         </Animated.View>
       )}
-
       <View style={S.content}>
         {/* 상단 */}
         <View style={S.header}>

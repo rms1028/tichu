@@ -53,7 +53,6 @@ export function EmoteButton({ onSend }: Props) {
           </View>
         </Animated.View>
       )}
-
       {/* 채팅 버튼 */}
       <TouchableOpacity style={[S.chatBtn, cooldown && S.chatBtnCooldown]} onPress={() => setOpen(!open)} activeOpacity={0.7}>
         <Text style={S.chatIcon}>{'\uD83D\uDCAC'}</Text>
@@ -61,7 +60,6 @@ export function EmoteButton({ onSend }: Props) {
     </View>
   );
 }
-
 // 말풍선 컴포넌트 (아바타 위에 표시)
 export function EmoteBubble({ emoji, label }: { emoji: string; label: string }) {
   return (

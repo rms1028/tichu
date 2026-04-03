@@ -122,7 +122,6 @@ export function CircleTimer({ remainingSec, totalSec, playerName, isMyTurn, seat
           <Text style={{ color: 'rgba(255,255,255,0.45)', fontWeight: '600' }}>{'의 차례'}</Text>
         </Text>
       ) : null}
-
       <Animated.View style={[
         styles.outerRing,
         animStyle,

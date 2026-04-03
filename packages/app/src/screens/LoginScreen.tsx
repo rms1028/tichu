@@ -36,7 +36,6 @@ export function LoginScreen({ onGuestLogin, onGoogleLogin, loading, error }: Log
             maxLength={12}
           />
           {error && <Text style={S.error}>{error}</Text>}
-
           {loading ? (
             <ActivityIndicator color="#F59E0B" size="large" style={{ marginVertical: 20 }} />
           ) : (

@@ -52,7 +52,6 @@ export function ShopScreen({ onBack }: Props) {
       </View>
       {/* 메시지 */}
       {message ? <Text style={S.message}>{message}</Text> : null}
-
       {/* 아이템 그리드 */}
       <ScrollView style={S.scroll} contentContainerStyle={S.grid}>
         {items.map(item => {

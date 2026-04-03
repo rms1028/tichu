@@ -183,7 +183,6 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
           </View>
         );
       })}
-
       {/* 폭탄 토글 버튼 (폭탄이 있고 팔로우 시) */}
       {canBomb && (
         <TouchableOpacity style={styles.splitToggle} onPress={() => setBombSplit(!bombSplit)} activeOpacity={0.7}>
@@ -191,7 +190,6 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
           <Text style={styles.splitToggleText}>{bombSplit ? '합침' : '분리'}</Text>
         </TouchableOpacity>
       )}
-
       {/* 폭탄 그룹 (분리 모드일 때만) */}
       {showBombGroups && (
         <>{bombGroups.map((group, gi) => (

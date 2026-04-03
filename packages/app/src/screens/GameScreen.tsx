@@ -106,7 +106,6 @@ export function GameScreen({
   const scores = useGameStore((s) => s.scores);
   const reset = useGameStore((s) => s.reset);
   const { leftOpponent, rightOpponent, partnerSeat } = useTeamInfo();
-
   // 에러 배너 shake 애니메이션
   const errorShakeX = useSharedValue(0);
   useEffect(() => {
@@ -123,7 +122,6 @@ export function GameScreen({
   const errorShakeStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: errorShakeX.value }],
   }));
-
   // 트릭 승리 / 패스 팝업은 TableArea 내부에서 처리
 
   // 티츄 선언 중앙 팝업 (2초간 표시)
@@ -139,7 +137,6 @@ export function GameScreen({
       prevTichuRef.current[seat] = decl ?? null;
     }
   }, [tichuDeclarations]);
-
   // Helper: get player name by seat
   const seatName = (seat: number): string => players[seat]?.nickname ?? `P${seat + 1}`;
   // Helper: get rank label
@@ -167,7 +164,6 @@ export function GameScreen({
     intervalRef.current = setInterval(tick, 200);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [turnStartedAt, turnDuration, phase, bombWindow]);
-
   // 턴 글로우 (테이블 영역)
   const turnGlow = useSharedValue(0);
   useEffect(() => {
@@ -190,7 +186,6 @@ export function GameScreen({
     shadowColor: tableBorderColor,
     shadowOpacity: turnGlow.value * 0.5,
   }));
-
   // 내 턴 하단 영역 밝기
   const bottomGlow = useSharedValue(0);
   useEffect(() => {
@@ -205,7 +200,6 @@ export function GameScreen({
       ? `rgba(243,156,18,${0.04 + bottomGlow.value * 0.06})`
       : 'rgba(0,0,0,0.2)',
   }));
-
   // 5초 이하 긴박감 (내 턴)
   const urgencyPulse = useSharedValue(0);
   useEffect(() => {
@@ -224,7 +218,6 @@ export function GameScreen({
     borderTopColor: `rgba(239,68,68,${urgencyPulse.value * 0.6})`,
     borderTopWidth: urgencyPulse.value > 0.01 ? 2 : 1,
   }));
-
   // 대기 중
   if (phase === 'WAITING_FOR_PLAYERS') {
     const joined = [0, 1, 2, 3].filter(s => players[s] !== null).length;
@@ -242,7 +235,6 @@ export function GameScreen({
       </SafeAreaView>
     );
   }
-
   // 딜링 중 (빠른 전환 시 버벅임 방지)
   if (phase === 'DEALING_8' || phase === 'DEALING_6') {
     return (
@@ -254,7 +246,6 @@ export function GameScreen({
       </SafeAreaView>
     );
   }
-
   // 게임 종료
   if (gameOver) {
     const isTeam1Winner = gameOver.winner === 'team1';
@@ -308,7 +299,6 @@ export function GameScreen({
               )}
             </View>
           )}
-
           <TouchableOpacity
             style={styles.backToLobbyBtn}
             onPress={() => {
@@ -322,7 +312,6 @@ export function GameScreen({
       </SafeAreaView>
     );
   }
-
   // 라운드 결과 표시
   if (roundResult && (phase === 'ROUND_END' || phase === 'SCORING')) {
     const fo = roundResult.finishOrder ?? finishOrder;
@@ -344,7 +333,6 @@ export function GameScreen({
               </View>
             </View>
           )}
-
           {/* 카드 점수 */}
           {roundResult.details && (
             <View style={styles.detailSection}>
@@ -380,7 +368,6 @@ export function GameScreen({
               )}
             </View>
           )}
-
           {/* 이번 라운드 */}
           <View style={styles.detailSection}>
             <Text style={styles.detailSectionTitle}>이번 라운드</Text>
@@ -402,7 +389,6 @@ export function GameScreen({
       </SafeAreaView>
     );
   }
-
   // 교환 페이즈
   if (phase === 'PASSING') {
     return (
@@ -411,7 +397,6 @@ export function GameScreen({
       </SafeAreaView>
     );
   }
-
   // 플레이어별 색상
   const SEAT_COLORS = ['#22d3ee', '#f472b6', '#a78bfa', '#fb923c'];
   const currentPlayerNick = isMyTurn ? '' : (players[currentTurn]?.nickname ?? '...');
@@ -501,7 +486,6 @@ export function GameScreen({
           <EmoteButton onSend={() => {}} />
         </View>
       )}
-
       {/* Bottom area: error, turn indicator, timer, actions, hand */}
       <Animated.View style={[styles.bottomArea, bottomGlowStyle, urgencyStyle]}>
         {/* 에러 메시지 */}
@@ -510,7 +494,6 @@ export function GameScreen({
             <Text style={styles.errorText}>{errorMsg}</Text>
           </View>
         )}
-
         {/* 턴 + 원형 타이머 + 액션바 통합 */}
         <View style={styles.turnAndActions}>
           <View style={styles.timerAndButtonsRow}>
@@ -524,7 +507,6 @@ export function GameScreen({
                 seatColor={currentSeatColor}
               />
             )}
-
             {/* 액션 버튼 */}
             <View style={styles.actionRow}>
               <ActionBar
@@ -565,9 +547,7 @@ export function GameScreen({
           </View>
         </View>
       )}
-
       {/* 트릭 승리 / 패스 팝업은 TableArea 안에서 표시 */}
-
       {/* 티츄 선언 중앙 폭발 팝업 */}
       {tichuFlash && (
         <View style={styles.tichuFlashOverlay} pointerEvents="none">

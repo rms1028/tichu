@@ -193,7 +193,6 @@ export function OpponentHand({
           <View style={styles.emoteTail} />
         </View>
       )}
-
       {/* 아바타 프레임 */}
       <View style={styles.avatarFrame}>
         <View style={[
@@ -223,7 +222,6 @@ export function OpponentHand({
           <Text style={[styles.deckNum, cardCount <= 3 && styles.deckNumDanger]}>{cardCount}</Text>
         </View>
       )}
-
       {/* 상태 뱃지들 */}
       {finished ? (
         <View style={styles.outBadge}>
@@ -245,7 +243,6 @@ export function OpponentHand({
           )}
         </>
       )}
-
       {/* 이모트 버튼 (제거) */}
       {false && !finished && (
         <View style={styles.emoteRow}>

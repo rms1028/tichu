@@ -16,7 +16,6 @@ export function TermsScreen({ onBack }: Props) {
       </View>
       <ScrollView style={T.scroll} contentContainerStyle={T.content}>
         <Text style={T.updated}>{'최종 업데이트: 2024년 4월 1일'}</Text>
-
         <Text style={T.h2}>{'제1조 (목적)'}</Text>
         <Text style={T.p}>{'본 약관은 티츄(TICHU) 모바일 카드 게임(이하 "서비스")의 이용에 관한 기본적인 사항을 규정함을 목적으로 합니다.'}</Text>
         <Text style={T.h2}>{'제2조 (용어의 정의)'}</Text>

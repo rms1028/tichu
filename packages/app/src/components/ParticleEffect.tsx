@@ -70,7 +70,6 @@ export function ParticleEffect({ type, count = 20 }: Props) {
     </View>
   );
 }
-
 // 화면 흔들림 효과
 export function ScreenShake({ children, active }: { children: React.ReactNode; active: boolean }) {
   const shakeX = useSharedValue(0);

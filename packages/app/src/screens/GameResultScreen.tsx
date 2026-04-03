@@ -59,7 +59,6 @@ export function GameResultScreen({
   const isWin = winner === myTeam;
   const team1Players = players.filter(p => p.seat === 0 || p.seat === 2);
   const team2Players = players.filter(p => p.seat === 1 || p.seat === 3);
-
   // XP 바 애니메이션
   const xpW = useSharedValue((xpBefore / xpMax) * 100);
   useEffect(() => {
@@ -67,12 +66,10 @@ export function GameResultScreen({
     try { isWin ? SFX.victory() : SFX.defeat(); } catch {}
   }, []);
   const xpStyle = useAnimatedStyle(() => ({ width: `${xpW.value}%` }));
-
   // 배너 스케일
   const bannerScale = useSharedValue(0.5);
   useEffect(() => { bannerScale.value = withSpring(1, { damping: 8, stiffness: 120 }); }, []);
   const bannerStyle = useAnimatedStyle(() => ({ transform: [{ scale: bannerScale.value }] }));
-
   // MVP 카드 글로우 펄스
   const mvpGlow = useSharedValue(0.3);
   useEffect(() => {

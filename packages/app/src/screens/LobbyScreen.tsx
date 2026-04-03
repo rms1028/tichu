@@ -138,7 +138,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
     textShadowRadius: 12 + logoGlow.value * 8,
     opacity: 0.85 + logoGlow.value * 0.15,
   }));
-
   // 파티클
   const particles = useRef([
     { s: '\u2660', x: 10, d: 0 }, { s: '\u2665', x: 28, d: 2 },
@@ -205,7 +204,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
             <Text style={PS.joined}>{'가입일: 2024.01.15'}</Text>
           </View>
           <View style={PS.divider} />
-
           {/* 티어 & XP */}
           <View style={PS.section}>
             <View style={PS.secTitleRow}><View style={[PS.secBar, { backgroundColor: '#F59E0B' }]} /><Text style={PS.secTitle}>{'티어 & XP'}</Text></View>
@@ -268,7 +266,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
       </SafeAreaView>
     );
   }
-
   // ═══════════ 메인 화면 ═══════════
   return (
     <SafeAreaView style={S.root}>
@@ -362,7 +359,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                   <Text style={{ color: '#F59E0B', fontSize: 18, fontWeight: '900', letterSpacing: 3 }}>{friendCode}</Text>
                 </View>
               ) : null}
-
               {/* 친구 코드로 검색 */}
               <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8, paddingHorizontal: 4 }}>
                 <TextInput
@@ -396,9 +392,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
               {friendSearchResult && !friendSearchResult.found && (
                 <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, textAlign: 'center', marginBottom: 6 }}>{'플레이어를 찾을 수 없습니다'}</Text>
               )}
-
               {friendMsg ? <Text style={{ color: '#F59E0B', fontSize: 11, textAlign: 'center', marginBottom: 6 }}>{friendMsg}</Text> : null}
-
               {/* 친구 요청 */}
               {friendRequests.length > 0 && (
                 <>
@@ -416,7 +410,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                   ))}
                 </>
               )}
-
               <ScrollView showsVerticalScrollIndicator={false}>
                 {/* 온라인 친구 */}
                 <Text style={S.fpSec}>{'온라인 (' + onlineFriends.length + ')'}</Text>
@@ -432,7 +425,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                     )}
                   </View>
                 ))}
-
                 {/* 오프라인 친구 */}
                 <Text style={[S.fpSec, { marginTop: 10 }]}>{'오프라인 (' + offlineFriends.length + ')'}</Text>
                 {offlineFriends.map((f, i) => (
@@ -446,7 +438,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           </Animated.View>
         </Pressable>
       )}
-
       {/* ═══ 출석 체크 팝업 ═══ */}
       <Modal visible={showAttendance} transparent animationType="fade">
         <View style={S.attOverlay}>
@@ -521,7 +512,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                   ))}
                 </ScrollView>
               )}
-
               {/* 비밀번호 입력 */}
               {joinTarget && (
                 <View style={{ marginTop: 12, gap: 8 }}>
@@ -552,7 +542,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
               </TouchableOpacity>
             </View>
           )}
-
           <TouchableOpacity style={{ alignItems: 'center', marginTop: 14 }} onPress={() => { setShowRoom(false); setJoinTarget(null); }}>
             <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>닫기</Text>
           </TouchableOpacity>
@@ -709,7 +698,6 @@ const S = StyleSheet.create({
   mTabText: { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '700' },
   mTabTextActive: { color: '#F59E0B' },
 });
-
 // 프로필 전용 스타일
 const PS = StyleSheet.create({
   scroll: { paddingHorizontal: 20, paddingBottom: 30, maxWidth: 700, alignSelf: 'center', width: '100%' },

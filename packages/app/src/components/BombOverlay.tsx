@@ -67,7 +67,6 @@ export function BombOverlay({ onSubmitBombCards }: BombOverlayProps) {
     }, 100);
     return () => clearInterval(iv);
   }, [bombWindow]);
-
   // 펄스 애니메이션 (폭탄 윈도우 활성 시)
   const pulse = useSharedValue(1);
   useEffect(() => {
@@ -109,7 +108,6 @@ export function BombOverlay({ onSubmitBombCards }: BombOverlayProps) {
           <Text style={styles.timerText}>{seconds}s</Text>
         </View>
       )}
-
       {/* 폭탄 칩 목록 */}
       <View style={styles.chipList}>
         {availableBombs.map((bomb, i) => (

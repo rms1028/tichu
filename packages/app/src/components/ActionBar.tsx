@@ -128,7 +128,6 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
           <Text style={[styles.passText, !isMyTurn && styles.passTextDisabled]}>패스</Text>
         </TouchableOpacity>
       )}
-
       <AnimatedTouchable
         style={[styles.playButton, !canPlay && styles.disabledPlay, playAnimStyle]}
         onPress={handlePlay}

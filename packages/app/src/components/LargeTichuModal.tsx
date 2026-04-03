@@ -26,7 +26,6 @@ export function LargeTichuModal({ onDeclare, onPass }: LargeTichuModalProps) {
     const iv = setInterval(() => setRemaining(r => { if (r <= 1) { clearInterval(iv); return 0; } return r - 1; }), 1000);
     return () => clearInterval(iv);
   }, [phase]);
-
   // 타임아웃 시 자동 패스
   useEffect(() => {
     if (remaining <= 0 && phase === 'LARGE_TICHU_WINDOW' && !responded) {
