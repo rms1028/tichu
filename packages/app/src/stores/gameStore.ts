@@ -80,6 +80,7 @@ export interface GameState {
   friendInvite: { fromNickname: string; roomId: string } | null;
   dbUserId: string | null;
   leaderboard: { id: string; nickname: string; xp: number; wins: number; totalGames: number }[];
+  customRoomList: { roomId: string; roomName: string; playerCount: number; hasPassword: boolean }[];
   seasonInfo: {
     seasonNumber: number; seasonName: string; remainingDays: number;
     myRating: number; myPeakRating: number; myRank: number;
@@ -164,6 +165,7 @@ const INITIAL_STATE = {
   friendInvite: null as { fromNickname: string; roomId: string } | null,
   dbUserId: null as string | null,
   leaderboard: [] as { id: string; nickname: string; xp: number; wins: number; totalGames: number }[],
+  customRoomList: [] as { roomId: string; roomName: string; playerCount: number; hasPassword: boolean }[],
   seasonInfo: null as {
     seasonNumber: number; seasonName: string; remainingDays: number;
     myRating: number; myPeakRating: number; myRank: number;
@@ -278,12 +280,16 @@ export const useGameStore = create<GameState>((set, get) => ({
     passedSeats: [...state.passedSeats, seat],
   })),
 
-  onTrickWon: (winningSeat, cards, points) => set({
-    trickWonEvent: { winningSeat, cards, points },
-    tableCards: null,
-    lastPlayEvent: null,
-    passedSeats: [],
-  }),
+  onTrickWon: (winningSeat, cards, points) => {
+    // 트릭 승리 표시 — tableCards를 1.5초 유지 후 클리어
+    set({
+      trickWonEvent: { winningSeat, cards, points },
+      passedSeats: [],
+    });
+    setTimeout(() => {
+      set({ tableCards: null, lastPlayEvent: null });
+    }, 1500);
+  },
 
   onPlayerFinished: (seat, rank) => set((state) => ({
     finishOrder: [...state.finishOrder, seat],

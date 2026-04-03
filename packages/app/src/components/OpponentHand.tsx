@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { isMobile, mob } from '../utils/responsive';
 import Animated, {
@@ -25,6 +25,7 @@ interface OpponentHandProps {
   connected?: boolean;
   isPartner?: boolean;
   nickColor?: string;
+  trickWon?: { points: number } | null;
 }
 
 // 동물 아바타 매핑 (이름 해시 기반)
@@ -48,9 +49,29 @@ function getAvatar(name: string) {
 }
 
 export function OpponentHand({
-  cardCount, nickname, tichu, isCurrentTurn, finished, passed, position, connected = true, isPartner = false, nickColor,
+  cardCount, nickname, tichu, isCurrentTurn, finished, passed, position, connected = true, isPartner = false, nickColor, trickWon = null,
 }: OpponentHandProps) {
   const [emote, setEmote] = useState<string | null>(null);
+  const [passBubble, setPassBubble] = useState(false);
+  const prevPassedRef = useRef(false);
+  const [wonBubble, setWonBubble] = useState<number | null>(null);
+
+  // 패스 말풍선: passed가 false→true로 바뀔 때 표시
+  useEffect(() => {
+    if (passed && !prevPassedRef.current) {
+      setPassBubble(true);
+      setTimeout(() => setPassBubble(false), 1200);
+    }
+    prevPassedRef.current = passed;
+  }, [passed]);
+
+  // 트릭 승리 말풍선
+  useEffect(() => {
+    if (trickWon) {
+      setWonBubble(trickWon.points);
+      setTimeout(() => setWonBubble(null), 2000);
+    }
+  }, [trickWon]);
 
   // 턴 pulse
   const pulseScale = useSharedValue(1);
@@ -85,7 +106,7 @@ export function OpponentHand({
     shadowOpacity: ringGlow.value,
   }));
 
-  const teamBorderColor = isPartner ? '#3B82F6' : '#EF4444';
+  const teamBorderColor = isPartner ? COLORS.team1 : COLORS.team2;
   const avatar = getAvatar(nickname);
 
   // 이모트 표시 후 자동 사라짐
@@ -100,6 +121,16 @@ export function OpponentHand({
       <View style={[styles.partnerRow, finished && styles.finishedContainer]}>
         {/* 좌: 아바타 + 이름 */}
         <View style={styles.partnerLeft}>
+          {wonBubble !== null && (
+            <View style={styles.wonBubble}>
+              <Text style={styles.wonBubbleText}>🏆 {wonBubble > 0 ? `+${wonBubble}` : '승리!'}</Text>
+            </View>
+          )}
+          {passBubble && !wonBubble && (
+            <View style={styles.passBubble}>
+              <Text style={styles.passBubbleText}>패스!</Text>
+            </View>
+          )}
           <View style={[
             styles.avatarOuter,
             { borderColor: teamBorderColor },
@@ -134,7 +165,7 @@ export function OpponentHand({
         )}
         {!finished && passed && (
           <View style={styles.passBadge}>
-            <Text style={styles.passText}>{'\uD328\uC2A4'}</Text>
+            <Text style={styles.passText}>패스!</Text>
           </View>
         )}
       </View>
@@ -143,6 +174,18 @@ export function OpponentHand({
 
   return (
     <View style={[styles.container, finished && styles.finishedContainer]}>
+      {/* 트릭 승리 말풍선 */}
+      {wonBubble !== null && (
+        <View style={[styles.wonBubble, position === 'left' && styles.bubbleRight, position === 'right' && styles.bubbleLeft]}>
+          <Text style={styles.wonBubbleText}>🏆 {wonBubble > 0 ? `+${wonBubble}` : '승리!'}</Text>
+        </View>
+      )}
+      {/* 패스 말풍선 */}
+      {passBubble && !wonBubble && (
+        <View style={[styles.passBubble, position === 'left' && styles.bubbleRight, position === 'right' && styles.bubbleLeft]}>
+          <Text style={styles.passBubbleText}>패스!</Text>
+        </View>
+      )}
       {/* 이모트 말풍선 */}
       {emote && (
         <View style={styles.emoteBubble}>
@@ -202,7 +245,7 @@ export function OpponentHand({
           )}
           {passed && (
             <View style={styles.passBadge}>
-              <Text style={styles.passText}>패스</Text>
+              <Text style={styles.passText}>패스!</Text>
             </View>
           )}
         </>
@@ -362,7 +405,62 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 
-  // 패스
+  // 말풍선 방향 (좌측 상대→오른쪽에 표시, 우측 상대→왼쪽에 표시)
+  bubbleRight: {
+    top: undefined,
+    left: '100%',
+    marginLeft: 6,
+  },
+  bubbleLeft: {
+    top: undefined,
+    right: '100%',
+    left: undefined,
+    marginRight: 6,
+  },
+  // 트릭 승리 말풍선
+  wonBubble: {
+    position: 'absolute',
+    top: -28,
+    zIndex: 100,
+    backgroundColor: 'rgba(16,185,129,0.9)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 8,
+    flexDirection: 'row',
+  },
+  wonBubbleText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  // 패스 말풍선
+  passBubble: {
+    position: 'absolute',
+    top: -28,
+    zIndex: 100,
+    backgroundColor: 'rgba(100,116,139,0.9)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 8,
+    flexDirection: 'row',
+  },
+  passBubbleText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
+    borderTopColor: 'rgba(100,116,139,0.9)',
+  },
+  // 패스 뱃지 (작은 표시)
   passBadge: {
     backgroundColor: 'rgba(120,144,156,0.4)',
     borderRadius: 5,

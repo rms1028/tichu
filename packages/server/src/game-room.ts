@@ -72,6 +72,9 @@ export interface RoomSettings {
   targetScore: number;
   allowSpectators: boolean;
   botDifficulty: 'easy' | 'medium' | 'hard';
+  roomName?: string;
+  password?: string;
+  isCustom?: boolean;
 }
 
 export const DEFAULT_SETTINGS: RoomSettings = {

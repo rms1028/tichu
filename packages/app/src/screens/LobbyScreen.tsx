@@ -10,8 +10,10 @@ import { BackgroundWatermark } from '../components/BackgroundWatermark';
 import { RulesScreen } from './RulesScreen';
 
 interface LobbyScreenProps {
-  onJoin: (roomId: string, playerId: string, nickname: string) => void;
+  onJoin: (roomId: string, playerId: string, nickname: string, password?: string) => void;
   onTutorial?: () => void;
+  onCreateCustomRoom?: (roomName: string, password: string | undefined, playerId: string, nickname: string) => void;
+  onListRooms?: () => void;
   onFriendInit?: (playerId: string, nickname: string) => void;
   onFriendSearch?: (code: string, myPlayerId: string) => void;
   onFriendRequest?: (fromId: string, fromNickname: string, toId: string) => void;
@@ -64,7 +66,7 @@ function FloatingSymbol({ symbol, x, delay }: { symbol: string; x: number; delay
   return <Animated.Text style={[{ position: 'absolute', left: `${x}%` as any, top: `${20 + delay * 7}%` as any, fontSize: 22, color: '#fff', opacity: 0.04 }, s]}>{symbol}</Animated.Text>;
 }
 
-export function LobbyScreen({ onJoin, onTutorial, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite }: LobbyScreenProps) {
+export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRooms, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite }: LobbyScreenProps) {
   const savedNickname = useUserStore((s) => s.nickname);
   const savedPlayerId = useUserStore((s) => s.playerId);
   const userSetNickname = useUserStore((s) => s.setNickname);
@@ -93,11 +95,18 @@ export function LobbyScreen({ onJoin, onTutorial, onFriendInit, onFriendSearch, 
   const onlineFriends = friendList.filter(f => f.online);
   const offlineFriends = friendList.filter(f => !f.online);
   const [roomCode, setRoomCode] = useState('');
+  const [customTab, setCustomTab] = useState<'list' | 'create'>('list');
+  const [newRoomName, setNewRoomName] = useState('');
+  const [newRoomPw, setNewRoomPw] = useState('');
+  const [joinPw, setJoinPw] = useState('');
+  const [joinTarget, setJoinTarget] = useState<{ roomId: string; roomName: string } | null>(null);
+  const customRoomList = useGameStore((s) => s.customRoomList);
   const [matching, setMatching] = useState(false);
   const [matchSec, setMatchSec] = useState(0);
   const [activeTab, setActiveTab] = useState(0);
   const soundOn = useUserStore((s) => s.soundOn);
   const musicOn = useUserStore((s) => s.musicOn);
+  const ttsOn = useUserStore((s) => s.ttsOn);
   const notifyOn = useUserStore((s) => s.notifyOn);
   const friendNotify = useUserStore((s) => s.friendNotify);
   const gameNotify = useUserStore((s) => s.gameNotify);
@@ -162,10 +171,12 @@ export function LobbyScreen({ onJoin, onTutorial, onFriendInit, onFriendSearch, 
             <Text style={S.secTitle}>{'🔊 소리'}</Text>
             <View style={S.menuRow}><Text style={S.menuIcon}>{'🔊'}</Text><Text style={S.menuText}>{'효과음'}</Text><TouchableOpacity onPress={() => setSetting('soundOn', !soundOn)}><Text style={[S.toggle, soundOn && S.toggleOn]}>{soundOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
             <View style={S.menuRow}><Text style={S.menuIcon}>{'🎵'}</Text><Text style={S.menuText}>{'배경음악'}</Text><TouchableOpacity onPress={() => setSetting('musicOn', !musicOn)}><Text style={[S.toggle, musicOn && S.toggleOn]}>{musicOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
+            <View style={S.menuRow}><Text style={S.menuIcon}>{'🗣️'}</Text><Text style={S.menuText}>{'음성 안내 (TTS)'}</Text><TouchableOpacity onPress={() => setSetting('ttsOn', !ttsOn)}><Text style={[S.toggle, ttsOn && S.toggleOn]}>{ttsOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
           </View>
 
           <View style={S.section}>
             <Text style={S.secTitle}>{'📖 정보'}</Text>
+            <TouchableOpacity style={S.menuRow} onPress={() => { if (onTutorial) onTutorial(); }}><Text style={S.menuIcon}>{'🎓'}</Text><Text style={S.menuText}>{'초보자 가이드'}</Text><Text style={S.menuArrow}>{'>'}</Text></TouchableOpacity>
             <TouchableOpacity style={S.menuRow} onPress={() => setPage('rules')}><Text style={S.menuIcon}>{'❓'}</Text><Text style={S.menuText}>{'도움말 / 게임 규칙'}</Text><Text style={S.menuArrow}>{'>'}</Text></TouchableOpacity>
             <TouchableOpacity style={S.menuRow} onPress={() => setPage('terms')}><Text style={S.menuIcon}>{'📋'}</Text><Text style={S.menuText}>{'이용약관'}</Text><Text style={S.menuArrow}>{'>'}</Text></TouchableOpacity>
           </View>
@@ -311,7 +322,7 @@ export function LobbyScreen({ onJoin, onTutorial, onFriendInit, onFriendSearch, 
                 <Text style={S.cSub}>{'\uBE44\uC2B7\uD55C \uC2E4\uB825\uC758 \uC720\uC800\uC640'}{'\n'}{'\uC989\uC2DC \uD50C\uB808\uC774'}</Text>
                 <View style={S.playBtn}><Text style={S.playBtnText}>{'\u25B6  \uD50C\uB808\uC774'}</Text></View>
               </TouchableOpacity>
-              <TouchableOpacity style={[S.card, S.cardD]} activeOpacity={0.85} onPress={() => setShowRoom(true)}>
+              <TouchableOpacity style={[S.card, S.cardD]} activeOpacity={0.85} onPress={() => { setShowRoom(true); setCustomTab('list'); onListRooms?.(); }}>
                 <Text style={S.cIcon}>{'\uD83D\uDD12'}</Text>
                 <Text style={S.cTitle}>{'\uCEE4\uC2A4\uD140 \uBAA8\uB4DC'}</Text>
                 <Text style={S.cSub}>{'\uBC29 \uB9CC\uB4E4\uAE30 \uBC0F'}{'\n'}{'\uCF54\uB4DC\uB85C \uC785\uC7A5'}</Text>
@@ -482,16 +493,89 @@ export function LobbyScreen({ onJoin, onTutorial, onFriendInit, onFriendSearch, 
         </View></View>
       </Modal>
 
-      {/* 방 코드 모달 */}
+      {/* 커스텀 방 모달 */}
       <Modal visible={showRoom} transparent animationType="fade">
-        <View style={S.mOvl}><View style={S.mBox}>
-          <Text style={S.mTitle}>{'\uD83D\uDC65 \uCEE4\uC2A4\uD140 \uBAA8\uB4DC'}</Text>
-          <TextInput style={S.mInput} value={roomCode} onChangeText={setRoomCode} placeholder={'\uBC29 \uCF54\uB4DC \uC785\uB825'} placeholderTextColor="rgba(255,255,255,0.3)" autoCapitalize="none" />
-          <View style={S.mBtns}>
-            <TouchableOpacity style={S.mSec} onPress={() => { newRoom(); setShowRoom(false); }}><Text style={S.mSecT}>{'\uBC29 \uB9CC\uB4E4\uAE30'}</Text></TouchableOpacity>
-            <TouchableOpacity style={[S.mOk, !roomCode && { opacity: 0.4 }]} onPress={() => { joinRoom(); setShowRoom(false); }} disabled={!roomCode}><Text style={S.mOkT}>{'\uC785\uC7A5'}</Text></TouchableOpacity>
+        <View style={S.mOvl}><View style={[S.mBox, { maxWidth: 420, minHeight: 350 }]}>
+          <Text style={S.mTitle}>{'🎮 커스텀 매치'}</Text>
+
+          {/* 탭 */}
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+            <TouchableOpacity
+              style={[S.mTab, customTab === 'list' && S.mTabActive]}
+              onPress={() => { setCustomTab('list'); onListRooms?.(); }}
+            >
+              <Text style={[S.mTabText, customTab === 'list' && S.mTabTextActive]}>방 목록</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[S.mTab, customTab === 'create' && S.mTabActive]}
+              onPress={() => setCustomTab('create')}
+            >
+              <Text style={[S.mTabText, customTab === 'create' && S.mTabTextActive]}>방 만들기</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={{ alignItems: 'center', marginTop: 12 }} onPress={() => setShowRoom(false)}><Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>{'\uCDE8\uC18C'}</Text></TouchableOpacity>
+
+          {customTab === 'list' ? (
+            <View style={{ flex: 1, minHeight: 180 }}>
+              {customRoomList.length === 0 ? (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 14 }}>대기 중인 방이 없습니다</Text>
+                  <TouchableOpacity style={{ marginTop: 12, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 8 }} onPress={() => onListRooms?.()}>
+                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>새로고침</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <ScrollView style={{ maxHeight: 200 }}>
+                  {customRoomList.map(r => (
+                    <TouchableOpacity
+                      key={r.roomId}
+                      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}
+                      onPress={() => {
+                        if (r.hasPassword) { setJoinTarget(r); setJoinPw(''); }
+                        else { onJoin(r.roomId, savedPlayerId, name); setShowRoom(false); }
+                      }}
+                    >
+                      <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700', flex: 1 }}>{r.roomName}</Text>
+                      <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginRight: 8 }}>{r.playerCount}/4</Text>
+                      {r.hasPassword && <Text style={{ fontSize: 14 }}>🔒</Text>}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* 비밀번호 입력 */}
+              {joinTarget && (
+                <View style={{ marginTop: 12, gap: 8 }}>
+                  <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>🔒 {joinTarget.roomName} — 비밀번호 입력</Text>
+                  <TextInput style={S.mInput} value={joinPw} onChangeText={setJoinPw} placeholder={'비밀번호'} placeholderTextColor="rgba(255,255,255,0.3)" secureTextEntry />
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity style={S.mSec} onPress={() => setJoinTarget(null)}><Text style={S.mSecT}>취소</Text></TouchableOpacity>
+                    <TouchableOpacity style={[S.mOk, !joinPw && { opacity: 0.4 }]} onPress={() => { onJoin(joinTarget.roomId, savedPlayerId, name, joinPw); setShowRoom(false); setJoinTarget(null); }} disabled={!joinPw}><Text style={S.mOkT}>입장</Text></TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={{ gap: 10 }}>
+              <TextInput style={S.mInput} value={newRoomName} onChangeText={setNewRoomName} placeholder={'방 이름 (예: 같이 한판!)'} placeholderTextColor="rgba(255,255,255,0.3)" />
+              <TextInput style={S.mInput} value={newRoomPw} onChangeText={setNewRoomPw} placeholder={'비밀번호 (선택사항)'} placeholderTextColor="rgba(255,255,255,0.3)" secureTextEntry />
+              <TouchableOpacity
+                style={[S.mOk, !newRoomName.trim() && { opacity: 0.4 }]}
+                disabled={!newRoomName.trim()}
+                onPress={() => {
+                  onCreateCustomRoom?.(newRoomName.trim(), newRoomPw || undefined, savedPlayerId, name);
+                  setShowRoom(false);
+                  setNewRoomName('');
+                  setNewRoomPw('');
+                }}
+              >
+                <Text style={S.mOkT}>방 만들기</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <TouchableOpacity style={{ alignItems: 'center', marginTop: 14 }} onPress={() => { setShowRoom(false); setJoinTarget(null); }}>
+            <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>닫기</Text>
+          </TouchableOpacity>
         </View></View>
       </Modal>
     </SafeAreaView>
@@ -640,6 +724,10 @@ const S = StyleSheet.create({
   mSecT: { color: 'rgba(255,255,255,0.6)', fontWeight: '700', fontSize: 13 },
   mOk: { flex: 1, backgroundColor: '#D97706', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   mOkT: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  mTab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  mTabActive: { backgroundColor: 'rgba(217,119,6,0.15)', borderColor: 'rgba(217,119,6,0.4)' },
+  mTabText: { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '700' },
+  mTabTextActive: { color: '#F59E0B' },
 });
 
 // 프로필 전용 스타일

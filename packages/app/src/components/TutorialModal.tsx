@@ -1,15 +1,49 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
-import Animated, { FadeIn, SlideInRight, SlideOutLeft } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { COLORS } from '../utils/theme';
 
 const STEPS = [
-  { title: '\uD83C\uDCCF \uD2F0\uCE04\uB780?', body: '\uD2F0\uCE04\uB294 4\uBA85\uC774 2\uD300\uC73C\uB85C \uB098\uB220 \uD50C\uB808\uC774\uD558\uB294 \uCE74\uB4DC \uAC8C\uC784\uC785\uB2C8\uB2E4.\n\uB9C8\uC8FC\uBCF4\uB294 \uC0AC\uB78C\uC774 \uD30C\uD2B8\uB108\uC774\uBA70,\n\uC190\uD328\uB97C \uBA3C\uC800 \uBE44\uC6B0\uB294 \uAC83\uC774 \uBAA9\uD45C\uC785\uB2C8\uB2E4.', icon: '\uD83D\uDC65' },
-  { title: '\uD83C\uDCCF \uCE74\uB4DC \uC870\uD569', body: '\u2022 \uC2F1\uAE00: 1\uC7A5\n\u2022 \uD398\uC5B4: \uAC19\uC740 \uC22B\uC790 2\uC7A5\n\u2022 \uD2B8\uB9AC\uD50C: \uAC19\uC740 \uC22B\uC790 3\uC7A5\n\u2022 \uC2A4\uD2B8\uB808\uC774\uD2B8: \uC5F0\uC18D 5\uC7A5+\n\u2022 \uD480\uD558\uC6B0\uC2A4: 3+2\uC7A5\n\u2022 \uD3ED\uD0C4: \uAC19\uC740 \uC22B\uC790 4\uC7A5 \uB610\uB294 \uAC19\uC740 \uBB38\uC591 \uC5F0\uC18D 5\uC7A5+', icon: '\u2660' },
-  { title: '\u2728 \uD2B9\uC218 \uCE74\uB4DC', body: '\uD83D\uDC09 \uC6A9: \uC2F1\uAE00 \uCD5C\uAC15, +25\uC810\n\uD83E\uDD85 \uBD09\uD669: \uC640\uC77C\uB4DC\uCE74\uB4DC, -25\uC810\n\uD83D\uDC15 \uAC1C: \uD30C\uD2B8\uB108\uC5D0\uAC8C \uB9AC\uB4DC\uAD8C \uC774\uC804\n\uD83D\uDC26 \uCC38\uC0C8: \uAC12 1, \uC18C\uC6D0 \uC120\uC5B8 \uAC00\uB2A5', icon: '\uD83D\uDC09' },
-  { title: '\uD83D\uDD25 \uD2F0\uCE04 \uC120\uC5B8', body: '\u2022 \uC2A4\uBAB0 \uD2F0\uCE04: \uCCAB \uCE74\uB4DC \uB0B4\uAE30 \uC804 \uC120\uC5B8\n  \uC131\uACF5 +100\uC810, \uC2E4\uD328 -100\uC810\n\n\u2022 \uB77C\uC9C0 \uD2F0\uCE04: 8\uC7A5\uB9CC \uBCF4\uACE0 \uC120\uC5B8\n  \uC131\uACF5 +200\uC810, \uC2E4\uD328 -200\uC810', icon: '\uD83D\uDD25' },
-  { title: '\uD83D\uDCB0 \uC810\uC218 \uACC4\uC0B0', body: '\u2022 5: +5\uC810\n\u2022 10, K: +10\uC810\n\u2022 \uC6A9: +25\uC810\n\u2022 \uBD09\uD669: -25\uC810\n\u2022 \uB098\uBA38\uC9C0: 0\uC810\n\n\uB77C\uC6B4\uB4DC \uCD1D\uD569\uC740 \uD56D\uC0C1 100\uC810!', icon: '\uD83E\uDE99' },
-  { title: '\uD83C\uDFC6 \uC2B9\uB9AC \uC870\uAC74', body: '\uB204\uC801 1,000\uC810\uC744 \uBA3C\uC800 \uB2EC\uC131\uD55C \uD300\uC774 \uC2B9\uB9AC!\n\n\uAC19\uC740 \uD300 1\uB4F1+2\uB4F1 = \uC6D0\uD22C \uD53C\uB2C8\uC2DC\n\u2192 200\uC810 \uD68D\uB4DD!\n\n\uC774\uC81C \uD2F0\uCE04\uB97C \uC990\uACA8\uBCF4\uC138\uC694!', icon: '\uD83C\uDFC6' },
+  {
+    icon: '🃏',
+    title: '티츄에 오신 걸 환영합니다!',
+    body: '4명이 2팀으로 나눠 플레이하는 전략 카드 게임입니다.\n맞은편에 앉은 사람이 내 파트너예요.\n\n목표: 1,000점을 먼저 달성하는 팀이 승리!',
+  },
+  {
+    icon: '📦',
+    title: '카드 구성',
+    body: '일반 카드 52장 (2~A, 4가지 문양)\n\n특수 카드 4장:\n🐦 참새(1) — 가장 먼저 내는 카드\n🐕 개 — 파트너에게 턴을 넘김\n🦅 봉황 — 와일드카드 (조커)\n🐉 용 — 싱글 최강 카드',
+  },
+  {
+    icon: '🔄',
+    title: '게임 진행',
+    body: '① 카드 14장을 받고 라지 티츄 선언 기회\n② 3장을 좌/파트너/우에게 교환\n③ 참새를 가진 사람이 첫 리드\n④ 같은 종류 + 더 높은 카드로 이겨야 함\n⑤ 모두 패스하면 트릭 승리, 새 리드',
+  },
+  {
+    icon: '♠',
+    title: '카드 조합',
+    body: '• 싱글 — 카드 1장\n• 페어 — 같은 숫자 2장\n• 트리플 — 같은 숫자 3장\n• 풀하우스 — 트리플 + 페어\n• 스트레이트 — 연속 숫자 5장 이상\n• 연속 페어 — 연속 숫자 페어 2쌍+',
+  },
+  {
+    icon: '💣',
+    title: '폭탄',
+    body: '• 포카드 — 같은 숫자 4장\n• 스트레이트 플러시 — 같은 문양 연속 5장+\n\n어떤 조합이든 폭탄으로 이길 수 있어요!\n상대 턴이어도 폭탄은 낼 수 있습니다.',
+  },
+  {
+    icon: '🔥',
+    title: '티츄 선언',
+    body: '• 라지 티츄 — 8장만 봤을 때 선언\n  성공 +200점, 실패 -200점\n\n• 스몰 티츄 — 첫 카드 내기 전 선언\n  성공 +100점, 실패 -100점\n\n선언 후 1등으로 나가면 성공!\n팀당 1명만 선언할 수 있어요.',
+  },
+  {
+    icon: '💰',
+    title: '점수 계산',
+    body: '• 5: +5점\n• 10, K: +10점\n• 용: +25점\n• 봉황: -25점\n• 나머지: 0점\n\n라운드 총합은 항상 100점!\n4등의 남은 카드 → 상대팀에게\n4등의 획득 트릭 → 1등에게',
+  },
+  {
+    icon: '🏆',
+    title: '준비 완료!',
+    body: '이제 티츄를 시작할 준비가 되었어요!\n\n💡 파트너와 협력하는 것이 핵심입니다.\n💡 폭탄은 결정적인 순간에 사용하세요.\n💡 같은 팀 1등+2등 = 원투 피니시 200점!\n💡 소원은 상대를 견제하는 데 활용하세요.',
+  },
 ];
 
 interface Props {
@@ -20,37 +54,50 @@ interface Props {
 export function TutorialModal({ visible, onClose }: Props) {
   const [step, setStep] = useState(0);
   const cur = STEPS[step]!;
+  const isLast = step === STEPS.length - 1;
+
+  const handleClose = () => {
+    setStep(0);
+    onClose();
+  };
 
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={S.overlay}>
         <View style={S.box}>
+          {/* 건너뛰기 */}
+          <TouchableOpacity style={S.skipBtn} onPress={handleClose}>
+            <Text style={S.skipText}>건너뛰기</Text>
+          </TouchableOpacity>
+
           <Animated.View key={step} entering={FadeIn.duration(300)} style={S.content}>
             <Text style={S.icon}>{cur.icon}</Text>
             <Text style={S.title}>{cur.title}</Text>
             <Text style={S.body}>{cur.body}</Text>
           </Animated.View>
 
-          {/* dots */}
+          {/* 진행 바 */}
           <View style={S.dots}>
-            {STEPS.map((_, i) => <View key={i} style={[S.dot, i === step && S.dotActive]} />)}
+            {STEPS.map((_, i) => <View key={i} style={[S.dot, i === step && S.dotActive, i < step && S.dotDone]} />)}
           </View>
 
           {/* 버튼 */}
           <View style={S.btns}>
             {step > 0 && (
               <TouchableOpacity style={S.prevBtn} onPress={() => setStep(step - 1)}>
-                <Text style={S.prevText}>{'\uC774\uC804'}</Text>
+                <Text style={S.prevText}>이전</Text>
               </TouchableOpacity>
             )}
             <View style={{ flex: 1 }} />
-            {step < STEPS.length - 1 ? (
+            <Text style={S.pageNum}>{step + 1} / {STEPS.length}</Text>
+            <View style={{ flex: 1 }} />
+            {!isLast ? (
               <TouchableOpacity style={S.nextBtn} onPress={() => setStep(step + 1)}>
-                <Text style={S.nextText}>{'\uB2E4\uC74C'}</Text>
+                <Text style={S.nextText}>다음</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={S.startBtn} onPress={() => { setStep(0); onClose(); }}>
-                <Text style={S.startText}>{'\uC2DC\uC791\uD558\uAE30!'}</Text>
+              <TouchableOpacity style={S.startBtn} onPress={handleClose}>
+                <Text style={S.startText}>시작하기!</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -61,20 +108,29 @@ export function TutorialModal({ visible, onClose }: Props) {
 }
 
 const S = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
-  box: { backgroundColor: COLORS.bgDark, borderRadius: 22, padding: 24, width: 360, maxWidth: '90%' as any, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 20 },
-  content: { alignItems: 'center', marginBottom: 16, minHeight: 200 },
-  icon: { fontSize: 40, marginBottom: 8 },
-  title: { color: '#FFD700', fontSize: 20, fontWeight: '900', marginBottom: 12, textAlign: 'center' },
-  body: { color: 'rgba(255,255,255,0.7)', fontSize: 14, lineHeight: 22, textAlign: 'center' },
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 16 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.15)' },
-  dotActive: { backgroundColor: '#F59E0B', width: 20 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center' },
+  box: {
+    backgroundColor: COLORS.bgDark, borderRadius: 22, padding: 24,
+    width: 400, maxWidth: '92%' as any,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 20,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+  },
+  skipBtn: { alignSelf: 'flex-end', marginBottom: 4 },
+  skipText: { color: 'rgba(255,255,255,0.3)', fontSize: 12, fontWeight: '600' },
+  content: { alignItems: 'center', marginBottom: 16, minHeight: 220 },
+  icon: { fontSize: 48, marginBottom: 10 },
+  title: { color: '#FFD700', fontSize: 20, fontWeight: '900', marginBottom: 14, textAlign: 'center' },
+  body: { color: 'rgba(255,255,255,0.75)', fontSize: 14, lineHeight: 22, textAlign: 'center' },
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: 5, marginBottom: 16 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.12)' },
+  dotActive: { backgroundColor: COLORS.accent, width: 18 },
+  dotDone: { backgroundColor: 'rgba(243,156,18,0.35)' },
   btns: { flexDirection: 'row', alignItems: 'center' },
-  prevBtn: { paddingHorizontal: 16, paddingVertical: 8 },
-  prevText: { color: 'rgba(255,255,255,0.4)', fontSize: 14, fontWeight: '700' },
-  nextBtn: { backgroundColor: '#D97706', borderRadius: 10, paddingHorizontal: 20, paddingVertical: 8 },
+  prevBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.06)' },
+  prevText: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '700' },
+  pageNum: { color: 'rgba(255,255,255,0.25)', fontSize: 12 },
+  nextBtn: { backgroundColor: COLORS.accent, borderRadius: 10, paddingHorizontal: 22, paddingVertical: 10 },
   nextText: { color: '#fff', fontSize: 14, fontWeight: '800' },
-  startBtn: { backgroundColor: '#D97706', borderRadius: 10, paddingHorizontal: 24, paddingVertical: 10 },
+  startBtn: { backgroundColor: '#2ecc71', borderRadius: 10, paddingHorizontal: 28, paddingVertical: 10, shadowColor: '#2ecc71', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6 },
   startText: { color: '#fff', fontSize: 16, fontWeight: '900' },
 });

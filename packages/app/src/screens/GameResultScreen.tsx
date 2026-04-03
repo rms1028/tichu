@@ -4,6 +4,7 @@ import { ParticleEffect } from '../components/ParticleEffect';
 import { SFX } from '../utils/sound';
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, withDelay, withSpring,
+  withRepeat, withSequence, Easing,
   FadeIn, ZoomIn,
 } from 'react-native-reanimated';
 import { COLORS } from '../utils/theme';
@@ -21,6 +22,35 @@ interface Props {
   rewards: { coins: number; xp: number; bonusCoins: number; tichuBonus: number };
   xpBefore: number; xpAfter: number; xpMax: number; tierUp: boolean;
   onRematch: () => void; onLobby: () => void;
+}
+
+// 점수 카운트업 컴포넌트
+function CountUpScore({ target, delay: d, color, isWinner }: { target: number; delay: number; color: string; isWinner: boolean }) {
+  const val = useSharedValue(0);
+  useEffect(() => {
+    val.value = withDelay(d, withTiming(target, { duration: 1200, easing: Easing.out(Easing.cubic) }));
+  }, [target]);
+  const textStyle = useAnimatedStyle(() => ({
+    color,
+    fontSize: 32,
+    fontWeight: '900',
+  }));
+  // Use a simpler approach - animate opacity and show final value
+  const opacity = useSharedValue(0);
+  const scale = useSharedValue(0.5);
+  useEffect(() => {
+    opacity.value = withDelay(d, withTiming(1, { duration: 400 }));
+    scale.value = withDelay(d, withSpring(1, { damping: 8, stiffness: 120 }));
+  }, []);
+  const containerStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+  return (
+    <Animated.View style={containerStyle}>
+      <Text style={[S.scoreNum, { color }, isWinner ? S.scoreWin : S.scoreLose]}>{target}</Text>
+    </Animated.View>
+  );
 }
 
 export function GameResultScreen({
@@ -43,10 +73,28 @@ export function GameResultScreen({
   useEffect(() => { bannerScale.value = withSpring(1, { damping: 8, stiffness: 120 }); }, []);
   const bannerStyle = useAnimatedStyle(() => ({ transform: [{ scale: bannerScale.value }] }));
 
+  // MVP 카드 글로우 펄스
+  const mvpGlow = useSharedValue(0.3);
+  useEffect(() => {
+    mvpGlow.value = withRepeat(
+      withSequence(
+        withTiming(0.8, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+      ), -1, false,
+    );
+  }, []);
+  const mvpGlowStyle = useAnimatedStyle(() => ({
+    shadowOpacity: mvpGlow.value,
+  }));
+
   const renderPlayer = (p: PlayerResult, idx: number) => {
     const isT1 = p.seat === 0 || p.seat === 2;
+    const cardStyle = p.isMvp
+      ? [S.pCard, S.pCardMvp, mvpGlowStyle, { borderColor: '#FFD700' }]
+      : [S.pCard, { borderColor: isT1 ? 'rgba(59,130,246,0.25)' : 'rgba(239,68,68,0.25)' }];
+
     return (
-      <Animated.View key={p.seat} entering={FadeIn.delay(500 + idx * 150).duration(400)} style={[S.pCard, p.isMvp && S.pCardMvp, { borderColor: isT1 ? 'rgba(59,130,246,0.25)' : 'rgba(239,68,68,0.25)' }]}>
+      <Animated.View key={p.seat} entering={FadeIn.delay(500 + idx * 150).duration(400)} style={cardStyle}>
         {p.isMvp && <Text style={S.mvpIcon}>{'\uD83D\uDC51'}</Text>}
         <Text style={S.pAvatar}>{p.avatar}</Text>
         <Text style={S.pName} numberOfLines={1}>{p.name}</Text>
@@ -62,22 +110,27 @@ export function GameResultScreen({
   return (
     <SafeAreaView style={S.root}>
       <BackgroundWatermark />
-      {isWin && <ParticleEffect type="victory" count={25} />}
+      {/* 승리 시 화려한 파티클 */}
+      {isWin && <ParticleEffect type="victory" count={35} />}
+      {isWin && <ParticleEffect type="onetwo" count={15} />}
       <View style={S.content}>
         {/* 승패 배너 */}
         <Animated.View style={[S.bannerWrap, bannerStyle]}>
-          <Text style={[S.banner, isWin ? S.bannerWin : S.bannerLose]}>
+          <Animated.Text
+            entering={ZoomIn.delay(200).duration(500).springify()}
+            style={[S.banner, isWin ? S.bannerWin : S.bannerLose]}
+          >
             {isWin ? '\uD83C\uDF89 \uC2B9\uB9AC!' : '\uD83D\uDE22 \uD328\uBC30'}
-          </Text>
+          </Animated.Text>
           <View style={S.scoreRow}>
             <View style={S.scoreTeam}>
-              <Text style={[S.scoreLabel, { color: '#3B82F6' }]}>Team 1</Text>
-              <Text style={[S.scoreNum, winner === 'team1' ? S.scoreWin : S.scoreLose]}>{scores.team1}</Text>
+              <Text style={[S.scoreLabel, { color: COLORS.team1 }]}>Team 1</Text>
+              <CountUpScore target={scores.team1} delay={600} color={winner === 'team1' ? '#FFD700' : 'rgba(255,255,255,0.4)'} isWinner={winner === 'team1'} />
             </View>
             <Text style={S.vs}>VS</Text>
             <View style={S.scoreTeam}>
-              <Text style={[S.scoreLabel, { color: '#EF4444' }]}>Team 2</Text>
-              <Text style={[S.scoreNum, winner === 'team2' ? S.scoreWin : S.scoreLose]}>{scores.team2}</Text>
+              <Text style={[S.scoreLabel, { color: COLORS.team2 }]}>Team 2</Text>
+              <CountUpScore target={scores.team2} delay={800} color={winner === 'team2' ? '#FFD700' : 'rgba(255,255,255,0.4)'} isWinner={winner === 'team2'} />
             </View>
           </View>
         </Animated.View>
@@ -144,7 +197,7 @@ const S = StyleSheet.create({
   teamGroup: { flexDirection: 'row', gap: 6 },
   divider: { width: 1, height: 80, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: 6 },
   pCard: { width: 100, backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 14, borderWidth: 1, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 6, gap: 2, position: 'relative' },
-  pCardMvp: { borderColor: '#FFD700 !important' as any, shadowColor: '#FFD700', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 6 },
+  pCardMvp: { shadowColor: '#FFD700', shadowOffset: { width: 0, height: 0 }, shadowRadius: 14, elevation: 8 },
   mvpIcon: { position: 'absolute', top: -8, right: -4, fontSize: 16 },
   pAvatar: { fontSize: 28 },
   pName: { color: '#fff', fontSize: 12, fontWeight: '700', maxWidth: 80, textAlign: 'center' },
@@ -152,7 +205,7 @@ const S = StyleSheet.create({
   pStatsRow: { flexDirection: 'row', gap: 6, marginTop: 2 },
   pStat: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '600' },
   pGood: { color: '#10b981' },
-  pBad: { color: '#ef4444' },
+  pBad: { color: COLORS.danger },
 
   // 보상
   rewardWrap: { alignItems: 'center', gap: 10, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16 },

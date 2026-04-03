@@ -99,6 +99,7 @@ interface UserState {
   // 설정
   soundOn: boolean;
   musicOn: boolean;
+  ttsOn: boolean;
   notifyOn: boolean;
   friendNotify: boolean;
   gameNotify: boolean;
@@ -122,18 +123,26 @@ interface UserState {
   equipAvatar: (id: string) => void;
   equipCardBack: (id: string) => void;
   setNickname: (name: string) => void;
-  setSetting: (key: 'soundOn' | 'musicOn' | 'notifyOn' | 'friendNotify' | 'gameNotify', value: boolean) => void;
+  setSetting: (key: 'soundOn' | 'musicOn' | 'ttsOn' | 'notifyOn' | 'friendNotify' | 'gameNotify', value: boolean) => void;
   setPlayerId: (id: string) => void;
   isGuest: () => boolean;
+  applyServerRewards: (xp: number, coins: number, won: boolean, tichuSuccess: boolean) => void;
+  syncFromServer: (data: { coins: number; xp: number; totalGames: number; wins: number; losses: number; tichuSuccess: number; winStreak: number }) => void;
 }
 
-// MMKV는 웹에서 안 되므로 웹에서는 메모리만 사용
+// MMKV (모바일) 또는 localStorage (웹) 사용
 let storage: any = null;
 if (Platform.OS !== 'web') {
   try {
     const { MMKV } = require('react-native-mmkv');
     storage = new MMKV();
   } catch { /* */ }
+} else {
+  // 웹: localStorage 래퍼
+  storage = {
+    getString: (key: string) => { try { return localStorage.getItem(key); } catch { return null; } },
+    set: (key: string, val: string) => { try { localStorage.setItem(key, val); } catch {} },
+  };
 }
 
 function loadState(): Partial<UserState> {
@@ -178,6 +187,7 @@ export const useUserStore = create<UserState>((set, get) => ({
   equippedCardBack: saved.equippedCardBack ?? 'classic',
   soundOn: saved.soundOn ?? true,
   musicOn: saved.musicOn ?? true,
+  ttsOn: saved.ttsOn ?? true,
   notifyOn: saved.notifyOn ?? true,
   friendNotify: saved.friendNotify ?? true,
   gameNotify: saved.gameNotify ?? true,
@@ -280,10 +290,62 @@ export const useUserStore = create<UserState>((set, get) => ({
   equipAvatar: (id) => set(s => { const ns = { ...s, equippedAvatar: id }; saveState(ns); return ns; }),
   equipCardBack: (id) => set(s => { const ns = { ...s, equippedCardBack: id }; saveState(ns); return ns; }),
   setNickname: (name) => set(s => { const ns = { ...s, nickname: name }; saveState(ns); return ns; }),
-  setSetting: (key, value) => set(s => { const ns = { ...s, [key]: value }; saveState(ns); return ns; }),
+  setSetting: (key, value) => {
+    if (key === 'ttsOn') {
+      try { const { setTtsEnabled } = require('../utils/sound'); setTtsEnabled(value); } catch {}
+    }
+    set(s => { const ns = { ...s, [key]: value }; saveState(ns); return ns; });
+  },
   setPlayerId: (id) => set(s => { const ns = { ...s, playerId: id }; saveState(ns); return ns; }),
   isGuest: () => get().playerId.startsWith('guest_'),
+
+  // 서버에서 보상 수신 시 로컬 스토어 업데이트
+  applyServerRewards: (xp, coins, won, tichuSuccess) => set(s => {
+    const ns = {
+      ...s,
+      xp: s.xp + xp,
+      coins: s.coins + coins,
+      totalGames: s.totalGames + 1,
+      wins: s.wins + (won ? 1 : 0),
+      losses: s.losses + (won ? 0 : 1),
+      winStreak: won ? s.winStreak + 1 : 0,
+      tichuSuccess: s.tichuSuccess + (tichuSuccess ? 1 : 0),
+    };
+    // 미션 업데이트
+    const missions = [...ns.missions];
+    const playMission = missions.find(m => m.id === 'play3');
+    if (playMission && !playMission.claimed) { playMission.progress = Math.min(playMission.target, playMission.progress + 1); playMission.completed = playMission.progress >= playMission.target; }
+    const winMission = missions.find(m => m.id === 'win2');
+    if (winMission && !winMission.claimed && won) { winMission.progress = Math.min(winMission.target, winMission.progress + 1); winMission.completed = winMission.progress >= winMission.target; }
+    const tichuMission = missions.find(m => m.id === 'tichu1');
+    if (tichuMission && !tichuMission.claimed && tichuSuccess) { tichuMission.progress = 1; tichuMission.completed = true; }
+    ns.missions = missions;
+    saveState(ns);
+    return ns;
+  }),
+
+  // 로그인 시 서버 DB 데이터로 동기화
+  syncFromServer: (data) => set(s => {
+    const ns = {
+      ...s,
+      coins: data.coins,
+      xp: data.xp,
+      totalGames: data.totalGames,
+      wins: data.wins,
+      losses: data.losses,
+      tichuSuccess: data.tichuSuccess,
+      winStreak: data.winStreak,
+    };
+    saveState(ns);
+    return ns;
+  }),
 }));
+
+// 앱 시작 시 저장된 TTS 설정 반영
+try {
+  const { setTtsEnabled } = require('../utils/sound');
+  setTtsEnabled(useUserStore.getState().ttsOn);
+} catch {}
 
 function isYesterday(dateStr: string): boolean {
   if (!dateStr) return false;

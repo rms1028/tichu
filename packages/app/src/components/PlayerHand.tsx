@@ -153,6 +153,7 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
       {/* 일반 카드 */}
       {normalCards.map((card, i) => {
         const isSelected = selectedCards.some(c => cardEquals(c, card));
+        const isBombMember = bombCardKeys.has(cardKey(card));
         const centerIdx = (normalCount - 1) / 2;
         const signedOffset = i - centerIdx;
         const absOffset = Math.abs(signedOffset);
@@ -175,6 +176,7 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
             <CardView
               card={card}
               selected={isSelected}
+              isBombCard={isBombMember}
               onPress={() => handleCardPress(card)}
               disabled={!canSelectNormal}
             />

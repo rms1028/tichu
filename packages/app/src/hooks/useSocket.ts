@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { Card, Rank, PlayedHand, GamePhase } from '@tichu/shared';
 import { useGameStore } from '../stores/gameStore';
-import { SFX } from '../utils/sound';
+import { SFX, TTS } from '../utils/sound';
 import { haptics } from '../utils/haptics';
 
 const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL ?? 'http://localhost:3001';
@@ -40,6 +40,14 @@ export function useSocket() {
     // ── 방 참가 ────────────────────────────────────────────
     socket.on('room_joined', (data: { seat: number; roomId: string; players: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> }) => {
       store.setRoomInfo(data.roomId, data.seat, data.players);
+    });
+
+    socket.on('room_list', (data: { rooms: { roomId: string; roomName: string; playerCount: number; hasPassword: boolean }[] }) => {
+      useGameStore.setState({ customRoomList: data.rooms });
+    });
+
+    socket.on('rooms_updated', () => {
+      socketRef.current?.emit('list_rooms');
     });
 
     socket.on('player_joined', (data: { seat: number; player: { nickname: string; connected: boolean; isBot: boolean } }) => {
@@ -82,6 +90,7 @@ export function useSocket() {
       const { mySeat } = useGameStore.getState();
       if (data.seat === mySeat) {
         try { SFX.myTurn(); } catch {}
+        try { TTS.myTurn(); } catch {}
       }
     });
 
@@ -93,37 +102,53 @@ export function useSocket() {
     socket.on('card_played', (data: { seat: number; hand: PlayedHand; remainingCards: number }) => {
       store.onCardPlayed(data.seat, data.hand, data.remainingCards);
       try { SFX.cardPlay(); } catch {}
+      try { TTS.cardPlayed(data.hand.value, data.hand.type); } catch {}
     });
 
     socket.on('player_passed', (data: { seat: number }) => {
       store.onPlayerPassed(data.seat);
       try { SFX.pass(); } catch {}
+      try { TTS.pass(); } catch {}
     });
 
     // ── 트릭 승리 ──────────────────────────────────────────
     socket.on('trick_won', (data: { winningSeat: number; cards: Card[]; points: number }) => {
       store.onTrickWon(data.winningSeat, data.cards, data.points);
       try { SFX.trickWon(); } catch {}
+      try {
+        const name = useGameStore.getState().players[data.winningSeat]?.nickname ?? '?';
+        TTS.trickWon(name, data.points);
+      } catch {}
     });
 
     // ── 나감 ───────────────────────────────────────────────
     socket.on('player_finished', (data: { seat: number; rank: number }) => {
       store.onPlayerFinished(data.seat, data.rank);
+      try {
+        const name = useGameStore.getState().players[data.seat]?.nickname ?? '?';
+        TTS.playerFinished(name, data.rank);
+      } catch {}
     });
 
     // ── 소원 ───────────────────────────────────────────────
     socket.on('wish_active', (data: { wish: Rank }) => {
       store.onWishActive(data.wish);
+      try { TTS.wishActive(data.wish); } catch {}
     });
 
     socket.on('wish_fulfilled', () => {
       store.onWishFulfilled();
+      try { TTS.wishFulfilled(); } catch {}
     });
 
     // ── 티츄 선언 ──────────────────────────────────────────
     socket.on('tichu_declared', (data: { seat: number; tichuType: 'large' | 'small' }) => {
       store.onTichuDeclared(data.seat, data.tichuType);
       try { SFX.tichu(); } catch {}
+      try {
+        const name = useGameStore.getState().players[data.seat]?.nickname ?? '?';
+        TTS.tichu(name, data.tichuType);
+      } catch {}
     });
 
     // ── 폭탄 윈도우 ───────────────────────────────────────
@@ -157,6 +182,7 @@ export function useSocket() {
       }
       useGameStore.setState(updates as any);
       try { SFX.bomb(); } catch {}
+      try { TTS.cardPlayed(data.bomb.value, data.bomb.type); } catch {}
       haptics.heavyTap();
     });
 
@@ -196,10 +222,29 @@ export function useSocket() {
     }) => {
       store.onRoundResult(data.team1, data.team2, data.scores, data.details, data.finishOrder, data.tichuDeclarations);
       try { SFX.roundEnd(); } catch {}
+      try {
+        const { mySeat } = useGameStore.getState();
+        const myTeam = (mySeat === 0 || mySeat === 2) ? 'team1' : 'team2';
+        const myPoints = myTeam === 'team1' ? data.team1 : data.team2;
+        const won = myPoints > (myTeam === 'team1' ? data.team2 : data.team1);
+        if (data.details?.oneTwoFinish) TTS.oneTwoFinish();
+        else TTS.roundResult(myPoints, won);
+      } catch {}
     });
 
     socket.on('game_over', (data: { winner: string; scores: { team1: number; team2: number } }) => {
       store.onGameOver(data.winner, data.scores);
+      try {
+        const { mySeat } = useGameStore.getState();
+        const myTeam = (mySeat === 0 || mySeat === 2) ? 'team1' : 'team2';
+        TTS.gameOver(data.winner === myTeam);
+      } catch {}
+    });
+
+    // 서버에서 보상 수신 → userStore에 반영
+    socket.on('game_rewards', (data: { xp: number; coins: number; won: boolean; tichuBonus: number }) => {
+      const us = require('../stores/userStore').useUserStore.getState();
+      us.applyServerRewards(data.xp, data.coins, data.won, data.tichuBonus > 0);
     });
 
     // ── 로그인 ──────────────────────────────────────────────
@@ -208,9 +253,18 @@ export function useSocket() {
       totalGames: number; wins: number; losses: number; tichuSuccess: number; winStreak: number;
     }) => {
       useGameStore.setState({ dbUserId: data.userId });
-      // userStore 동기화
+      // userStore를 서버 DB 데이터로 동기화
       const us = require('../stores/userStore').useUserStore.getState();
       us.setNickname(data.nickname);
+      us.syncFromServer({
+        coins: data.coins,
+        xp: data.xp,
+        totalGames: data.totalGames,
+        wins: data.wins,
+        losses: data.losses,
+        tichuSuccess: data.tichuSuccess,
+        winStreak: data.winStreak,
+      });
     });
 
     socket.on('login_error', (data: { error: string }) => {
@@ -300,9 +354,18 @@ export function useSocket() {
 
   // ── 송신 함수들 ────────────────────────────────────────────
 
-  const joinRoom = useCallback((roomId: string, playerId: string, nickname: string) => {
+  const joinRoom = useCallback((roomId: string, playerId: string, nickname: string, password?: string) => {
     store.setPlayerInfo(playerId, nickname);
-    socketRef.current?.emit('join_room', { roomId, playerId, nickname });
+    socketRef.current?.emit('join_room', { roomId, playerId, nickname, password });
+  }, []);
+
+  const createCustomRoom = useCallback((roomName: string, password: string | undefined, playerId: string, nickname: string) => {
+    store.setPlayerInfo(playerId, nickname);
+    socketRef.current?.emit('create_custom_room', { roomName, password, playerId, nickname });
+  }, []);
+
+  const listRooms = useCallback(() => {
+    socketRef.current?.emit('list_rooms');
   }, []);
 
   const declareTichu = useCallback((type: 'large' | 'small') => {
@@ -431,5 +494,7 @@ export function useSocket() {
     friendReject,
     friendRemove,
     friendInvite,
+    createCustomRoom,
+    listRooms,
   };
 }

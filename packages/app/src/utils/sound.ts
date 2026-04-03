@@ -114,3 +114,86 @@ export const SFX = {
     setTimeout(() => playChord([1319, 1568], 0.3, 'sine', 0.1), 300);
   },
 };
+
+// ── TTS (Text-to-Speech) ──────────────────────────────────
+
+let ttsEnabled = true;
+
+export function setTtsEnabled(on: boolean) { ttsEnabled = on; }
+export function isTtsEnabled() { return ttsEnabled; }
+
+function speak(text: string) {
+  if (!ttsEnabled) return;
+  try {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ko-KR';
+    u.rate = 1.2;
+    u.volume = 0.7;
+    u.pitch = 1.0;
+    window.speechSynthesis.speak(u);
+  } catch {}
+}
+
+function handTypeToKorean(type: string): string {
+  switch (type) {
+    case 'single': return '';
+    case 'pair': return '페어';
+    case 'steps': return '연속페어';
+    case 'triple': return '트리플';
+    case 'fullhouse': return '풀하우스';
+    case 'straight': return '스트레이트';
+    case 'four_bomb': return '폭탄!';
+    case 'straight_flush_bomb': return '스트레이트 플러시 폭탄!';
+    default: return '';
+  }
+}
+
+function valueToKorean(v: number | null | undefined): string {
+  if (v === null || v === undefined || !isFinite(v)) return '용';
+  if (v % 1 !== 0) return String(Math.floor(v)); // 봉황
+  switch (v) {
+    case 1: return '참새';
+    case 11: return '잭';
+    case 12: return '퀸';
+    case 13: return '킹';
+    case 14: return '에이스';
+    default: return String(v);
+  }
+}
+
+export const TTS = {
+  cardPlayed: (value: number | null | undefined, type: string) => {
+    const typeName = handTypeToKorean(type);
+    const valueName = valueToKorean(value);
+    if (type === 'four_bomb' || type === 'straight_flush_bomb') {
+      speak(typeName);
+    } else if (typeName) {
+      speak(`${valueName} ${typeName}`);
+    } else {
+      speak(valueName);
+    }
+  },
+  pass: () => speak('패스'),
+  myTurn: () => speak('내 차례'),
+  trickWon: (name: string, points: number) => {
+    speak(points > 0 ? `${name} 승리, ${points}점` : `${name} 승리`);
+  },
+  tichu: (name: string, type: 'large' | 'small') => {
+    speak(type === 'large' ? `${name} 라지티츄!` : `${name} 스몰티츄!`);
+  },
+  playerFinished: (name: string, rank: number) => {
+    const rankName = ['1', '2', '3', '4'][rank - 1] ?? String(rank);
+    speak(`${name} ${rankName}등`);
+  },
+  wishActive: (rank: string) => speak(`소원: ${rank}`),
+  wishFulfilled: () => speak('소원 해제'),
+  roundResult: (myTeamPoints: number, won: boolean) => {
+    speak(won ? `라운드 승리! ${myTeamPoints}점` : `라운드 종료, ${myTeamPoints}점`);
+  },
+  gameOver: (won: boolean) => {
+    speak(won ? '게임 승리!' : '게임 종료');
+  },
+  oneTwoFinish: () => speak('원투 피니시!'),
+};

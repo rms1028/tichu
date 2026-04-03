@@ -13,8 +13,8 @@ export const COLORS = {
   accent: '#f39c12',
   danger: '#e74c3c',
   success: '#2ecc71',
-  team1: '#3498db',
-  team2: '#e67e22',
+  team1: '#3B82F6',
+  team2: '#EF4444',
   bomb: '#9b59b6',
   tichu: '#e74c3c',
 };

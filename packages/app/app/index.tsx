@@ -40,6 +40,7 @@ function AppInner() {
     exchangeCards, playCards, passTurn,
     dragonGive, submitBomb, addBots, swapSeat,
     queueMatch, cancelMatch,
+    createCustomRoom, listRooms,
     friendInit, friendSearch, friendRequest, friendAccept, friendReject, friendRemove, friendInvite,
     guestLogin, firebaseLogin, getLeaderboard,
   } = useSocket();
@@ -143,22 +144,27 @@ function AppInner() {
     return (
       <>
         <LobbyScreen
-          onJoin={(room, playerId, nick) => {
+          onJoin={(room, playerId, nick, password) => {
           setNickname(nick);
           if (room.startsWith('std_')) {
-            // 빠른매칭 → 서버 큐에 참가
             setMatchMode('quick');
             setMatchRoomCode('');
             setScreen('matchmaking');
             queueMatch(playerId, nick);
           } else {
-            // 커스텀 → 직접 방 참가
             setMatchMode('custom');
             setMatchRoomCode(room);
             setScreen('matchmaking');
-            joinRoom(room, playerId, nick);
+            joinRoom(room, playerId, nick, password);
           }
         }}
+        onCreateCustomRoom={(roomName, password, playerId, nick) => {
+          setNickname(nick);
+          setMatchMode('custom');
+          setScreen('matchmaking');
+          createCustomRoom(roomName, password, playerId, nick);
+        }}
+        onListRooms={listRooms}
         onTutorial={() => setShowTutorial(true)}
         onFriendInit={friendInit}
         onFriendSearch={friendSearch}

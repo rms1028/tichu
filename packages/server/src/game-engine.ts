@@ -485,9 +485,15 @@ export function passTurn(room: GameRoom, seat: number): EngineResult {
   }
   // 리드 시 패스 불가 (개만 남은 경우 제외)
   if (room.tableCards === null) {
-    // Edge #11: 개만 남아있으면 리드권이 있어도 개 리드 가능하므로 패스 불가
-    // 아니, 리드 시에는 뭔가는 내야 함. 자동처리에서 최저 싱글로 내게 됨.
     return { ok: false, error: 'cannot_pass_on_lead', events: [] };
+  }
+
+  // 소원 활성 시: 소원 숫자 보유 + 합법 조합 존재 → 패스 불가 (섹션 7.4)
+  if (room.wish !== null) {
+    const wishResult = mustFulfillWish(room.hands[seat]!, room.tableCards, room.wish, false);
+    if (wishResult.mustPlay && wishResult.validPlaysWithWish.length > 0) {
+      return { ok: false, error: 'must_fulfill_wish', events: [] };
+    }
   }
 
   room.currentTrick.consecutivePasses++;

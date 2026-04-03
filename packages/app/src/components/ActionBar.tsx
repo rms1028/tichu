@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  withSpring,
+  Easing,
+  ZoomIn,
+} from 'react-native-reanimated';
 import type { Card, Rank } from '@tichu/shared';
 import { isMahjong, isPhoenix, isNormalCard } from '@tichu/shared';
 import { useGameStore } from '../stores/gameStore';
@@ -29,6 +39,8 @@ function valueToRank(v: number): Rank {
   return map[v] ?? '2';
 }
 
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+
 export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
   const selectedCards = useGameStore((s) => s.selectedCards);
   const isMyTurn = useGameStore((s) => s.isMyTurn);
@@ -46,6 +58,30 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
   const hasSelection = selectedCards.length > 0;
   const hasMahjong = selectedCards.some(isMahjong);
   const hasPhoenix = selectedCards.some(isPhoenix);
+  const canPlay = hasSelection && isMyTurn;
+
+  // Play 버튼 글로우 펄스
+  const playGlow = useSharedValue(0);
+  const playScale = useSharedValue(1);
+  useEffect(() => {
+    if (canPlay) {
+      playGlow.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.4, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+        ), -1, false,
+      );
+      playScale.value = withSpring(1.05, { damping: 10, stiffness: 100 });
+    } else {
+      playGlow.value = withTiming(0, { duration: 200 });
+      playScale.value = withSpring(1, { damping: 10, stiffness: 100 });
+    }
+  }, [canPlay]);
+
+  const playAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: playScale.value }],
+    shadowOpacity: canPlay ? 0.3 + playGlow.value * 0.5 : 0,
+  }));
 
   const getPhoenixAs = (): Rank | undefined => {
     if (hasPhoenix && selectedCards.length > 1) return inferPhoenixAs(selectedCards);
@@ -53,7 +89,7 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
   };
 
   const handlePlay = () => {
-    if (!hasSelection || !isMyTurn) return;
+    if (!canPlay) return;
     if (hasMahjong) {
       setShowWishPicker(true);
       return;
@@ -70,54 +106,60 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
 
   if (phase !== 'TRICK_PLAY') return null;
 
+  const WISH_RANKS: Rank[] = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+
   return (
     <View style={styles.container}>
       <TouchableOpacity
-        style={[styles.button, styles.clearButton, !hasSelection && styles.disabledSub]}
+        style={[styles.button, hasSelection ? styles.clearButton : styles.clearButtonDisabled]}
         onPress={clearSelection}
         disabled={!hasSelection}
         activeOpacity={0.7}
       >
-        <Text style={styles.clearText}>초기화</Text>
+        <Text style={[styles.clearText, !hasSelection && styles.clearTextDisabled]}>초기화</Text>
       </TouchableOpacity>
 
       {!isLead && (
         <TouchableOpacity
-          style={[styles.button, styles.passButton, !isMyTurn && styles.disabledSub]}
+          style={[styles.button, isMyTurn ? styles.passButton : styles.passButtonDisabled]}
           onPress={onPass}
           disabled={!isMyTurn}
           activeOpacity={0.7}
         >
-          <Text style={styles.passText}>패스</Text>
+          <Text style={[styles.passText, !isMyTurn && styles.passTextDisabled]}>패스</Text>
         </TouchableOpacity>
       )}
 
-      <TouchableOpacity
-        style={[styles.playButton, (!hasSelection || !isMyTurn) && styles.disabledPlay]}
+      <AnimatedTouchable
+        style={[styles.playButton, !canPlay && styles.disabledPlay, playAnimStyle]}
         onPress={handlePlay}
-        disabled={!hasSelection || !isMyTurn}
+        disabled={!canPlay}
         activeOpacity={0.8}
       >
         <Text style={styles.playText}>내기</Text>
-      </TouchableOpacity>
+      </AnimatedTouchable>
 
-      {/* 소원 선택 오버레이 */}
+      {/* 소원 선택 그리드 */}
       {showWishPicker && (
-        <View style={styles.wishOverlay} pointerEvents="box-none">
+        <Animated.View
+          entering={ZoomIn.duration(200).springify()}
+          style={styles.wishOverlay}
+          pointerEvents="box-none"
+        >
           <View style={styles.wishBox}>
             <Text style={styles.wishTitle}>{'소원 숫자 선택'}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.wishScroll}>
+            <View style={styles.wishGrid}>
               <TouchableOpacity style={[styles.wishBtn, styles.wishBtnSkip]} onPress={() => handleWishSelect(undefined)}>
                 <Text style={styles.wishBtnSkipText}>{'안 함'}</Text>
               </TouchableOpacity>
-              {(['2','3','4','5','6','7','8','9','10','J','Q','K','A'] as Rank[]).map(rank => (
+              {WISH_RANKS.map(rank => (
                 <TouchableOpacity key={rank} style={styles.wishBtn} onPress={() => handleWishSelect(rank)}>
                   <Text style={styles.wishBtnText}>{rank}</Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
           </View>
-        </View>
+        </Animated.View>
       )}
     </View>
   );
@@ -143,25 +185,36 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   clearButton: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  clearButtonDisabled: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   clearText: {
-    color: 'rgba(255,255,255,0.5)',
+    color: '#fff',
     fontSize: mob(13, 16),
     fontWeight: '700',
   },
+  clearTextDisabled: {
+    color: 'rgba(255,255,255,0.2)',
+  },
   passButton: {
-    backgroundColor: 'rgba(100,116,139,0.2)',
-    borderColor: 'rgba(148,163,184,0.4)',
+    backgroundColor: 'rgba(59,130,246,0.7)',
+    borderColor: 'rgba(96,165,250,0.8)',
+  },
+  passButtonDisabled: {
+    backgroundColor: 'rgba(100,116,139,0.08)',
+    borderColor: 'rgba(100,116,139,0.15)',
   },
   passText: {
-    color: '#94a3b8',
+    color: '#fff',
     fontSize: mob(13, 16),
     fontWeight: '800',
   },
-  disabledSub: {
-    opacity: 0.3,
+  passTextDisabled: {
+    color: 'rgba(255,255,255,0.2)',
   },
   playButton: {
     backgroundColor: 'rgba(217,119,6,0.9)',
@@ -174,7 +227,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     shadowColor: '#F59E0B',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
     shadowRadius: 12,
     elevation: 8,
     borderWidth: 1.5,
@@ -195,7 +247,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
 
-  // 소원 선택 — 절대 위치 오버레이
+  // 소원 선택 그리드
   wishOverlay: {
     position: 'absolute',
     bottom: '100%',
@@ -216,7 +268,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 10,
     elevation: 15,
-    maxWidth: isMobile ? 320 : 500,
+    maxWidth: isMobile ? 300 : 400,
     width: '100%',
   },
   wishTitle: {
@@ -226,20 +278,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
-  wishScroll: {
+  wishGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 4,
   },
   wishBtn: {
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderRadius: 10,
-    minWidth: 44,
-    minHeight: 44,
+    minWidth: 42,
+    minHeight: 42,
     alignItems: 'center',
     justifyContent: 'center',
   },

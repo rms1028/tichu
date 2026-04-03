@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
   withSpring,
   withRepeat,
+  Easing,
   FadeIn,
   FadeOut,
   SlideInUp,
@@ -85,6 +86,7 @@ export function GameScreen({
   const gameOver = useGameStore((s) => s.gameOver);
   const errorMsg = useGameStore((s) => s.errorMsg);
   const passedSeats = useGameStore((s) => s.passedSeats);
+  const trickWonEvent = useGameStore((s) => s.trickWonEvent);
   const exchangeReceived = useGameStore((s) => s.exchangeReceived);
   const mySeat = useGameStore((s) => s.mySeat);
   const isMyTurn = useGameStore((s) => s.isMyTurn);
@@ -122,32 +124,7 @@ export function GameScreen({
     transform: [{ translateX: errorShakeX.value }],
   }));
 
-  // 트릭 승리 팝업 (2초 표시)
-  const trickWonEvent = useGameStore((s) => s.trickWonEvent);
-  const [trickWonFlash, setTrickWonFlash] = useState<{ winner: string; points: number } | null>(null);
-  useEffect(() => {
-    if (trickWonEvent) {
-      const name = players[trickWonEvent.winningSeat]?.nickname ?? '?';
-      setTrickWonFlash({ winner: name, points: trickWonEvent.points });
-      setTimeout(() => setTrickWonFlash(null), 2000);
-    }
-  }, [trickWonEvent]);
-
-  // 패스 팝업 (1초 표시)
-  const passedSeatsState = useGameStore((s) => s.passedSeats);
-  const [passFlash, setPassFlash] = useState<string | null>(null);
-  const prevPassedRef = useRef<number[]>([]);
-  useEffect(() => {
-    if (passedSeatsState.length > prevPassedRef.current.length) {
-      const newSeat = passedSeatsState[passedSeatsState.length - 1];
-      if (newSeat !== undefined) {
-        const name = players[newSeat]?.nickname ?? '?';
-        setPassFlash(name);
-        setTimeout(() => setPassFlash(null), 1000);
-      }
-    }
-    prevPassedRef.current = passedSeatsState;
-  }, [passedSeatsState]);
+  // 트릭 승리 / 패스 팝업은 TableArea 내부에서 처리
 
   // 티츄 선언 중앙 팝업 (2초간 표시)
   const [tichuFlash, setTichuFlash] = useState<{ seat: number; type: 'large' | 'small' } | null>(null);
@@ -190,6 +167,63 @@ export function GameScreen({
     intervalRef.current = setInterval(tick, 200);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [turnStartedAt, turnDuration, phase, bombWindow]);
+
+  // 턴 글로우 (테이블 영역)
+  const turnGlow = useSharedValue(0);
+  useEffect(() => {
+    if (phase === 'TRICK_PLAY' && currentTurn >= 0) {
+      turnGlow.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.4, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        ), -1, false,
+      );
+    } else {
+      turnGlow.value = withTiming(0, { duration: 300 });
+    }
+  }, [phase, currentTurn]);
+
+  const isPartnerTurn = !isMyTurn && ((currentTurn + 2) % 4 === mySeat);
+  const tableBorderColor = isMyTurn ? COLORS.accent : isPartnerTurn ? COLORS.team1 : COLORS.team2;
+  const tableGlowStyle = useAnimatedStyle(() => ({
+    borderColor: phase === 'TRICK_PLAY' ? tableBorderColor : 'transparent',
+    shadowColor: tableBorderColor,
+    shadowOpacity: turnGlow.value * 0.5,
+  }));
+
+  // 내 턴 하단 영역 밝기
+  const bottomGlow = useSharedValue(0);
+  useEffect(() => {
+    if (isMyTurn) {
+      bottomGlow.value = withTiming(1, { duration: 300 });
+    } else {
+      bottomGlow.value = withTiming(0, { duration: 300 });
+    }
+  }, [isMyTurn]);
+  const bottomGlowStyle = useAnimatedStyle(() => ({
+    backgroundColor: isMyTurn
+      ? `rgba(243,156,18,${0.04 + bottomGlow.value * 0.06})`
+      : 'rgba(0,0,0,0.2)',
+  }));
+
+  // 5초 이하 긴박감 (내 턴)
+  const urgencyPulse = useSharedValue(0);
+  useEffect(() => {
+    if (isMyTurn && remainingSec > 0 && remainingSec <= 5) {
+      urgencyPulse.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 250 }),
+          withTiming(0, { duration: 250 }),
+        ), -1, false,
+      );
+    } else {
+      urgencyPulse.value = withTiming(0, { duration: 200 });
+    }
+  }, [isMyTurn, remainingSec <= 5]);
+  const urgencyStyle = useAnimatedStyle(() => ({
+    borderTopColor: `rgba(239,68,68,${urgencyPulse.value * 0.6})`,
+    borderTopWidth: urgencyPulse.value > 0.01 ? 2 : 1,
+  }));
 
   // 대기 중
   if (phase === 'WAITING_FOR_PLAYERS') {
@@ -410,6 +444,7 @@ export function GameScreen({
             passed={passedSeats.includes(partnerSeat)}
             connected={players[partnerSeat]?.connected ?? true}
             isPartner={true}
+            trickWon={trickWonEvent?.winningSeat === partnerSeat ? { points: trickWonEvent.points } : null}
           />
         </View>
         <View style={styles.topBarRight} />
@@ -430,13 +465,14 @@ export function GameScreen({
             connected={players[leftOpponent]?.connected ?? true}
             isPartner={false}
             nickColor="#A3E635"
+            trickWon={trickWonEvent?.winningSeat === leftOpponent ? { points: trickWonEvent.points } : null}
           />
         </View>
 
         {/* Table center */}
-        <View style={styles.tableCenter}>
+        <Animated.View style={[styles.tableCenter, styles.tableCenterGlow, tableGlowStyle]}>
           <TableArea />
-        </View>
+        </Animated.View>
 
         {/* Right opponent */}
         <View style={styles.sideOpponent}>
@@ -451,6 +487,7 @@ export function GameScreen({
             connected={players[rightOpponent]?.connected ?? true}
             isPartner={false}
             nickColor="#C084FC"
+            trickWon={trickWonEvent?.winningSeat === rightOpponent ? { points: trickWonEvent.points } : null}
           />
         </View>
       </View>
@@ -474,7 +511,7 @@ export function GameScreen({
       )}
 
       {/* Bottom area: error, turn indicator, timer, actions, hand */}
-      <View style={styles.bottomArea}>
+      <Animated.View style={[styles.bottomArea, bottomGlowStyle, urgencyStyle]}>
         {/* 에러 메시지 */}
         {errorMsg && (
           <View
@@ -513,7 +550,7 @@ export function GameScreen({
         </View>
 
         <PlayerHand onSubmitBombCards={onSubmitBombCards} />
-      </View>
+      </Animated.View>
 
       {/* 모달 */}
       <LargeTichuModal
@@ -545,35 +582,7 @@ export function GameScreen({
         </View>
       )}
 
-      {/* 트릭 승리 팝업 */}
-      {trickWonFlash && (
-        <View
-         
-         
-          style={styles.trickWonOverlay}
-          pointerEvents="none"
-        >
-          <View style={styles.trickWonBox}>
-            <Text style={styles.trickWonIcon}>{'🏆'}</Text>
-            <Text style={styles.trickWonName}>{trickWonFlash.winner}</Text>
-            {trickWonFlash.points > 0 && (
-              <Text style={styles.trickWonPoints}>+{trickWonFlash.points}점</Text>
-            )}
-          </View>
-        </View>
-      )}
-
-      {/* 패스 팝업 */}
-      {passFlash && (
-        <View
-         
-         
-          style={styles.passFlashOverlay}
-          pointerEvents="none"
-        >
-          <Text style={styles.passFlashText}>{passFlash} 패스</Text>
-        </View>
-      )}
+      {/* 트릭 승리 / 패스 팝업은 TableArea 안에서 표시 */}
 
       {/* 티츄 선언 중앙 폭발 팝업 */}
       {tichuFlash && (
@@ -659,9 +668,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  tableCenterGlow: {
+    borderWidth: 1,
+    borderColor: 'transparent',
+    borderRadius: 16,
+    marginVertical: 2,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 20,
+    elevation: 8,
+  },
   bottomArea: {
     paddingBottom: mob(4, 16),
-    backgroundColor: 'rgba(0,0,0,0.2)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.06)',
     shadowColor: '#000',
@@ -949,32 +966,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
-  // 트릭 승리 팝업
-  trickWonOverlay: {
-    position: 'absolute', top: '30%', left: 0, right: 0,
-    alignItems: 'center', zIndex: 180,
-  },
-  trickWonBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: 'rgba(16,185,129,0.9)', borderRadius: 16,
-    paddingHorizontal: 20, paddingVertical: 10,
-    shadowColor: '#10b981', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.6, shadowRadius: 12, elevation: 10,
-  },
-  trickWonIcon: { fontSize: 20 },
-  trickWonName: { color: '#fff', fontSize: 16, fontWeight: '900' },
-  trickWonPoints: { color: '#A7F3D0', fontSize: 14, fontWeight: '800' },
-
-  // 패스 팝업
-  passFlashOverlay: {
-    position: 'absolute', top: '45%', left: 0, right: 0,
-    alignItems: 'center', zIndex: 170,
-  },
-  passFlashText: {
-    color: 'rgba(255,255,255,0.6)', fontSize: 14, fontWeight: '700',
-    backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 10,
-    paddingHorizontal: 14, paddingVertical: 6,
-  },
 
   // 중앙 폭발 팝업
   tichuFlashOverlay: {
@@ -1040,7 +1031,7 @@ const styles = StyleSheet.create({
     borderRadius: mob(14, 17),
     backgroundColor: 'rgba(0,0,0,0.3)',
     borderWidth: 2,
-    borderColor: '#3B82F6',
+    borderColor: COLORS.team1,
     alignItems: 'center',
     justifyContent: 'center',
   },

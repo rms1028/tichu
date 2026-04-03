@@ -32,6 +32,7 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
 
   // 서버 플레이어 정보를 슬롯으로 변환
   const avatars = ['🐲', '🦁', '🐻', '🦊'];
+  const hasServerPlayers = Object.values(players).some(p => p !== null);
   const slots: Slot[] = [0, 1, 2, 3].map(seat => {
     const p = players[seat];
     if (p) {
@@ -41,6 +42,16 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
         tier: p.isBot ? '🤖' : '🥈',
         ready: true,
         isBot: p.isBot,
+      };
+    }
+    // 빠른 매칭 대기 중: 서버에 아직 방이 없으면 seat 0에 내 정보 표시
+    if (!hasServerPlayers && seat === 0 && mode === 'quick') {
+      return {
+        name: nickname,
+        avatar: avatars[0]!,
+        tier: '🥈',
+        ready: true,
+        isBot: false,
       };
     }
     return { name: null, avatar: '', tier: '', ready: false, isBot: false };
@@ -111,7 +122,7 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
   const renderSlot = (slot: Slot, idx: number) => {
     // teams: seat 0,2 = team1, seat 1,3 = team2
     const isTeam1 = idx === 0 || idx === 2;
-    const isMe = idx === mySeat;
+    const isMe = idx === mySeat || (!hasServerPlayers && mode === 'quick' && idx === 0);
     const teamColor = isTeam1 ? 'rgba(59,130,246,0.08)' : 'rgba(239,68,68,0.08)';
     const borderColor = isMe
       ? '#F59E0B'
@@ -191,8 +202,8 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
         {/* 슬롯 */}
         <View style={S.slotsArea}>
           <View style={S.teamHeader}>
-            <View style={S.teamLabelRow}><View style={[S.teamDot, { backgroundColor: '#3B82F6' }]} /><Text style={S.teamLabel}>Team 1</Text></View>
-            <View style={S.teamLabelRow}><Text style={S.teamLabel}>Team 2</Text><View style={[S.teamDot, { backgroundColor: '#EF4444' }]} /></View>
+            <View style={S.teamLabelRow}><View style={[S.teamDot, { backgroundColor: COLORS.team1 }]} /><Text style={S.teamLabel}>Team 1</Text></View>
+            <View style={S.teamLabelRow}><Text style={S.teamLabel}>Team 2</Text><View style={[S.teamDot, { backgroundColor: COLORS.team2 }]} /></View>
           </View>
           <View style={S.slotsGrid}>
             <View style={S.teamCol}>{[0, 1].map(i => renderSlot(slots[i]!, i))}</View>

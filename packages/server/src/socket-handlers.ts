@@ -247,9 +247,67 @@ export function registerSocketHandlers(io: Server): void {
       } catch (err) { console.error('[claim_season_reward]', err); }
     });
 
+    // ── 커스텀 방 목록 ─────────────────────────────────────
+    socket.on('list_rooms', () => {
+      const roomList: { roomId: string; roomName: string; playerCount: number; hasPassword: boolean }[] = [];
+      for (const [id, room] of rooms) {
+        if (!room.settings.isCustom) continue;
+        if (room.phase !== 'WAITING_FOR_PLAYERS') continue;
+        const playerCount = [0, 1, 2, 3].filter(s => room.players[s] !== null).length;
+        if (playerCount >= 4) continue;
+        roomList.push({
+          roomId: id,
+          roomName: room.settings.roomName ?? id,
+          playerCount,
+          hasPassword: !!room.settings.password,
+        });
+      }
+      socket.emit('room_list', { rooms: roomList });
+    });
+
+    // ── 커스텀 방 생성 ──────────────────────────────────────
+    socket.on('create_custom_room', (data: { roomName: string; password?: string; playerId: string; nickname: string }) => {
+      const roomId = `custom_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      const room = getOrCreateRoom(roomId);
+      room.settings.isCustom = true;
+      room.settings.roomName = data.roomName || '티츄 방';
+      if (data.password) room.settings.password = data.password;
+
+      // 방장 seat 0으로 입장
+      room.players[0] = {
+        playerId: data.playerId,
+        nickname: data.nickname,
+        socketId: socket.id,
+        connected: true,
+        isBot: false,
+      };
+
+      playerRoomId = roomId;
+      playerSeat = 0;
+      socket.join(roomId);
+
+      const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
+      for (let s = 0; s < 4; s++) {
+        const p = room.players[s];
+        playersInfo[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
+      }
+
+      socket.emit('room_joined', { seat: 0, roomId, players: playersInfo });
+      playerOnline({ playerId: data.playerId, nickname: data.nickname, socketId: socket.id, status: 'ingame', roomId });
+
+      // 전체에게 방 목록 갱신 알림
+      io.emit('rooms_updated');
+    });
+
     // ── join_room ──────────────────────────────────────────
-    socket.on('join_room', (data: { roomId: string; playerId: string; nickname: string }) => {
+    socket.on('join_room', (data: { roomId: string; playerId: string; nickname: string; password?: string }) => {
       const room = getOrCreateRoom(data.roomId);
+
+      // 비밀번호 체크
+      if (room.settings.password && room.settings.password !== data.password) {
+        socket.emit('error', { message: 'wrong_password' });
+        return;
+      }
 
       // 빈 좌석 찾기
       let seat = -1;
@@ -1098,6 +1156,8 @@ function handlePostPlay(io: Server, room: GameRoom): void {
 
   if (room.phase === 'GAME_OVER') {
     clearTurnTimer(room);
+    // DB에 게임 결과 기록 + 보상 전송
+    recordGameResults(io, room);
     return;
   }
 
@@ -1171,6 +1231,53 @@ function clearTurnTimer(room: GameRoom): void {
 }
 
 // ── 이벤트 브로드캐스트 ─────────────────────────────────────
+
+async function recordGameResults(io: Server, room: GameRoom): Promise<void> {
+  const winner = room.scores.team1 >= room.scores.team2 ? 'team1' : 'team2';
+
+  for (let seat = 0; seat < 4; seat++) {
+    const player = room.players[seat];
+    if (!player || player.isBot) continue;
+
+    const team = getTeamForSeat(room, seat);
+    const won = team === winner;
+    const tichu = room.tichuDeclarations[seat];
+    const tichuSuccess = tichu !== null && room.finishOrder[0] === seat;
+    const finishRank = room.finishOrder.indexOf(seat) + 1;
+
+    // XP/코인 계산
+    const xpGain = won ? 30 : 10;
+    const coinGain = (won ? 50 : 20) + (tichuSuccess ? 10 : 0);
+
+    // DB에 기록 (비동기, 실패해도 게임 진행에 영향 없음)
+    try {
+      await dbRecordGameResult({
+        userId: player.playerId,
+        roomId: room.roomId,
+        won,
+        team,
+        score: room.scores[team],
+        opponentScore: room.scores[team === 'team1' ? 'team2' : 'team1'],
+        tichuDeclared: tichu,
+        tichuSuccess,
+        finishRank,
+        roundCount: room.roundNumber,
+      });
+    } catch (e) {
+      console.error(`[recordGameResults] DB error for ${player.playerId}:`, e);
+    }
+
+    // 클라이언트에 보상 정보 전송
+    if (player.socketId) {
+      io.to(player.socketId).emit('game_rewards', {
+        xp: xpGain,
+        coins: coinGain,
+        won,
+        tichuBonus: tichuSuccess ? 10 : 0,
+      });
+    }
+  }
+}
 
 function broadcastEvents(io: Server, room: GameRoom, events: GameEvent[]): void {
   for (const event of events) {

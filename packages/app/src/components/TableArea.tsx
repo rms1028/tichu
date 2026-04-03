@@ -4,11 +4,14 @@ import Animated, {
   FadeIn,
   ZoomIn,
   FadeOut,
+  SlideInDown,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
   withSequence,
   withTiming,
+  withDelay,
+  withSpring,
   Easing,
 } from 'react-native-reanimated';
 import { useGameStore } from '../stores/gameStore';
@@ -38,6 +41,16 @@ export function TableArea() {
     prevCardsRef.current = tableCards;
   }
 
+  // 새 트릭 감지 (카드가 null로 바뀔 때 = 수거됨)
+  const prevHadCards = useRef(false);
+  const showCollectAnim = useRef(false);
+  if (!tableCards && prevHadCards.current) {
+    showCollectAnim.current = true;
+  } else if (tableCards) {
+    showCollectAnim.current = false;
+  }
+  prevHadCards.current = !!tableCards;
+
   // 폭탄/SF 이펙트
   const isBomb = tableCards?.type === 'four_bomb' || tableCards?.type === 'straight_flush_bomb';
   const bombGlow = useSharedValue(0);
@@ -63,64 +76,66 @@ export function TableArea() {
 
   const turnName = players[currentTurn]?.nickname ?? '...';
 
-  // 상대팀 이름 색상: 좌측 상대=노랑, 우측 상대=시안 (빨간 배경 위에서 잘 보이는 색)
+  // 상대팀 이름 색상: 좌측 상대=라임, 우측 상대=보라
   const leftEnemy = (mySeat + 1) % 4;
-  const rightEnemy = (mySeat + 3) % 4;
-  const enemyNameColor = currentTurn === leftEnemy ? '#A3E635' : '#C084FC'; // 라임 / 보라
+  const enemyNameColor = currentTurn === leftEnemy ? '#A3E635' : '#C084FC';
 
   return (
-    <View style={styles.container}>
-      {/* 턴 표시 */}
-      {phase === 'TRICK_PLAY' && (
-        <View
-          key={`turn-${currentTurn}`}
-         
-          style={[
-            styles.turnBanner,
-            isMyTurn && styles.turnBannerMine,
-            isPartnerTurn && styles.turnBannerPartner,
-            isEnemyTurn && styles.turnBannerEnemy,
-          ]}
-        >
-          {isMyTurn ? (
-            <Text style={[styles.turnText, styles.turnTextWhite]}>{'내 차례!'}</Text>
-          ) : (
-            <Text style={styles.turnText}>
-              <Text style={[styles.turnNameHighlight, isEnemyTurn && { color: enemyNameColor }]}>{turnName}</Text>
-              <Text style={styles.turnSuffix}>{'의 차례'}</Text>
-            </Text>
-          )}
-        </View>
-      )}
+    <View style={styles.outerContainer}>
 
-      {/* 소원 표시 */}
+      {/* 중앙 컨텐츠 (턴 배너 + 카드) */}
+      <View style={styles.centerContent}>
+        {/* 턴 표시 */}
+        {phase === 'TRICK_PLAY' && (
+          <Animated.View
+            key={`turn-${currentTurn}`}
+            entering={ZoomIn.duration(250).springify()}
+            style={[
+              styles.turnBanner,
+              isMyTurn && styles.turnBannerMine,
+              isPartnerTurn && styles.turnBannerPartner,
+              isEnemyTurn && styles.turnBannerEnemy,
+            ]}
+          >
+            {isMyTurn ? (
+              <Text style={[styles.turnText, styles.turnTextWhite]}>{'내 차례!'}</Text>
+            ) : (
+              <Text style={styles.turnText}>
+                <Text style={[styles.turnNameHighlight, isEnemyTurn && { color: enemyNameColor }]}>{turnName}</Text>
+                <Text style={styles.turnSuffix}>{'의 차례'}</Text>
+              </Text>
+            )}
+          </Animated.View>
+        )}
+
+        {/* 소원 표시 */}
       {wish && (
-        <View style={styles.wishBanner}>
+        <Animated.View entering={ZoomIn.duration(300).springify()} style={styles.wishBanner}>
           <Text style={styles.wishIcon}>{'\u{1F004}'}</Text>
           <View>
             <Text style={styles.wishLabel}>소원 활성</Text>
             <Text style={styles.wishRank}>{wish}</Text>
           </View>
-        </View>
+        </Animated.View>
       )}
 
-      {/* 바닥 카드 - 확대 & 입체적 + 후광 */}
+      {/* 바닥 카드 - 등장 애니메이션 */}
       {tableCards ? (
-        <View
+        <Animated.View
           key={`table-${tableKeyRef.current}`}
-         
+          entering={SlideInDown.duration(250).springify().damping(14).stiffness(120)}
         >
           {/* 후광 이펙트 */}
-          <View style={[
+          <Animated.View style={[
             styles.glowRipple,
             isBomb && styles.glowRippleBomb,
             bombGlowStyle,
           ]} />
           <View style={styles.cardsRow}>
             {tableCards.cards.map((card, i) => (
-              <View
+              <Animated.View
                 key={i}
-               
+                entering={ZoomIn.delay(i * 40).duration(200).springify()}
                 style={[
                   styles.tableCard,
                   i > 0 && styles.tableCardOverlap,
@@ -128,33 +143,40 @@ export function TableArea() {
                   { zIndex: i },
                 ]}
               >
-                <CardView card={card} size="large" disabled />
-              </View>
+                <CardView card={card} size="normal" disabled />
+              </Animated.View>
             ))}
           </View>
           {lastPlay && (
-            <Text style={styles.playInfo}>
+            <Animated.Text
+              entering={FadeIn.delay(150).duration(200)}
+              style={styles.playInfo}
+            >
               {players[lastPlay.seat]?.nickname ?? '?'} {'\u2192'} {valueLabel(lastPlay.hand.value)} {handTypeLabel(lastPlay.hand.type)}
-            </Text>
+            </Animated.Text>
           )}
-        </View>
+        </Animated.View>
       ) : (
-        <View>
+        <Animated.View
+          key={`empty-${tableKeyRef.current}`}
+          entering={FadeIn.duration(300)}
+        >
           <Text style={styles.emptyText}>
             {phase === 'TRICK_PLAY' ? '새 트릭' : ''}
           </Text>
-        </View>
+        </Animated.View>
       )}
+      </View>
     </View>
   );
 }
 
-function valueLabel(v: number): string {
+function valueLabel(v: number | null | undefined): string {
+  if (v === null || v === undefined || v === Infinity || !isFinite(v)) return '용';
   if (v === 11) return 'J';
   if (v === 12) return 'Q';
   if (v === 13) return 'K';
   if (v === 14) return 'A';
-  if (v === Infinity) return '\uC6A9';
   if (v % 1 !== 0) return String(Math.floor(v)); // 봉황 float
   return String(v);
 }
@@ -174,11 +196,16 @@ function handTypeLabel(type: string): string {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  outerContainer: {
+    flex: 1,
+    flexDirection: 'column',
+    padding: 8,
+  },
+  centerContent: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    padding: 8,
+    paddingBottom: mob(20, 30),
   },
   turnBanner: {
     backgroundColor: COLORS.surface,
@@ -186,6 +213,7 @@ const styles = StyleSheet.create({
     paddingVertical: mob(6, 10),
     borderRadius: mob(16, 24),
     marginBottom: mob(8, 10),
+    transform: [{ translateY: -20 }],
     borderWidth: 1,
     borderColor: COLORS.surfaceLight,
     shadowColor: '#000',
@@ -206,7 +234,7 @@ const styles = StyleSheet.create({
   turnBannerPartner: {
     backgroundColor: 'rgba(59,130,246,0.85)',
     borderColor: 'rgba(96,165,250,0.5)',
-    shadowColor: '#3B82F6',
+    shadowColor: COLORS.team1,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.6,
     shadowRadius: 14,
@@ -215,7 +243,7 @@ const styles = StyleSheet.create({
   turnBannerEnemy: {
     backgroundColor: 'rgba(239,68,68,0.85)',
     borderColor: 'rgba(252,129,129,0.5)',
-    shadowColor: '#EF4444',
+    shadowColor: COLORS.team2,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.6,
     shadowRadius: 14,

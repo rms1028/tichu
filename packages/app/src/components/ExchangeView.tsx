@@ -67,7 +67,7 @@ export function ExchangeView({ onExchange }: ExchangeViewProps) {
           <View key={i} style={styles.selectedSlot}>
             <Text style={styles.slotLabel}>{labels[i]}</Text>
             {selected[i] ? (
-              <CardView card={selected[i]!} size="small" onPress={() => toggleCard(selected[i]!)} />
+              <CardView card={selected[i]!} size="normal" onPress={() => toggleCard(selected[i]!)} />
             ) : (
               <View style={styles.emptySlot} />
             )}
@@ -83,7 +83,7 @@ export function ExchangeView({ onExchange }: ExchangeViewProps) {
               key={i}
               card={card}
               selected={isSelected}
-              size="small"
+              size="normal"
               onPress={() => toggleCard(card)}
             />
           );
@@ -97,15 +97,15 @@ export function ExchangeView({ onExchange }: ExchangeViewProps) {
           <View style={styles.receivedRow}>
             <View style={styles.receivedSlot}>
               <Text style={styles.slotLabel}>← 왼쪽에서</Text>
-              <CardView card={exchangeReceived.fromLeft} size="small" />
+              <CardView card={exchangeReceived.fromLeft} size="normal" />
             </View>
             <View style={styles.receivedSlot}>
               <Text style={styles.slotLabel}>↑ 파트너에서</Text>
-              <CardView card={exchangeReceived.fromPartner} size="small" />
+              <CardView card={exchangeReceived.fromPartner} size="normal" />
             </View>
             <View style={styles.receivedSlot}>
               <Text style={styles.slotLabel}>→ 오른쪽에서</Text>
-              <CardView card={exchangeReceived.fromRight} size="small" />
+              <CardView card={exchangeReceived.fromRight} size="normal" />
             </View>
           </View>
         </View>
@@ -178,8 +178,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   emptySlot: {
-    width: 36,
-    height: 52,
+    width: 42,
+    height: 60,
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: COLORS.textDim,
