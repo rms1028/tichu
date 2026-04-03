@@ -92,28 +92,41 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
         </View>
       </View>
       <Text style={S.subtitle}>3장을 선택하세요 (왼쪽, 파트너, 오른쪽 순)</Text>
-      {/* 스몰 티츄 + 선언 현황 */}
-      <View style={S.tichuRow}>
-        {myTichu ? (
-          <View style={[S.tichuBadge, myTichu === 'large' && S.tichuBadgeLarge]}>
-            <Text style={S.tichuBadgeText}>{myTichu === 'large' ? '🔥 라지 티츄' : '⭐ 스몰 티츄'} 선언!</Text>
-          </View>
-        ) : canDeclareTichu && onDeclareTichu ? (
-          <TouchableOpacity style={S.tichuBtn} onPress={() => onDeclareTichu('small')}>
-            <Text style={S.tichuBtnText}>⭐ 스몰 티츄 선언</Text>
-          </TouchableOpacity>
-        ) : null}
+      {/* 플레이어 아바타 + 티츄 선언 현황 */}
+      <View style={S.playerRow}>
         {[0, 1, 2, 3].map(seat => {
+          const p = players[seat];
+          if (!p) return null;
           const decl = tichuDeclarations[seat];
-          if (!decl || seat === mySeat) return null;
-          const name = players[seat]?.nickname ?? `P${seat + 1}`;
+          const isMe = seat === mySeat;
+          const avatars = ['🐲', '🦁', '🐻', '🦊'];
+          const isTeam1 = seat === 0 || seat === 2;
           return (
-            <View key={seat} style={[S.otherTichuBadge, decl === 'large' && S.otherTichuLarge]}>
-              <Text style={S.otherTichuText}>{decl === 'large' ? '🔥' : '⭐'} {name}</Text>
+            <View key={seat} style={S.playerSlot}>
+              <View style={[S.playerAvatar, { borderColor: isTeam1 ? '#3B82F6' : '#EF4444' }, isMe && S.playerAvatarMe]}>
+                <Text style={S.playerAvatarEmoji}>{avatars[seat]}</Text>
+              </View>
+              <Text style={[S.playerNick, isMe && S.playerNickMe]} numberOfLines={1}>{p.nickname}</Text>
+              {decl ? (
+                <View style={[S.tichuTag, decl === 'large' && S.tichuTagLarge]}>
+                  <Text style={S.tichuTagText}>{decl === 'large' ? '🔥라지' : '⭐스몰'}</Text>
+                </View>
+              ) : null}
             </View>
           );
         })}
       </View>
+      {/* 스몰 티츄 선언 버튼 */}
+      {!myTichu && canDeclareTichu && onDeclareTichu && (
+        <TouchableOpacity style={S.tichuBtn} onPress={() => onDeclareTichu('small')}>
+          <Text style={S.tichuBtnText}>⭐ 스몰 티츄 선언</Text>
+        </TouchableOpacity>
+      )}
+      {myTichu && (
+        <View style={[S.tichuBadge, myTichu === 'large' && S.tichuBadgeLarge]}>
+          <Text style={S.tichuBadgeText}>{myTichu === 'large' ? '🔥 라지 티츄' : '⭐ 스몰 티츄'} 선언 완료!</Text>
+        </View>
+      )}
       {/* 교환 슬롯 */}
       <View style={S.slotRow}>
         {[0, 1, 2].map(i => (
@@ -216,16 +229,23 @@ const S = StyleSheet.create({
   disabled: { opacity: 0.4 },
   confirmText: { color: '#fff', fontWeight: '900', fontSize: mob(16, 20) },
   waitText: { color: COLORS.accent, fontSize: mob(16, 20), fontWeight: 'bold' },
-  // 스몰 티츄
-  tichuRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: mob(6, 10), flexWrap: 'wrap' },
+  // 플레이어 아바타 행
+  playerRow: { flexDirection: 'row', justifyContent: 'center', gap: mob(12, 20) },
+  playerSlot: { alignItems: 'center', gap: 2 },
+  playerAvatar: { width: mob(32, 44), height: mob(32, 44), borderRadius: mob(16, 22), borderWidth: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.3)' },
+  playerAvatarMe: { borderColor: '#F59E0B' },
+  playerAvatarEmoji: { fontSize: mob(16, 22) },
+  playerNick: { color: 'rgba(255,255,255,0.7)', fontSize: mob(9, 12), fontWeight: '600', maxWidth: mob(50, 70), textAlign: 'center' },
+  playerNickMe: { color: '#F59E0B', fontWeight: '800' },
+  tichuTag: { backgroundColor: 'rgba(243,156,18,0.25)', borderRadius: 6, paddingHorizontal: mob(4, 8), paddingVertical: 1, borderWidth: 1, borderColor: 'rgba(243,156,18,0.5)' },
+  tichuTagLarge: { backgroundColor: 'rgba(231,76,60,0.25)', borderColor: 'rgba(231,76,60,0.5)' },
+  tichuTagText: { color: '#fff', fontSize: mob(8, 11), fontWeight: '800' },
+  // 스몰 티츄 버튼
   tichuBtn: { backgroundColor: 'rgba(243,156,18,0.15)', borderWidth: 1.5, borderColor: 'rgba(243,156,18,0.5)', borderRadius: 10, paddingHorizontal: mob(12, 18), paddingVertical: mob(6, 8) },
   tichuBtnText: { color: '#F59E0B', fontSize: mob(13, 16), fontWeight: '800' },
   tichuBadge: { backgroundColor: 'rgba(243,156,18,0.2)', borderWidth: 1, borderColor: '#f39c12', borderRadius: 8, paddingHorizontal: mob(10, 14), paddingVertical: mob(3, 5) },
   tichuBadgeLarge: { backgroundColor: 'rgba(231,76,60,0.2)', borderColor: '#e74c3c' },
   tichuBadgeText: { color: '#fff', fontSize: mob(12, 15), fontWeight: '800' },
-  otherTichuBadge: { backgroundColor: 'rgba(243,156,18,0.1)', borderRadius: 6, paddingHorizontal: mob(6, 10), paddingVertical: mob(2, 3) },
-  otherTichuLarge: { backgroundColor: 'rgba(231,76,60,0.1)' },
-  otherTichuText: { color: 'rgba(255,255,255,0.7)', fontSize: mob(10, 13), fontWeight: '700' },
   receivedWrap: { alignItems: 'center', gap: mob(4, 8) },
   receivedTitle: { color: COLORS.accent, fontSize: mob(16, 20), fontWeight: 'bold' },
 });
