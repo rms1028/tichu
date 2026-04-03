@@ -1083,7 +1083,7 @@ function scheduleBotLargeTichu(io: Server, room: GameRoom): void {
     if (allLargeTichuResponded(room)) {
       finishLargeTichuPhase(io, room);
     }
-  }, 1000);
+  }, 400);
 }
 
 function scheduleBotExchange(io: Server, room: GameRoom): void {
@@ -1106,7 +1106,7 @@ function scheduleBotExchange(io: Server, room: GameRoom): void {
       broadcastEvents(io, room, events);
       startTurnTimer(io, room);
     }
-  }, 800);
+  }, 300);
 }
 
 function startLargeTichuTimer(io: Server, room: GameRoom): void {
@@ -1189,7 +1189,7 @@ function startTurnTimer(io: Server, room: GameRoom): void {
 }
 
 function scheduleBotAction(io: Server, room: GameRoom, seat: number, turnId: number): void {
-  const delay = 1200 + Math.random() * 800; // 1.2~2초 (자연스러운 플레이 속도)
+  const delay = 400 + Math.random() * 400; // 0.4~0.8초 (빠른 플레이)
   setTimeout(() => {
     if (room.turnTimer.turnId !== turnId) return;
     if (room.currentTurn !== seat) return;
@@ -1320,7 +1320,7 @@ function scheduleBotBombWindow(io: Server, room: GameRoom): void {
         }
       }
     }
-  }, 1000);
+  }, 400);
 }
 
 function handlePostPlay(io: Server, room: GameRoom): void {
