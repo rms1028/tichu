@@ -33,7 +33,8 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
 
   // 서버 플레이어 정보를 슬롯으로 변환
   const avatars = ['🐲', '🦁', '🐻', '🦊'];
-  const hasServerPlayers = Object.values(players).some(p => p !== null);
+  const roomId = useGameStore((s) => s.roomId);
+  const hasJoinedRoom = !!roomId && mySeat >= 0;
   const slots: Slot[] = [0, 1, 2, 3].map(seat => {
     const p = players[seat];
     if (p) {
@@ -45,8 +46,8 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
         isBot: p.isBot,
       };
     }
-    // 빠른 매칭 대기 중: 서버에 아직 방이 없으면 seat 0에 내 정보 표시
-    if (!hasServerPlayers && seat === 0 && mode === 'quick') {
+    // 대기 중: 아직 room_joined 안 왔으면 seat 0에 내 정보 표시
+    if (!hasJoinedRoom && seat === 0) {
       return {
         name: nickname,
         avatar: avatars[0]!,
@@ -60,6 +61,7 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
 
   const filledCount = slots.filter(s => s.name !== null).length;
   const humanCount = slots.filter(s => s.name !== null && !s.isBot).length;
+  const isHost = mySeat === 0;
 
   // 경과 시간
   useEffect(() => {
@@ -123,7 +125,7 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
   const renderSlot = (slot: Slot, idx: number) => {
     // teams: seat 0,2 = team1, seat 1,3 = team2
     const isTeam1 = idx === 0 || idx === 2;
-    const isMe = idx === mySeat || (!hasServerPlayers && mode === 'quick' && idx === 0);
+    const isMe = idx === mySeat || (!hasJoinedRoom && idx === 0);
     const teamColor = isTeam1 ? 'rgba(59,130,246,0.08)' : 'rgba(239,68,68,0.08)';
     const borderColor = isMe
       ? '#F59E0B'
@@ -215,12 +217,12 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
 
         {/* 하단 */}
         <View style={S.bottom}>
-          {mode === 'custom' && mySeat === 0 && filledCount >= 1 && (
+          {mode === 'custom' && isHost && (
             <TouchableOpacity style={S.startGameBtn} onPress={onStartGame}>
               <Text style={S.startGameText}>{'🎮 게임 시작'}</Text>
             </TouchableOpacity>
           )}
-          {mode === 'custom' && (
+          {mode === 'custom' && isHost && (
             <TouchableOpacity style={S.botFillBtn} onPress={onAddBots}>
               <Text style={S.botFillText}>{'🤖 봇으로 채우기'}</Text>
             </TouchableOpacity>

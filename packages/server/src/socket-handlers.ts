@@ -404,14 +404,19 @@ export function registerSocketHandlers(io: Server): void {
         socket.emit('invalid_play', { reason: 'game_already_started' });
         return;
       }
+      // 커스텀 방은 방장만
+      if (room.settings.isCustom && playerSeat !== 0) {
+        socket.emit('error', { message: 'not_room_host' });
+        return;
+      }
 
-      const botNames = ['Bot-A', 'Bot-B', 'Bot-C'];
+      const botNames = ['봇 A', '봇 B', '봇 C'];
       let botIdx = 0;
       for (let s = 0; s < 4; s++) {
         if (room.players[s] === null) {
           room.players[s] = {
             playerId: `bot_${s}_${Date.now()}`,
-            nickname: botNames[botIdx++] ?? `Bot-${s}`,
+            nickname: botNames[botIdx++] ?? `봇-${s}`,
             socketId: '',
             connected: true,
             isBot: true,
@@ -423,14 +428,15 @@ export function registerSocketHandlers(io: Server): void {
         }
       }
 
-      // 4인 참가 → 게임 시작
-      const filledSeats = [0, 1, 2, 3].filter(s => room.players[s] !== null);
-      if (filledSeats.length === 4) {
-        const events = startRound(room);
-        broadcastEvents(io, room, events);
-        // 봇 라지 티츄 즉시 처리
-        scheduleBotLargeTichu(io, room);
-        startLargeTichuTimer(io, room);
+      // 커스텀이 아니면 4인 참가 시 자동 시작
+      if (!room.settings.isCustom) {
+        const filledSeats = [0, 1, 2, 3].filter(s => room.players[s] !== null);
+        if (filledSeats.length === 4) {
+          const events = startRound(room);
+          broadcastEvents(io, room, events);
+          scheduleBotLargeTichu(io, room);
+          startLargeTichuTimer(io, room);
+        }
       }
     });
 
