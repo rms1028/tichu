@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View } from 'react-native';
+import { View, LogBox } from 'react-native';
+LogBox.ignoreLogs(['Unexpected text node']);
 import { useGameStore } from '../src/stores/gameStore';
 import { useSocket } from '../src/hooks/useSocket';
 import { LobbyScreen } from '../src/screens/LobbyScreen';
