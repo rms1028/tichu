@@ -14,6 +14,7 @@ interface LobbyScreenProps {
   onTutorial?: () => void;
   onCreateCustomRoom?: (roomName: string, password: string | undefined, playerId: string, nickname: string) => void;
   onListRooms?: () => void;
+  onGetLeaderboard?: () => void;
   onFriendInit?: (playerId: string, nickname: string) => void;
   onFriendSearch?: (code: string, myPlayerId: string) => void;
   onFriendRequest?: (fromId: string, fromNickname: string, toId: string) => void;
@@ -63,7 +64,7 @@ function FloatingSymbol({ symbol, x, delay }: { symbol: string; x: number; delay
   return <Animated.Text style={[{ position: 'absolute', left: `${x}%` as any, top: `${20 + delay * 7}%` as any, fontSize: 22, color: '#fff', opacity: 0.04 }, s]}>{symbol}</Animated.Text>;
 }
 
-export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRooms, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite }: LobbyScreenProps) {
+export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRooms, onGetLeaderboard, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite }: LobbyScreenProps) {
   const savedNickname = useUserStore((s) => s.nickname);
   const savedPlayerId = useUserStore((s) => s.playerId);
   const userSetNickname = useUserStore((s) => s.setNickname);
@@ -144,7 +145,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
 
   // ═══════════ 서브 페이지 ═══════════
   if (page === 'rules') return <RulesScreen onBack={() => setPage('main')} />;
-  if (page === 'ranking') return <RankingScreen onBack={() => setPage('main')} />;
+  if (page === 'ranking') return <RankingScreen onBack={() => setPage('main')} onRefresh={onGetLeaderboard} />;
   if (page === 'shop') return <ShopScreen onBack={() => setPage('main')} />;
   if (page === 'achievements') return <AchievementsScreen onBack={() => setPage('profile')} />;
   if (page === 'terms') return <TermsScreen onBack={() => setPage('settings')} />;

@@ -175,6 +175,7 @@ function AppInner() {
           createCustomRoom(roomName, password, playerId, nick);
         }}
         onListRooms={listRooms}
+        onGetLeaderboard={getLeaderboard}
         onTutorial={() => setShowTutorial(true)}
         onFriendInit={friendInit}
         onFriendSearch={friendSearch}
