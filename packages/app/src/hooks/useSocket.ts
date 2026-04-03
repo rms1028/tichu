@@ -26,8 +26,12 @@ export function useSocket() {
     socket.on('connect', () => {
       store.setConnection(true);
 
-      // 재접속 시 rejoin
-      const { roomId, playerId } = useGameStore.getState();
+      // 재접속 시 로그인 + rejoin
+      const { roomId, playerId, nickname } = useGameStore.getState();
+      const us = require('../stores/userStore').useUserStore.getState();
+      if (us.playerId && us.nickname) {
+        socket.emit('guest_login', { guestId: us.playerId, nickname: us.nickname });
+      }
       if (roomId && playerId) {
         socket.emit('rejoin_room', { roomId, playerId });
       }
