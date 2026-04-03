@@ -393,7 +393,7 @@ export function GameScreen({
   if (phase === 'PASSING') {
     return (
       <SafeAreaView style={styles.container}>
-        <ExchangeView onExchange={onExchange} />
+        <ExchangeView onExchange={onExchange} onDeclareTichu={onDeclareTichu} />
       </SafeAreaView>
     );
   }

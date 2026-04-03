@@ -15,12 +15,18 @@ function cardEquals(a: Card, b: Card): boolean {
 
 interface ExchangeViewProps {
   onExchange: (left: Card, partner: Card, right: Card) => void;
+  onDeclareTichu?: (type: 'small') => void;
 }
 
-export function ExchangeView({ onExchange }: ExchangeViewProps) {
+export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) {
   const myHand = useGameStore((s) => s.myHand);
   const phase = useGameStore((s) => s.phase);
   const exchangeReceived = useGameStore((s) => s.exchangeReceived);
+  const canDeclareTichu = useGameStore((s) => s.canDeclareTichu);
+  const tichuDeclarations = useGameStore((s) => s.tichuDeclarations);
+  const mySeat = useGameStore((s) => s.mySeat);
+  const players = useGameStore((s) => s.players);
+  const myTichu = tichuDeclarations[mySeat];
   const [selected, setSelected] = useState<Card[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [remaining, setRemaining] = useState(30);
@@ -86,6 +92,28 @@ export function ExchangeView({ onExchange }: ExchangeViewProps) {
         </View>
       </View>
       <Text style={S.subtitle}>3장을 선택하세요 (왼쪽, 파트너, 오른쪽 순)</Text>
+      {/* 스몰 티츄 + 선언 현황 */}
+      <View style={S.tichuRow}>
+        {myTichu ? (
+          <View style={[S.tichuBadge, myTichu === 'large' && S.tichuBadgeLarge]}>
+            <Text style={S.tichuBadgeText}>{myTichu === 'large' ? '🔥 라지 티츄' : '⭐ 스몰 티츄'} 선언!</Text>
+          </View>
+        ) : canDeclareTichu && onDeclareTichu ? (
+          <TouchableOpacity style={S.tichuBtn} onPress={() => onDeclareTichu('small')}>
+            <Text style={S.tichuBtnText}>⭐ 스몰 티츄 선언</Text>
+          </TouchableOpacity>
+        ) : null}
+        {[0, 1, 2, 3].map(seat => {
+          const decl = tichuDeclarations[seat];
+          if (!decl || seat === mySeat) return null;
+          const name = players[seat]?.nickname ?? `P${seat + 1}`;
+          return (
+            <View key={seat} style={[S.otherTichuBadge, decl === 'large' && S.otherTichuLarge]}>
+              <Text style={S.otherTichuText}>{decl === 'large' ? '🔥' : '⭐'} {name}</Text>
+            </View>
+          );
+        })}
+      </View>
       {/* 교환 슬롯 */}
       <View style={S.slotRow}>
         {[0, 1, 2].map(i => (
@@ -188,6 +216,16 @@ const S = StyleSheet.create({
   disabled: { opacity: 0.4 },
   confirmText: { color: '#fff', fontWeight: '900', fontSize: mob(16, 20) },
   waitText: { color: COLORS.accent, fontSize: mob(16, 20), fontWeight: 'bold' },
+  // 스몰 티츄
+  tichuRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: mob(6, 10), flexWrap: 'wrap' },
+  tichuBtn: { backgroundColor: 'rgba(243,156,18,0.15)', borderWidth: 1.5, borderColor: 'rgba(243,156,18,0.5)', borderRadius: 10, paddingHorizontal: mob(12, 18), paddingVertical: mob(6, 8) },
+  tichuBtnText: { color: '#F59E0B', fontSize: mob(13, 16), fontWeight: '800' },
+  tichuBadge: { backgroundColor: 'rgba(243,156,18,0.2)', borderWidth: 1, borderColor: '#f39c12', borderRadius: 8, paddingHorizontal: mob(10, 14), paddingVertical: mob(3, 5) },
+  tichuBadgeLarge: { backgroundColor: 'rgba(231,76,60,0.2)', borderColor: '#e74c3c' },
+  tichuBadgeText: { color: '#fff', fontSize: mob(12, 15), fontWeight: '800' },
+  otherTichuBadge: { backgroundColor: 'rgba(243,156,18,0.1)', borderRadius: 6, paddingHorizontal: mob(6, 10), paddingVertical: mob(2, 3) },
+  otherTichuLarge: { backgroundColor: 'rgba(231,76,60,0.1)' },
+  otherTichuText: { color: 'rgba(255,255,255,0.7)', fontSize: mob(10, 13), fontWeight: '700' },
   receivedWrap: { alignItems: 'center', gap: mob(4, 8) },
   receivedTitle: { color: COLORS.accent, fontSize: mob(16, 20), fontWeight: 'bold' },
 });
