@@ -61,7 +61,8 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
 
   const filledCount = slots.filter(s => s.name !== null).length;
   const humanCount = slots.filter(s => s.name !== null && !s.isBot).length;
-  const isHost = mySeat === 0;
+  const isHost = mySeat === 0 || (!hasJoinedRoom && mode === 'custom');
+  const canStart = filledCount === 4;
 
   // 경과 시간
   useEffect(() => {
@@ -130,7 +131,7 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
     const borderColor = isMe
       ? '#F59E0B'
       : slot.name ? (isTeam1 ? 'rgba(59,130,246,0.3)' : 'rgba(239,68,68,0.3)') : 'rgba(255,255,255,0.1)';
-    const canSwap = mode === 'custom' && !isMe && filledCount < 4;
+    const canSwap = mode === 'custom' && !isMe;
 
     const content = (
       <Animated.View key={idx} entering={slot.name ? ZoomIn.delay(idx * 200).duration(350).springify() : undefined} style={[S.slot, { backgroundColor: teamColor, borderColor, borderStyle: isMe ? 'solid' : 'dashed' }]}>
@@ -146,7 +147,7 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
         ) : (
           <>
             <View style={S.emptyCircle}><Animated.Text style={[S.emptyDots, dotStyle]}>...</Animated.Text></View>
-            <Text style={S.emptyText}>{'상대를 찾는 중...'}</Text>
+            <Text style={S.emptyText}>{mode === 'custom' ? '대기 중' : '상대를 찾는 중...'}</Text>
             {canSwap && <Text style={S.swapHint}>{'탭하여 이동'}</Text>}
           </>
         )}
@@ -218,11 +219,17 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
         {/* 하단 */}
         <View style={S.bottom}>
           {mode === 'custom' && isHost && (
-            <TouchableOpacity style={S.startGameBtn} onPress={onStartGame}>
-              <Text style={S.startGameText}>{'🎮 게임 시작'}</Text>
+            <TouchableOpacity
+              style={[S.startGameBtn, !canStart && S.startGameBtnDisabled]}
+              onPress={onStartGame}
+              disabled={!canStart}
+            >
+              <Text style={[S.startGameText, !canStart && { opacity: 0.5 }]}>
+                {canStart ? '🎮 게임 시작' : `🎮 게임 시작 (${filledCount}/4)`}
+              </Text>
             </TouchableOpacity>
           )}
-          {mode === 'custom' && isHost && (
+          {mode === 'custom' && isHost && filledCount < 4 && (
             <TouchableOpacity style={S.botFillBtn} onPress={onAddBots}>
               <Text style={S.botFillText}>{'🤖 봇으로 채우기'}</Text>
             </TouchableOpacity>
@@ -290,6 +297,7 @@ const S = StyleSheet.create({
   // 하단
   bottom: { alignItems: 'center', gap: 10 },
   startGameBtn: { backgroundColor: '#2ecc71', borderRadius: 12, paddingHorizontal: 32, paddingVertical: 12, shadowColor: '#2ecc71', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6 },
+  startGameBtnDisabled: { backgroundColor: 'rgba(46,204,113,0.25)', shadowOpacity: 0 },
   startGameText: { color: '#fff', fontSize: 16, fontWeight: '900' },
   botFillBtn: { backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)' },
   botFillText: { color: '#818CF8', fontSize: 15, fontWeight: '700' },
