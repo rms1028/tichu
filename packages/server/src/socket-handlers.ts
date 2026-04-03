@@ -442,12 +442,13 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── add_bot_to_seat (특정 자리에 봇 추가) ─────────────
     socket.on('add_bot_to_seat', (data: { seat: number }) => {
+      console.log(`[add_bot_to_seat] seat=${data.seat}, playerRoomId=${playerRoomId}, playerSeat=${playerSeat}`);
       const room = getRoom();
-      if (!room) return;
-      if (room.phase !== 'WAITING_FOR_PLAYERS') return;
+      if (!room) { console.log('[add_bot_to_seat] no room'); return; }
+      if (room.phase !== 'WAITING_FOR_PLAYERS') { console.log('[add_bot_to_seat] wrong phase:', room.phase); return; }
       const s = data.seat;
       if (s < 0 || s > 3) return;
-      if (room.players[s] !== null) return; // 이미 누가 있음
+      if (room.players[s] !== null) { console.log('[add_bot_to_seat] seat occupied'); return; }
 
       const botNames = ['봇 A', '봇 B', '봇 C', '봇 D'];
       room.players[s] = {
