@@ -198,6 +198,11 @@ export function registerSocketHandlers(io: Server): void {
     let playerSeat: number = -1;
     let dbUserId: string | null = null;
 
+    // 소켓 에러 핸들링 — 연결 끊김 방지
+    socket.on('error', (err) => {
+      console.error(`[socket error] ${socket.id}:`, err);
+    });
+
     // ── 게스트 로그인 (DB 유저 생성/조회) ──────────────────
     socket.on('guest_login', async (data: { guestId: string; nickname: string }) => {
       console.log('[guest_login] attempt:', data.guestId, data.nickname);
@@ -1190,6 +1195,7 @@ function startTurnTimer(io: Server, room: GameRoom): void {
 function scheduleBotAction(io: Server, room: GameRoom, seat: number, turnId: number): void {
   const delay = 400 + Math.random() * 400; // 0.4~0.8초 (빠른 플레이)
   setTimeout(() => {
+    try {
     if (room.turnTimer.turnId !== turnId) return;
     if (room.currentTurn !== seat) return;
 
@@ -1203,7 +1209,6 @@ function scheduleBotAction(io: Server, room: GameRoom, seat: number, turnId: num
       console.log(`[bot] seat=${seat} pass`);
       result = passTurn(room, seat);
     } else {
-      // 리드에서 패스 시도 → 타임아웃 처리로 폴백
       console.warn(`[bot] seat=${seat} tried to pass on lead, falling back to timeout`);
       result = handleTurnTimeout(room);
     }
@@ -1213,12 +1218,21 @@ function scheduleBotAction(io: Server, room: GameRoom, seat: number, turnId: num
       handlePostPlay(io, room);
     } else {
       console.warn(`[bot] seat=${seat} action failed: ${result.error}, falling back to timeout`);
-      // 실패 시 즉시 타임아웃 처리로 폴백
       const timeoutResult = handleTurnTimeout(room);
       if (timeoutResult.ok) {
         broadcastEvents(io, room, timeoutResult.events);
         handlePostPlay(io, room);
       }
+    }
+    } catch (err) {
+      console.error(`[bot] seat=${seat} CRASH:`, err);
+      try {
+        const timeoutResult = handleTurnTimeout(room);
+        if (timeoutResult.ok) {
+          broadcastEvents(io, room, timeoutResult.events);
+          handlePostPlay(io, room);
+        }
+      } catch {}
     }
   }, delay);
 }
