@@ -64,7 +64,6 @@ export function LargeTichuModal({ onDeclare, onPass }: LargeTichuModalProps) {
           </View>
           <Text style={S.title}>{'라지 티츄 선언'}</Text>
           <Text style={S.desc}>{'8장을 확인했습니다. 라지 티츄를 선언하시겠습니까?'}</Text>
-
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.cardsScroll}>
             {sorted.map((card, i) => (
               <View key={i} style={i > 0 ? S.cardOverlap : undefined}>
@@ -72,13 +71,11 @@ export function LargeTichuModal({ onDeclare, onPass }: LargeTichuModalProps) {
               </View>
             ))}
           </ScrollView>
-
           <View style={S.scoreRow}>
             <Text style={S.scoreGood}>{'성공 +200'}</Text>
             <Text style={S.scoreSep}>{'/'}</Text>
             <Text style={S.scoreBad}>{'실패 -200'}</Text>
           </View>
-
           <View style={S.btnRow}>
             <TouchableOpacity style={S.passBtn} onPress={handlePass} activeOpacity={0.7}>
               <Text style={S.passBtnText}>{'패스'}</Text>

@@ -183,7 +183,6 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
   return (
     <SafeAreaView style={S.root}>
       <BackgroundWatermark />
-
       {/* 카운트다운 오버레이 */}
       {countdown !== null && countdown > 0 && (
         <Animated.View entering={ZoomIn.duration(300).springify()} style={S.cdOverlay}>
@@ -218,7 +217,6 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
               : `${filledCount}/4 명 참가`}
           </Text>
         </View>
-
         {/* 슬롯 */}
         <View style={S.slotsArea}>
           <View style={S.teamHeader}>
@@ -231,7 +229,6 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
             <View style={S.teamCol}>{[2, 3].map(i => renderSlot(slots[i]!, i))}</View>
           </View>
         </View>
-
         {/* 하단 */}
         <View style={S.bottom}>
           {mode === 'custom' && isHost && (

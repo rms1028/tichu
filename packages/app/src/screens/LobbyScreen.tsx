@@ -159,21 +159,18 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
         <ScrollView style={{ flex: 1, zIndex: 5 }} contentContainerStyle={{ padding: 20, maxWidth: 700, alignSelf: 'center' as const, width: '100%' }}>
           <TouchableOpacity onPress={() => setPage('main')} style={S.backBtn}><Text style={S.backText}>{'← 뒤로'}</Text></TouchableOpacity>
           <Text style={S.settingsTitle}>{'⚙️ 설정'}</Text>
-
           <View style={S.section}>
             <Text style={S.secTitle}>{'🔔 알림'}</Text>
             <View style={S.menuRow}><Text style={S.menuIcon}>{'🔔'}</Text><Text style={S.menuText}>{'전체 알림'}</Text><TouchableOpacity onPress={() => setSetting('notifyOn', !notifyOn)}><Text style={[S.toggle, notifyOn && S.toggleOn]}>{notifyOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
             <View style={S.menuRow}><Text style={S.menuIcon}>{'👥'}</Text><Text style={S.menuText}>{'친구 초대 알림'}</Text><TouchableOpacity onPress={() => setSetting('friendNotify', !friendNotify)}><Text style={[S.toggle, friendNotify && S.toggleOn]}>{friendNotify ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
             <View style={S.menuRow}><Text style={S.menuIcon}>{'🎮'}</Text><Text style={S.menuText}>{'게임 시작 알림'}</Text><TouchableOpacity onPress={() => setSetting('gameNotify', !gameNotify)}><Text style={[S.toggle, gameNotify && S.toggleOn]}>{gameNotify ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
           </View>
-
           <View style={S.section}>
             <Text style={S.secTitle}>{'🔊 소리'}</Text>
             <View style={S.menuRow}><Text style={S.menuIcon}>{'🔊'}</Text><Text style={S.menuText}>{'효과음'}</Text><TouchableOpacity onPress={() => setSetting('soundOn', !soundOn)}><Text style={[S.toggle, soundOn && S.toggleOn]}>{soundOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
             <View style={S.menuRow}><Text style={S.menuIcon}>{'🎵'}</Text><Text style={S.menuText}>{'배경음악'}</Text><TouchableOpacity onPress={() => setSetting('musicOn', !musicOn)}><Text style={[S.toggle, musicOn && S.toggleOn]}>{musicOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
             <View style={S.menuRow}><Text style={S.menuIcon}>{'🗣️'}</Text><Text style={S.menuText}>{'음성 안내 (TTS)'}</Text><TouchableOpacity onPress={() => setSetting('ttsOn', !ttsOn)}><Text style={[S.toggle, ttsOn && S.toggleOn]}>{ttsOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
           </View>
-
           <View style={S.section}>
             <Text style={S.secTitle}>{'📖 정보'}</Text>
             <TouchableOpacity style={S.menuRow} onPress={() => { if (onTutorial) onTutorial(); }}><Text style={S.menuIcon}>{'🎓'}</Text><Text style={S.menuText}>{'초보자 가이드'}</Text><Text style={S.menuArrow}>{'>'}</Text></TouchableOpacity>
@@ -193,7 +190,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
         <BackgroundWatermark />
         <ScrollView style={{ flex: 1, zIndex: 5 }} contentContainerStyle={PS.scroll}>
           <TouchableOpacity onPress={() => setPage('main')} style={S.backBtn}><Text style={S.backText}>{'← 뒤로'}</Text></TouchableOpacity>
-
           {/* 프로필 헤더 */}
           <View style={PS.header}>
             <View style={[PS.avatarGlow, { shadowColor: tier.color }]}>
@@ -208,7 +204,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
             </View>
             <Text style={PS.joined}>{'가입일: 2024.01.15'}</Text>
           </View>
-
           <View style={PS.divider} />
 
           {/* 티어 & XP */}
@@ -224,7 +219,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
             </View>
             <Text style={PS.xpNext}>{'다음 티어: '}{nextTier.icon}{' '}{nextTier.name}</Text>
           </View>
-
           {/* 전적 통계 */}
           <View style={PS.section}>
             <View style={PS.secTitleRow}><View style={[PS.secBar, { backgroundColor: '#F59E0B' }]} /><Text style={PS.secTitle}>{'전적 통계'}</Text></View>
@@ -234,7 +228,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
               <View style={PS.statCard}><Text style={PS.statNum}>{us.tichuSuccess}</Text><Text style={PS.statLabel}>{'티츄 성공'}</Text></View>
             </View>
           </View>
-
           {/* 출석 현황 */}
           <View style={PS.section}>
             <View style={PS.secTitleRow}>
@@ -249,7 +242,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
               </View>
             ))}</View>
           </View>
-
           {/* 메뉴 */}
           <View style={PS.section}>
             <View style={PS.secTitleRow}><View style={[PS.secBar, { backgroundColor: '#F59E0B' }]} /><Text style={PS.secTitle}>{'메뉴'}</Text></View>
@@ -281,12 +273,10 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
   return (
     <SafeAreaView style={S.root}>
       <BackgroundWatermark />
-
       {/* 파티클 */}
       <View style={S.particleLayer} pointerEvents="none">
         {particles.map((p, i) => <FloatingSymbol key={i} symbol={p.s} x={p.x} delay={p.d} />)}
       </View>
-
       {/* 상단 바 */}
       <Animated.View entering={FadeIn.delay(0).duration(500)} style={S.topBar}>
         <TouchableOpacity style={S.profileBtn} activeOpacity={0.8} onPress={() => setPage('profile')}>
@@ -303,7 +293,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           </TouchableOpacity>
         </View>
       </Animated.View>
-
       {/* 중앙 */}
       <View style={S.center}>
         <Animated.View entering={FadeIn.delay(200).duration(500)} style={S.logoArea}>
@@ -311,7 +300,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           <Text style={S.subtitle}>Ultimate Card Battle</Text>
           <View style={S.divider} />
         </Animated.View>
-
         {!matching ? (
           <Animated.View entering={FadeIn.delay(400).duration(500)} style={S.cardsWrap}>
             <View style={S.cards}>
@@ -351,7 +339,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           </Animated.View>
         )}
       </View>
-
       {/* 하단 탭 */}
       <Animated.View entering={FadeIn.delay(800).duration(500)} style={S.nav}>
         {[{ i: '\uD83C\uDFE0', l: '\uD648', idx: 0 }, { i: '\uD83C\uDFC6', l: '\uB7AD\uD0B9', idx: 1 }, { i: '\u2699\uFE0F', l: '\uC124\uC815', idx: 2 }].map(t => (
@@ -362,14 +349,12 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           </TouchableOpacity>
         ))}
       </Animated.View>
-
       {/* ═══ 친구 사이드 패널 ═══ */}
       {showFriends && (
         <Pressable style={S.overlay} onPress={() => setShowFriends(false)}>
           <Animated.View entering={SlideInRight.duration(300)} style={S.fp}>
             <Pressable style={{ flex: 1 }} onPress={e => e.stopPropagation()}>
               <View style={S.fpHead}><Text style={S.fpTitle}>{'친구 목록'}</Text><TouchableOpacity onPress={() => setShowFriends(false)}><Text style={S.fpX}>{'\u2715'}</Text></TouchableOpacity></View>
-
               {/* 내 친구 코드 */}
               {friendCode ? (
                 <View style={{ alignItems: 'center', marginBottom: 10 }}>
@@ -395,7 +380,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                   <Text style={S.fpAddText}>{'검색'}</Text>
                 </TouchableOpacity>
               </View>
-
               {/* 검색 결과 */}
               {friendSearchResult && friendSearchResult.found && (
                 <View style={[S.fpRow, { backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 8, marginBottom: 6 }]}>
@@ -483,7 +467,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           </Animated.View>
         </View>
       </Modal>
-
       {/* 닉네임 편집 모달 */}
       <Modal visible={showNickEdit} transparent animationType="fade">
         <View style={S.mOvl}><View style={S.mBox}>
@@ -492,12 +475,10 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           <TouchableOpacity style={[S.mOk, !nick.trim() && { opacity: 0.4 }]} onPress={() => { if (nick.trim()) { userSetNickname(nick.trim()); setShowNickEdit(false); } }} disabled={!nick.trim()}><Text style={S.mOkT}>{'확인'}</Text></TouchableOpacity>
         </View></View>
       </Modal>
-
       {/* 커스텀 방 모달 */}
       <Modal visible={showRoom} transparent animationType="fade">
         <View style={S.mOvl}><View style={[S.mBox, { maxWidth: 420, minHeight: 350 }]}>
           <Text style={S.mTitle}>{'🎮 커스텀 매치'}</Text>
-
           {/* 탭 */}
           <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
             <TouchableOpacity
@@ -513,7 +494,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
               <Text style={[S.mTabText, customTab === 'create' && S.mTabTextActive]}>방 만들기</Text>
             </TouchableOpacity>
           </View>
-
           {customTab === 'list' ? (
             <View style={{ flex: 1, minHeight: 180 }}>
               {customRoomList.length === 0 ? (

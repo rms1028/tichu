@@ -41,7 +41,6 @@ export function ShopScreen({ onBack }: Props) {
         <Text style={S.title}>{'🛒 상점'}</Text>
         <View style={S.coinBadge}><Text style={S.coinIcon}>{'🪙'}</Text><Text style={S.coinText}>{coins}</Text></View>
       </View>
-
       {/* 탭 */}
       <View style={S.tabs}>
         <TouchableOpacity style={[S.tab, tab === 'avatar' && S.tabActive]} onPress={() => setTab('avatar')}>
@@ -51,7 +50,6 @@ export function ShopScreen({ onBack }: Props) {
           <Text style={[S.tabText, tab === 'cardback' && S.tabTextActive]}>{'카드 뒷면'}</Text>
         </TouchableOpacity>
       </View>
-
       {/* 메시지 */}
       {message ? <Text style={S.message}>{message}</Text> : null}
 

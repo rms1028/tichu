@@ -31,7 +31,6 @@ export function AchievementsScreen({ onBack }: Props) {
         <Text style={S.title}>{'🏅 업적'}</Text>
         <Text style={S.count}>{unlocked}/{achievements.length}</Text>
       </View>
-
       {/* 탭 */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.tabs}>
         {CATEGORIES.map(c => (
@@ -40,7 +39,6 @@ export function AchievementsScreen({ onBack }: Props) {
           </TouchableOpacity>
         ))}
       </ScrollView>
-
       <ScrollView style={S.scroll} contentContainerStyle={S.list}>
         {filtered.map(a => (
           <View key={a.id} style={[S.card, a.unlocked && S.cardUnlocked]}>

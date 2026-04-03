@@ -69,18 +69,15 @@ export function TutorialModal({ visible, onClose }: Props) {
           <TouchableOpacity style={S.skipBtn} onPress={handleClose}>
             <Text style={S.skipText}>건너뛰기</Text>
           </TouchableOpacity>
-
           <Animated.View key={step} entering={FadeIn.duration(300)} style={S.content}>
             <Text style={S.icon}>{cur.icon}</Text>
             <Text style={S.title}>{cur.title}</Text>
             <Text style={S.body}>{cur.body}</Text>
           </Animated.View>
-
           {/* 진행 바 */}
           <View style={S.dots}>
             {STEPS.map((_, i) => <View key={i} style={[S.dot, i === step && S.dotActive, i < step && S.dotDone]} />)}
           </View>
-
           {/* 버튼 */}
           <View style={S.btns}>
             {step > 0 && (

@@ -61,7 +61,6 @@ export function ExchangeView({ onExchange }: ExchangeViewProps) {
         </View>
       </View>
       <Text style={styles.subtitle}>3장을 선택하세요 (왼쪽상대, 파트너, 오른쪽상대 순)</Text>
-
       <View style={styles.selectedRow}>
         {[0, 1, 2].map(i => (
           <View key={i} style={styles.selectedSlot}>
@@ -74,7 +73,6 @@ export function ExchangeView({ onExchange }: ExchangeViewProps) {
           </View>
         ))}
       </View>
-
       <View style={styles.handRow}>
         {sorted.map((card, i) => {
           const isSelected = selected.some(c => cardEquals(c, card));
@@ -89,7 +87,6 @@ export function ExchangeView({ onExchange }: ExchangeViewProps) {
           );
         })}
       </View>
-
       {submitted && exchangeReceived ? (
         <View style={styles.receivedContainer}>
           <Text style={styles.receivedTitle}>교환 완료!</Text>

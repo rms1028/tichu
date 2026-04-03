@@ -118,7 +118,6 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
       >
         <Text style={[styles.clearText, !hasSelection && styles.clearTextDisabled]}>초기화</Text>
       </TouchableOpacity>
-
       {!isLead && (
         <TouchableOpacity
           style={[styles.button, isMyTurn ? styles.passButton : styles.passButtonDisabled]}
@@ -138,7 +137,6 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
       >
         <Text style={styles.playText}>내기</Text>
       </AnimatedTouchable>
-
       {/* 소원 선택 그리드 */}
       {showWishPicker && (
         <Animated.View

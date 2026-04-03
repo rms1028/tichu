@@ -38,7 +38,6 @@ export function RankingScreen({ onBack }: Props) {
         <Text style={S.title}>{'🏆 랭킹'}</Text>
         <View style={{ width: 50 }} />
       </View>
-
       <ScrollView style={S.scroll} contentContainerStyle={S.content}>
         {/* 내 랭킹 카드 */}
         <View style={S.myCard}>
@@ -53,7 +52,6 @@ export function RankingScreen({ onBack }: Props) {
             <Text style={S.myWins}>{wins}승 / {totalGames}판</Text>
           </View>
         </View>
-
         {/* 티어 구간 표시 */}
         <View style={S.tierBar}>
           {TIERS.map((t, i) => (
@@ -64,7 +62,6 @@ export function RankingScreen({ onBack }: Props) {
             </View>
           ))}
         </View>
-
         {/* 랭킹 리스트 */}
         <View style={S.list}>
           {allPlayers.map((p, i) => {

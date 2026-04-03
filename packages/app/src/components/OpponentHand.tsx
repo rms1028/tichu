@@ -208,12 +208,10 @@ export function OpponentHand({
           </View>
         </View>
       </View>
-
       {/* 이름 */}
       <Text style={[styles.nickname, !connected && styles.nicknameDimmed, nickColor ? { color: nickColor } : undefined]} numberOfLines={1}>
         {nickname}
       </Text>
-
       {/* 카드 더미 + 숫자 */}
       {!finished && (
         <View style={styles.deckWrap}>

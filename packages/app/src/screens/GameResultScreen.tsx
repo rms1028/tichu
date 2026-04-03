@@ -134,14 +134,12 @@ export function GameResultScreen({
             </View>
           </View>
         </Animated.View>
-
         {/* 플레이어 카드 */}
         <View style={S.playersWrap}>
           <View style={S.teamGroup}>{team1Players.map((p, i) => renderPlayer(p, i))}</View>
           <View style={S.divider} />
           <View style={S.teamGroup}>{team2Players.map((p, i) => renderPlayer(p, i + 2))}</View>
         </View>
-
         {/* 보상 */}
         <Animated.View entering={FadeIn.delay(1200).duration(500)} style={S.rewardWrap}>
           <View style={S.rewardRow}>
@@ -160,7 +158,6 @@ export function GameResultScreen({
             </Animated.View>
           )}
         </Animated.View>
-
         {/* 버튼 */}
         <Animated.View entering={FadeIn.delay(1600).duration(400)} style={S.buttons}>
           <TouchableOpacity style={S.rematchBtn} onPress={onRematch} activeOpacity={0.85}>

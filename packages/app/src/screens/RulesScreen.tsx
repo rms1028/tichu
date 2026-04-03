@@ -60,7 +60,6 @@ export function RulesScreen({ onBack }: Props) {
         <Text style={R.headerTitle}>{'\uD83D\uDCD6 \uAC8C\uC784 \uADDC\uCE59'}</Text>
         <View style={{ width: 50 }} />
       </View>
-
       <View style={R.body}>
         {/* 좌측 목차 */}
         <View style={R.toc}>
@@ -73,10 +72,8 @@ export function RulesScreen({ onBack }: Props) {
             </TouchableOpacity>
           ))}
         </View>
-
         {/* 우측 본문 */}
         <ScrollView ref={scrollRef} style={R.content} showsVerticalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={50}>
-
           {/* 섹션 1: 게임 개요 */}
           <View onLayout={e => { sectionPositions.current[0] = e.nativeEvent.layout.y; }} style={R.section}>
             <Text style={R.secTitle}>{'\uD83C\uDCCF \uAC8C\uC784 \uAC1C\uC694'}</Text>
@@ -89,7 +86,6 @@ export function RulesScreen({ onBack }: Props) {
               <Text style={R.p}>{'\uCE74\uB4DC \uC138\uAE30: 2 < 3 < 4 < 5 < 6 < 7 < 8 < 9 < 10 < J < Q < K < A'}</Text>
             </View>
           </View>
-
           {/* 섹션 2: 진행 순서 */}
           <View onLayout={e => { sectionPositions.current[1] = e.nativeEvent.layout.y; }} style={R.section}>
             <Text style={R.secTitle}>{'\uD83D\uDD04 \uAC8C\uC784 \uC9C4\uD589 \uC21C\uC11C'}</Text>
@@ -106,11 +102,9 @@ export function RulesScreen({ onBack }: Props) {
               <Text style={R.step}>{'\u2467 3\uBA85\uC774 \uBE60\uC9C0\uBA74 \uB77C\uC6B4\uB4DC \uC885\uB8CC \u2192 \uC810\uC218 \uACC4\uC0B0'}</Text>
             </View>
           </View>
-
           {/* 섹션 3: 카드 조합 */}
           <View onLayout={e => { sectionPositions.current[2] = e.nativeEvent.layout.y; }} style={R.section}>
             <Text style={R.secTitle}>{'\♠ \uCE74\uB4DC \uC870\uD569 (\uC871\uBCF4)'}</Text>
-
             <View style={R.card}>
               <Text style={R.comboTitle}>{'\uC2F1\uAE00 — \uCE74\uB4DC 1\uC7A5'}</Text>
               <CardRow><MiniCard text="7" suit="♠" /><Text style={R.comboDesc}>{' \uB354 \uB192\uC740 \uC2F1\uAE00\uB85C \uC774\uAE40'}</Text></CardRow>
@@ -137,10 +131,8 @@ export function RulesScreen({ onBack }: Props) {
               <CardRow><MiniCard text="3" suit="♣" /><MiniCard text="4" suit="♥" color="red" /><MiniCard text="5" suit="♠" /><MiniCard text="6" suit="♦" color="red" /><MiniCard text="7" suit="♣" /></CardRow>
               <Text style={R.comboNote}>{'\uAC19\uC740 \uC7A5\uC218\uC758 \uB354 \uB192\uC740 \uC2A4\uD2B8\uB808\uC774\uD2B8\uB85C\uB9CC \uC774\uAE40'}</Text>
             </View>
-
             <Text style={R.ruleBox}>{'\uD575\uC2EC: \uC120 \uD50C\uB808\uC774\uC5B4\uAC00 \uB0B8 \uC870\uD569\uACFC \uAC19\uC740 \uC885\uB958 + \uAC19\uC740 \uC7A5\uC218\uC758 \uB354 \uB192\uC740 \uCE74\uB4DC\uB9CC \uB0BC \uC218 \uC788\uC74C'}</Text>
           </View>
-
           {/* 섹션 4: 폭탄 */}
           <View onLayout={e => { sectionPositions.current[3] = e.nativeEvent.layout.y; }} style={R.section}>
             <Text style={R.secTitle}>{'\uD83D\uDCA3 \uD3ED\uD0C4 (Bomb)'}</Text>
@@ -161,11 +153,9 @@ export function RulesScreen({ onBack }: Props) {
               <Text style={R.p}>{'\u2022 \uBD09\uD669\uC740 \uD3ED\uD0C4\uC5D0 \uD3EC\uD568 \uBD88\uAC00'}</Text>
             </View>
           </View>
-
           {/* 섹션 5: 특수 카드 */}
           <View onLayout={e => { sectionPositions.current[4] = e.nativeEvent.layout.y; }} style={R.section}>
             <Text style={R.secTitle}>{'\u2728 \uD2B9\uC218 \uCE74\uB4DC 4\uC7A5'}</Text>
-
             <View style={[R.card, R.specialMahjong]}>
               <Text style={R.specialIcon}>{'\uD83D\uDC26'}</Text>
               <Text style={R.specialName}>{'\uCC38\uC0C8 (1)'}</Text>
@@ -175,7 +165,6 @@ export function RulesScreen({ onBack }: Props) {
               <Text style={R.hint}>{'\uC9C0\uBAA9\uB2F9\uD55C \uC22B\uC790\uB97C \uAC00\uC9C4 \uD50C\uB808\uC774\uC5B4\uB294 \uB0BC \uC218 \uC788\uB294 \uC0C1\uD669\uC774\uBA74 \uBC18\uB4DC\uC2DC \uB0B4\uC57C \uD568'}</Text>
               <Text style={R.points}>{'\uC810\uC218: 0\uC810'}</Text>
             </View>
-
             <View style={[R.card, R.specialDog]}>
               <Text style={R.specialIcon}>{'\uD83D\uDC15'}</Text>
               <Text style={R.specialName}>{'\uAC1C (Dog)'}</Text>
@@ -185,7 +174,6 @@ export function RulesScreen({ onBack }: Props) {
               <Text style={R.p}>{'\u2022 \uB2E8\uB3C5\uC73C\uB85C\uB9CC \uC0AC\uC6A9, \uB2E4\uB978 \uC870\uD569\uC5D0 \uD3EC\uD568 \uBD88\uAC00'}</Text>
               <Text style={R.points}>{'\uC810\uC218: 0\uC810'}</Text>
             </View>
-
             <View style={[R.card, R.specialDragon]}>
               <Text style={R.specialIcon}>{'\uD83D\uDC09'}</Text>
               <Text style={R.specialName}>{'\uC6A9 (Dragon)'}</Text>
@@ -195,7 +183,6 @@ export function RulesScreen({ onBack }: Props) {
               <Text style={R.p}>{'\u2022 \uD3ED\uD0C4\uC73C\uB85C\uB9CC \uC774\uAE38 \uC218 \uC788\uC74C'}</Text>
               <Text style={R.points}>{'\uC810\uC218: +25\uC810'}</Text>
             </View>
-
             <View style={[R.card, R.specialPhoenix]}>
               <Text style={R.specialIcon}>{'\uD83E\uDD85'}</Text>
               <Text style={R.specialName}>{'\uBD09\uD669 (Phoenix)'}</Text>
@@ -206,7 +193,6 @@ export function RulesScreen({ onBack }: Props) {
               <Text style={[R.points, { color: '#ef4444' }]}>{'\uC810\uC218: -25\uC810 (\uB9C8\uC774\uB108\uC2A4!)'}</Text>
             </View>
           </View>
-
           {/* 섹션 6: 티츄 선언 */}
           <View onLayout={e => { sectionPositions.current[5] = e.nativeEvent.layout.y; }} style={R.section}>
             <Text style={R.secTitle}>{'\uD83D\uDD25 \uD2F0\uCE04 \uC120\uC5B8'}</Text>
@@ -222,7 +208,6 @@ export function RulesScreen({ onBack }: Props) {
               <Text style={R.p}>{'\u2022 \uC131\uACF5 \uC2DC +200\uC810, \uC2E4\uD328 \uC2DC -200\uC810'}</Text>
             </View>
           </View>
-
           {/* 섹션 7: 점수 계산 */}
           <View onLayout={e => { sectionPositions.current[6] = e.nativeEvent.layout.y; }} style={R.section}>
             <Text style={R.secTitle}>{'\uD83D\uDCB0 \uC810\uC218 \uACC4\uC0B0'}</Text>
@@ -247,7 +232,6 @@ export function RulesScreen({ onBack }: Props) {
               <Text style={R.important}>{'\uD574\uB2F9 \uD300 200\uC810, \uC0C1\uB300 \uD300 0\uC810 (\uCE74\uB4DC \uC810\uC218 \uACC4\uC0B0 \uC5C6\uC74C)'}</Text>
             </View>
           </View>
-
           {/* 섹션 8: 승리 조건 */}
           <View onLayout={e => { sectionPositions.current[7] = e.nativeEvent.layout.y; }} style={R.section}>
             <Text style={R.secTitle}>{'\uD83C\uDFC6 \uC2B9\uB9AC \uC870\uAC74'}</Text>
@@ -258,7 +242,6 @@ export function RulesScreen({ onBack }: Props) {
               <Text style={R.p}>{'\u2022 \uB3D9\uC810\uC774\uBA74 \uCD94\uAC00 \uB77C\uC6B4\uB4DC \uC9C4\uD589'}</Text>
             </View>
           </View>
-
           <View style={{ height: 40 }} />
         </ScrollView>
       </View>

@@ -207,7 +207,6 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
                 <Text style={styles.bombLabelIcon}>{'💣'}</Text>
                 <Text style={[styles.bombLabelText, canBomb && styles.bombLabelTextActive]}>{group.label}</Text>
               </View>
-
               {/* 폭탄 카드들 */}
               <View style={styles.bombCards}>
                 {group.cards.map((card, ci) => (

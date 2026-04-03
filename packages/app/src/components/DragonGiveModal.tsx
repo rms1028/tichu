@@ -23,7 +23,6 @@ export function DragonGiveModal({ onGive }: DragonGiveModalProps) {
         <View style={styles.modal}>
           <Text style={styles.title}>용 트릭 양도</Text>
           <Text style={styles.subtitle}>상대팀 1명에게 카드 더미를 양도하세요</Text>
-
           <View style={styles.buttonRow}>
             {opponents.map((seat) => (
               <TouchableOpacity

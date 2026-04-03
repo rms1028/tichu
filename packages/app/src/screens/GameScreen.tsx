@@ -280,7 +280,6 @@ export function GameScreen({
               </View>
             </View>
           </View>
-
           {/* 라운드 결과가 있으면 마지막 라운드 상세도 표시 */}
           {roundResult?.details && (
             <View style={styles.detailSection}>
@@ -332,7 +331,6 @@ export function GameScreen({
       <SafeAreaView style={styles.container}>
         <View style={styles.resultContainer}>
           <Text style={styles.roundTitle}>라운드 결과</Text>
-
           {/* 순위 */}
           {fo.length > 0 && (
             <View style={styles.detailSection}>
@@ -364,7 +362,6 @@ export function GameScreen({
                   <Text style={[styles.cardPointsValue, { color: COLORS.team2 }]}>{roundResult.details.team2CardPoints}점</Text>
                 </View>
               </View>
-
               {/* 티츄 보너스 */}
               {Object.entries(roundResult.details.tichuBonuses).length > 0 && (
                 <>
@@ -396,7 +393,6 @@ export function GameScreen({
               </Text>
             </View>
           </View>
-
           {/* 누적 점수 */}
           <View style={styles.detailSection}>
             <Text style={styles.detailSectionTitle}>누적 점수</Text>
@@ -449,7 +445,6 @@ export function GameScreen({
         </View>
         <View style={styles.topBarRight} />
       </View>
-
       {/* Middle area: left opponent | table center | right opponent */}
       <View style={styles.middleArea}>
         {/* Left opponent */}
@@ -468,12 +463,10 @@ export function GameScreen({
             trickWon={trickWonEvent?.winningSeat === leftOpponent ? { points: trickWonEvent.points } : null}
           />
         </View>
-
         {/* Table center */}
         <Animated.View style={[styles.tableCenter, styles.tableCenterGlow, tableGlowStyle]}>
           <TableArea />
         </Animated.View>
-
         {/* Right opponent */}
         <View style={styles.sideOpponent}>
           <OpponentHand
@@ -491,7 +484,6 @@ export function GameScreen({
           />
         </View>
       </View>
-
       {/* 티츄 선언 + 이모티콘 (박스 위) */}
       {(tichuDeclarations[mySeat] || canDeclareTichu) && (
         <View style={styles.topActionRow}>
@@ -543,17 +535,14 @@ export function GameScreen({
             </View>
           </View>
         </View>
-
         <PlayerHand onSubmitBombCards={onSubmitBombCards} />
       </Animated.View>
-
       {/* 모달 */}
       <LargeTichuModal
         onDeclare={() => onDeclareTichu('large')}
         onPass={onPassTichu}
       />
       <DragonGiveModal onGive={onDragonGive} />
-
       {/* 교환 결과 오버레이 (3초간 표시) */}
       {exchangeReceived && (
         <View style={styles.exchangeOverlay}>

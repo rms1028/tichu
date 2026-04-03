@@ -23,11 +23,9 @@ export function LoginScreen({ onGuestLogin, onGoogleLogin, loading, error }: Log
           <Text style={S.title}>{'TICHU'}</Text>
           <Text style={S.subtitle}>{'멀티플레이어 보드게임'}</Text>
         </Animated.View>
-
         {/* 로그인 카드 */}
         <Animated.View entering={FadeIn.delay(300).duration(400)} style={S.card}>
           <Text style={S.cardTitle}>{'게임 시작'}</Text>
-
           {/* 닉네임 입력 */}
           <TextInput
             style={S.input}
@@ -37,7 +35,6 @@ export function LoginScreen({ onGuestLogin, onGoogleLogin, loading, error }: Log
             placeholderTextColor="rgba(255,255,255,0.3)"
             maxLength={12}
           />
-
           {error && <Text style={S.error}>{error}</Text>}
 
           {loading ? (
@@ -54,14 +51,12 @@ export function LoginScreen({ onGuestLogin, onGoogleLogin, loading, error }: Log
                 <Text style={S.guestIcon}>{'🎮'}</Text>
                 <Text style={S.btnText}>{'게스트로 시작'}</Text>
               </TouchableOpacity>
-
               {/* 구분선 */}
               <View style={S.divider}>
                 <View style={S.dividerLine} />
                 <Text style={S.dividerText}>{'또는'}</Text>
                 <View style={S.dividerLine} />
               </View>
-
               {/* Google 로그인 */}
               <TouchableOpacity style={[S.btn, S.googleBtn]} onPress={onGoogleLogin} activeOpacity={0.7}>
                 <Text style={S.googleIcon}>{'G'}</Text>
@@ -70,7 +65,6 @@ export function LoginScreen({ onGuestLogin, onGoogleLogin, loading, error }: Log
             </>
           )}
         </Animated.View>
-
         <Text style={S.footer}>{'게스트 데이터는 기기에만 저장됩니다.\nGoogle 로그인 시 다른 기기에서도 이어 플레이할 수 있습니다.'}</Text>
       </View>
     </View>

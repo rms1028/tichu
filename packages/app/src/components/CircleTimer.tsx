@@ -138,7 +138,6 @@ export function CircleTimer({ remainingSec, totalSec, playerName, isMyTurn, seat
           <Text style={styles.timerUnit}>초</Text>
         </View>
       </Animated.View>
-
       {/* 하단 바 (진행률) */}
       <View style={styles.barBg}>
         <View style={[
