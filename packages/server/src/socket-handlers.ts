@@ -798,8 +798,13 @@ export function registerSocketHandlers(io: Server): void {
       for (let s = 0; s < 4; s++) counts[s] = room.hands[s]!.length;
       io.to(room.roomId).emit('hand_counts', { counts });
 
-      // 턴을 폭탄 낸 사람에게 이전
-      room.currentTurn = playerSeat;
+      // 폭탄 낸 다음 사람에게 턴 이전
+      const active = getActivePlayers(room);
+      let nextSeat = (playerSeat + 1) % 4;
+      while (!active.includes(nextSeat) && nextSeat !== playerSeat) {
+        nextSeat = (nextSeat + 1) % 4;
+      }
+      room.currentTurn = nextSeat;
       handlePostPlay(io, room);
     });
 
