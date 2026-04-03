@@ -35,17 +35,14 @@ const RP = 1250;
 const tier = TIERS[1]!; // 실버
 const rpPct = ((RP - 1000) / (2000 - 1000)) * 100;
 
-// 출석
-const ATTENDANCE = [
-  { day: 1, reward: '\uD83E\uDE99 50', checked: true },
-  { day: 2, reward: '\uD83E\uDE99 50', checked: true },
-  { day: 3, reward: '\uD83E\uDE99 50', checked: true },
-  { day: 4, reward: '\uD83E\uDE99 50', checked: true },
-  { day: 5, reward: '\uD83E\uDE99 50', checked: false }, // 오늘
-  { day: 6, reward: '\uD83E\uDE99 50', checked: false },
-  { day: 7, reward: '\uD83D\uDC8E 10', checked: false },
-];
-const TODAY = 5;
+// 출석 — streak에 따라 동적 생성
+function buildAttendance(streak: number, claimedToday: boolean) {
+  return [1, 2, 3, 4, 5, 6, 7].map(day => ({
+    day,
+    reward: day === 7 ? '💎 100' : '🪙 50',
+    checked: day <= streak || (day === streak + 1 && claimedToday),
+  }));
+}
 
 // 친구 (실제 데이터는 gameStore에서 가져옴)
 
@@ -233,10 +230,10 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
               <Text style={PS.secTitle}>{'출석 현황'}</Text>
               <View style={PS.streakBadge}><Text style={PS.streakText}>{'🔥 '}{us.attendanceStreak}{'일 연속'}</Text></View>
             </View>
-            <View style={PS.attGrid}>{ATTENDANCE.map((a, i) => (
-              <View key={i} style={[PS.attCell, a.checked && PS.attChecked, i + 1 === TODAY && PS.attToday]}>
+            <View style={PS.attGrid}>{buildAttendance(us.attendanceStreak, us.lastAttendanceDate === new Date().toISOString().slice(0, 10)).map((a, i) => (
+              <View key={i} style={[PS.attCell, a.checked && PS.attChecked, a.day === us.attendanceStreak + 1 && !a.checked && PS.attToday]}>
                 <Text style={PS.attDay}>{a.day}{'일'}</Text>
-                <Text style={PS.attIcon}>{a.checked ? '✅' : '🔒'}</Text>
+                <Text style={PS.attIcon}>{a.checked ? '✅' : a.day === us.attendanceStreak + 1 ? '📌' : '🔒'}</Text>
               </View>
             ))}</View>
           </View>
@@ -444,10 +441,10 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           <Animated.View entering={ZoomIn.duration(350).springify()} style={S.attModal}>
             <Text style={S.attTitle}>{'🎁 오늘의 출석 보상!'}</Text>
             <View style={S.attGrid}>
-              {ATTENDANCE.map((a, i) => (
-                <View key={i} style={[S.attCell, i + 1 === TODAY && S.attCellToday]}>
+              {buildAttendance(useUserStore.getState().attendanceStreak, false).map((a, i) => (
+                <View key={i} style={[S.attCell, a.day === useUserStore.getState().attendanceStreak + 1 && S.attCellToday]}>
                   <Text style={S.attDayN}>{a.day}{'일'}</Text>
-                  <Text style={{ fontSize: 18 }}>{a.checked ? '\u2705' : i + 1 === TODAY ? '\uD83C\uDF81' : '\uD83D\uDD12'}</Text>
+                  <Text style={{ fontSize: 18 }}>{a.checked ? '✅' : a.day === useUserStore.getState().attendanceStreak + 1 ? '🎁' : '🔒'}</Text>
                   <Text style={S.attReward}>{a.reward}</Text>
                 </View>
               ))}
