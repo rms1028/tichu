@@ -11,7 +11,7 @@ import Animated, {
   ZoomIn,
 } from 'react-native-reanimated';
 import type { Card, Rank } from '@tichu/shared';
-import { isMahjong, isPhoenix, isNormalCard } from '@tichu/shared';
+import { isMahjong, isPhoenix, isNormalCard, mustFulfillWish } from '@tichu/shared';
 import { useGameStore } from '../stores/gameStore';
 import { COLORS, FONT } from '../utils/theme';
 import { mob, isMobile } from '../utils/responsive';
@@ -45,6 +45,8 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
   const selectedCards = useGameStore((s) => s.selectedCards);
   const isMyTurn = useGameStore((s) => s.isMyTurn);
   const tableCards = useGameStore((s) => s.tableCards);
+  const myHand = useGameStore((s) => s.myHand);
+  const wish = useGameStore((s) => s.wish);
   const canDeclareTichu = useGameStore((s) => s.canDeclareTichu);
   const clearSelection = useGameStore((s) => s.clearSelection);
   const phase = useGameStore((s) => s.phase);
@@ -56,6 +58,13 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
 
   const isLead = tableCards === null;
   const hasSelection = selectedCards.length > 0;
+
+  // 소원 강제: 소원 카드를 낼 수 있으면 패스 불가
+  const wishForcesPlay = (() => {
+    if (!wish || isLead) return false;
+    const wr = mustFulfillWish(myHand, tableCards, wish, false);
+    return wr.mustPlay && wr.validPlaysWithWish.length > 0;
+  })();
   const hasMahjong = selectedCards.some(isMahjong);
   const hasPhoenix = selectedCards.some(isPhoenix);
   const canPlay = hasSelection && isMyTurn;
@@ -120,12 +129,14 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
       </TouchableOpacity>
       {!isLead && (
         <TouchableOpacity
-          style={[styles.button, isMyTurn ? styles.passButton : styles.passButtonDisabled]}
+          style={[styles.button, (isMyTurn && !wishForcesPlay) ? styles.passButton : styles.passButtonDisabled]}
           onPress={onPass}
-          disabled={!isMyTurn}
+          disabled={!isMyTurn || wishForcesPlay}
           activeOpacity={0.7}
         >
-          <Text style={[styles.passText, !isMyTurn && styles.passTextDisabled]}>패스</Text>
+          <Text style={[styles.passText, (!isMyTurn || wishForcesPlay) && styles.passTextDisabled]}>
+            {wishForcesPlay ? '소원!' : '패스'}
+          </Text>
         </TouchableOpacity>
       )}
       <AnimatedTouchable
