@@ -234,10 +234,7 @@ export function OpponentHand({
       ) : (
         <>
           {tichu && (
-            <View
-             
-              style={[styles.tichuBadge, tichu === 'large' && styles.tichuLarge]}
-            >
+            <View style={[styles.tichuBadge, tichu === 'large' && styles.tichuLarge]}>
               <Text style={styles.tichuText}>
                 {tichu === 'large' ? '🔥 라지!' : '⭐ 스몰'}
               </Text>

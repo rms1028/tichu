@@ -102,10 +102,7 @@ export function BombOverlay({ onSubmitBombCards }: BombOverlayProps) {
   const seconds = bombWindow ? (remainingMs / 1000).toFixed(1) : null;
 
   return (
-    <View
-     
-      style={styles.container}
-    >
+    <View style={styles.container}>
       {/* 타이머 뱃지 */}
       {isWindowActive && (
         <View style={styles.timerBadge}>

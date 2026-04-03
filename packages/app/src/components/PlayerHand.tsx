@@ -194,9 +194,7 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
 
       {/* 폭탄 그룹 (분리 모드일 때만) */}
       {showBombGroups && (
-        <>
-
-          {bombGroups.map((group, gi) => (
+        <>{bombGroups.map((group, gi) => (
             <TouchableOpacity
               key={`bomb-${gi}`}
               onPress={() => handleBombGroupPress(group)}
