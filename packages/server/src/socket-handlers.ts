@@ -349,14 +349,51 @@ export function registerSocketHandlers(io: Server): void {
         player: { nickname: data.nickname, connected: true, isBot: false },
       });
 
-      // 4인 참가 → 게임 시작
+      // 4인 참가 → 커스텀이 아니면 자동 시작
       const filledSeats = [0, 1, 2, 3].filter(s => room.players[s] !== null);
-      if (filledSeats.length === 4 && room.phase === 'WAITING_FOR_PLAYERS') {
+      if (filledSeats.length === 4 && room.phase === 'WAITING_FOR_PLAYERS' && !room.settings.isCustom) {
         const events = startRound(room);
         broadcastEvents(io, room, events);
         scheduleBotLargeTichu(io, room);
         startLargeTichuTimer(io, room);
       }
+    });
+
+    // ── start_game (방장만 시작 가능) ───────────────────────
+    socket.on('start_game', () => {
+      const room = getRoom();
+      if (!room) return;
+      if (room.phase !== 'WAITING_FOR_PLAYERS') return;
+      // 커스텀 방은 seat 0이 방장
+      if (room.settings.isCustom && playerSeat !== 0) {
+        socket.emit('error', { message: 'not_room_host' });
+        return;
+      }
+      const filledSeats = [0, 1, 2, 3].filter(s => room.players[s] !== null);
+      if (filledSeats.length < 2) {
+        socket.emit('error', { message: 'not_enough_players' });
+        return;
+      }
+      // 빈 자리 봇으로 채우기
+      for (let s = 0; s < 4; s++) {
+        if (!room.players[s]) {
+          room.players[s] = {
+            playerId: `bot_${s}`,
+            nickname: ['봇 A', '봇 B', '봇 C', '봇 D'][s]!,
+            socketId: '',
+            connected: true,
+            isBot: true,
+          };
+          io.to(room.roomId).emit('player_joined', {
+            seat: s,
+            player: { nickname: room.players[s]!.nickname, connected: true, isBot: true },
+          });
+        }
+      }
+      const events = startRound(room);
+      broadcastEvents(io, room, events);
+      scheduleBotLargeTichu(io, room);
+      startLargeTichuTimer(io, room);
     });
 
     // ── add_bots (빈 자리를 봇으로 채움) ────────────────────

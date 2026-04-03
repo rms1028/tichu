@@ -359,6 +359,10 @@ export function useSocket() {
     socketRef.current?.emit('join_room', { roomId, playerId, nickname, password });
   }, []);
 
+  const startGame = useCallback(() => {
+    socketRef.current?.emit('start_game');
+  }, []);
+
   const createCustomRoom = useCallback((roomName: string, password: string | undefined, playerId: string, nickname: string) => {
     store.setPlayerInfo(playerId, nickname);
     socketRef.current?.emit('create_custom_room', { roomName, password, playerId, nickname });
@@ -496,5 +500,6 @@ export function useSocket() {
     friendInvite,
     createCustomRoom,
     listRooms,
+    startGame,
   };
 }

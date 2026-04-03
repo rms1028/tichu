@@ -16,11 +16,12 @@ interface Props {
   onStart: () => void;
   onAddBots: () => void;
   onSwapSeat?: (targetSeat: number) => void;
+  onStartGame?: () => void;
 }
 
 interface Slot { name: string | null; avatar: string; tier: string; ready: boolean; isBot: boolean; }
 
-export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart, onAddBots, onSwapSeat }: Props) {
+export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart, onAddBots, onSwapSeat, onStartGame }: Props) {
   const [elapsed, setElapsed] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
@@ -71,9 +72,9 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
   const matchmakingPosition = useGameStore((s) => s.matchmakingPosition);
   const matchmakingQueueSize = useGameStore((s) => s.matchmakingQueueSize);
 
-  // 4인 채워지면 카운트다운
+  // 빠른매칭: 4인 채워지면 카운트다운 (커스텀은 방장 시작)
   useEffect(() => {
-    if (filledCount === 4 && countdown === null) {
+    if (mode === 'quick' && filledCount === 4 && countdown === null) {
       setCountdown(3);
     }
   }, [filledCount]);
@@ -214,7 +215,12 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
 
         {/* 하단 */}
         <View style={S.bottom}>
-          {mode === 'custom' && filledCount < 4 && (
+          {mode === 'custom' && mySeat === 0 && filledCount >= 1 && (
+            <TouchableOpacity style={S.startGameBtn} onPress={onStartGame}>
+              <Text style={S.startGameText}>{'🎮 게임 시작'}</Text>
+            </TouchableOpacity>
+          )}
+          {mode === 'custom' && (
             <TouchableOpacity style={S.botFillBtn} onPress={onAddBots}>
               <Text style={S.botFillText}>{'🤖 봇으로 채우기'}</Text>
             </TouchableOpacity>
@@ -281,6 +287,8 @@ const S = StyleSheet.create({
 
   // 하단
   bottom: { alignItems: 'center', gap: 10 },
+  startGameBtn: { backgroundColor: '#2ecc71', borderRadius: 12, paddingHorizontal: 32, paddingVertical: 12, shadowColor: '#2ecc71', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6 },
+  startGameText: { color: '#fff', fontSize: 16, fontWeight: '900' },
   botFillBtn: { backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)' },
   botFillText: { color: '#818CF8', fontSize: 15, fontWeight: '700' },
   cancelBtn: { borderRadius: 12, paddingHorizontal: 28, paddingVertical: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
