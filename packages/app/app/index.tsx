@@ -40,7 +40,7 @@ function AppInner() {
     exchangeCards, playCards, passTurn,
     dragonGive, submitBomb, addBots, swapSeat,
     queueMatch, cancelMatch,
-    createCustomRoom, listRooms, startGame,
+    createCustomRoom, listRooms, startGame, addBotToSeat, removeBot,
     friendInit, friendSearch, friendRequest, friendAccept, friendReject, friendRemove, friendInvite,
     guestLogin, firebaseLogin, getLeaderboard,
   } = useSocket();
@@ -197,6 +197,8 @@ function AppInner() {
         onAddBots={addBots}
         onSwapSeat={swapSeat}
         onStartGame={startGame}
+        onAddBotToSeat={addBotToSeat}
+        onRemoveBot={removeBot}
       />
     );
   }

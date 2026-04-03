@@ -440,6 +440,47 @@ export function registerSocketHandlers(io: Server): void {
       }
     });
 
+    // ── add_bot_to_seat (특정 자리에 봇 추가) ─────────────
+    socket.on('add_bot_to_seat', (data: { seat: number }) => {
+      const room = getRoom();
+      if (!room) return;
+      if (room.phase !== 'WAITING_FOR_PLAYERS') return;
+      const s = data.seat;
+      if (s < 0 || s > 3) return;
+      if (room.players[s] !== null) return; // 이미 누가 있음
+
+      const botNames = ['봇 A', '봇 B', '봇 C', '봇 D'];
+      room.players[s] = {
+        playerId: `bot_${s}_${Date.now()}`,
+        nickname: botNames[s]!,
+        socketId: '',
+        connected: true,
+        isBot: true,
+      };
+      io.to(room.roomId).emit('player_joined', {
+        seat: s,
+        player: { nickname: room.players[s]!.nickname, connected: true, isBot: true },
+      });
+    });
+
+    // ── remove_bot (봇 제거) ────────────────────────────────
+    socket.on('remove_bot', (data: { seat: number }) => {
+      const room = getRoom();
+      if (!room) return;
+      if (room.phase !== 'WAITING_FOR_PLAYERS') return;
+      const s = data.seat;
+      if (s < 0 || s > 3) return;
+      if (!room.players[s]?.isBot) return; // 봇이 아님
+
+      room.players[s] = null;
+      const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
+      for (let i = 0; i < 4; i++) {
+        const p = room.players[i];
+        playersInfo[i] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
+      }
+      io.to(room.roomId).emit('seats_updated', { players: playersInfo, swapped: [] });
+    });
+
     // ── swap_seat (대기 중 좌석 교환 → 팀 변경) ──────────
     socket.on('swap_seat', (data: { targetSeat: number }) => {
       const room = getRoom();

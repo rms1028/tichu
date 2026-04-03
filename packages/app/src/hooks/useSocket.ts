@@ -359,6 +359,14 @@ export function useSocket() {
     socketRef.current?.emit('join_room', { roomId, playerId, nickname, password });
   }, []);
 
+  const addBotToSeat = useCallback((seat: number) => {
+    socketRef.current?.emit('add_bot_to_seat', { seat });
+  }, []);
+
+  const removeBot = useCallback((seat: number) => {
+    socketRef.current?.emit('remove_bot', { seat });
+  }, []);
+
   const startGame = useCallback(() => {
     socketRef.current?.emit('start_game');
   }, []);
@@ -501,5 +509,7 @@ export function useSocket() {
     createCustomRoom,
     listRooms,
     startGame,
+    addBotToSeat,
+    removeBot,
   };
 }

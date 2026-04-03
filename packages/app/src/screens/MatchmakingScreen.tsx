@@ -17,11 +17,13 @@ interface Props {
   onAddBots: () => void;
   onSwapSeat?: (targetSeat: number) => void;
   onStartGame?: () => void;
+  onAddBotToSeat?: (seat: number) => void;
+  onRemoveBot?: (seat: number) => void;
 }
 
 interface Slot { name: string | null; avatar: string; tier: string; ready: boolean; isBot: boolean; }
 
-export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart, onAddBots, onSwapSeat, onStartGame }: Props) {
+export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart, onAddBots, onSwapSeat, onStartGame, onAddBotToSeat, onRemoveBot }: Props) {
   const [elapsed, setElapsed] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
@@ -120,7 +122,19 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
   const handleSlotPress = (idx: number) => {
     if (mode !== 'custom') return;
     if (idx === mySeat) return;
-    if (onSwapSeat) onSwapSeat(idx);
+    const slot = slots[idx];
+    if (!slot) return;
+
+    if (slot.name === null) {
+      // 빈 자리 → 봇 추가
+      if (onAddBotToSeat) onAddBotToSeat(idx);
+    } else if (slot.isBot) {
+      // 봇 자리 → 봇 제거
+      if (onRemoveBot) onRemoveBot(idx);
+    } else {
+      // 다른 플레이어 → 자리 교환
+      if (onSwapSeat) onSwapSeat(idx);
+    }
   };
 
   const renderSlot = (slot: Slot, idx: number) => {
@@ -142,13 +156,15 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
             <Text style={S.slotName} numberOfLines={1}>{slot.name}</Text>
             <Text style={S.slotTier}>{slot.tier}</Text>
             {slot.isBot && <View style={S.botBadge}><Text style={S.botBadgeText}>BOT</Text></View>}
-            {slot.ready && <View style={S.readyMark}><Text style={S.readyMarkText}>{'\u2713'}</Text></View>}
+            {slot.isBot && canSwap && <Text style={S.swapHint}>탭하여 제거</Text>}
+            {!slot.isBot && !isMe && canSwap && <Text style={S.swapHint}>탭하여 교환</Text>}
+            {slot.ready && !slot.isBot && <View style={S.readyMark}><Text style={S.readyMarkText}>{'\u2713'}</Text></View>}
           </>
         ) : (
           <>
             <View style={S.emptyCircle}><Animated.Text style={[S.emptyDots, dotStyle]}>...</Animated.Text></View>
             <Text style={S.emptyText}>{mode === 'custom' ? '대기 중' : '상대를 찾는 중...'}</Text>
-            {canSwap && <Text style={S.swapHint}>{'탭하여 이동'}</Text>}
+            {canSwap && <Text style={S.swapHint}>탭하여 봇 추가</Text>}
           </>
         )}
       </Animated.View>
@@ -227,11 +243,6 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
               <Text style={[S.startGameText, !canStart && { opacity: 0.5 }]}>
                 {canStart ? '🎮 게임 시작' : `🎮 게임 시작 (${filledCount}/4)`}
               </Text>
-            </TouchableOpacity>
-          )}
-          {mode === 'custom' && isHost && filledCount < 4 && (
-            <TouchableOpacity style={S.botFillBtn} onPress={onAddBots}>
-              <Text style={S.botFillText}>{'🤖 봇으로 채우기'}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={S.cancelBtn} onPress={onCancel}>
