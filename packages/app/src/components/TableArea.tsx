@@ -82,7 +82,6 @@ export function TableArea() {
 
   return (
     <View style={styles.outerContainer}>
-
       {/* 중앙 컨텐츠 (턴 배너 + 카드) */}
       <View style={styles.centerContent}>
         {/* 턴 표시 */}
