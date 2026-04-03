@@ -188,11 +188,16 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setPlayerInfo: (playerId, nickname) => set({ playerId, nickname }),
 
-  syncGameState: (state) => set((prev) => ({
-    ...prev,
-    ...state,
-    isMyTurn: (state.currentTurn ?? prev.currentTurn) === prev.mySeat,
-  })),
+  syncGameState: (state) => set((prev) => {
+    // 서버에서 빈 핸드가 왔는데 게임 진행 중이면 기존 핸드 유지 (재접속 타이밍 이슈 방지)
+    const myHand = (state.myHand && state.myHand.length > 0) ? state.myHand : prev.myHand;
+    return {
+      ...prev,
+      ...state,
+      myHand,
+      isMyTurn: (state.currentTurn ?? prev.currentTurn) === prev.mySeat,
+    };
+  }),
 
   toggleCardSelection: (card) => set((state) => {
     const idx = state.selectedCards.findIndex(c => cardEquals(c, card));

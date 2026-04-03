@@ -490,7 +490,9 @@ export function passTurn(room: GameRoom, seat: number): EngineResult {
 
   // 소원 활성 시: 소원 숫자 보유 + 합법 조합 존재 → 패스 불가 (섹션 7.4)
   if (room.wish !== null) {
-    const wishResult = mustFulfillWish(room.hands[seat]!, room.tableCards, room.wish, false);
+    const isLead = room.tableCards === null;
+    const wishResult = mustFulfillWish(room.hands[seat]!, room.tableCards, room.wish, isLead);
+    console.log(`[passTurn] wish=${room.wish}, seat=${seat}, mustPlay=${wishResult.mustPlay}, validPlays=${wishResult.validPlaysWithWish.length}, isLead=${isLead}`);
     if (wishResult.mustPlay && wishResult.validPlaysWithWish.length > 0) {
       return { ok: false, error: 'must_fulfill_wish', events: [] };
     }
