@@ -13,25 +13,26 @@ export function useSocket() {
 
   useEffect(() => {
     const socket = io(SERVER_URL, {
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 3000,
+      timeout: 10000,
+      upgrade: true,
     });
 
     socketRef.current = socket;
 
     // ── 연결 상태 ──────────────────────────────────────────
-    let hasLoggedIn = false;
     socket.on('connect', () => {
       store.setConnection(true);
 
-      // 재접속 시 로그인 (1회만) + rejoin
+      // 매 재접속 시 로그인 + rejoin (서버 재시작 대비)
       const us = require('../stores/userStore').useUserStore.getState();
-      if (!hasLoggedIn && us.playerId && us.nickname) {
+      if (us.playerId && us.nickname) {
         socket.emit('guest_login', { guestId: us.playerId, nickname: us.nickname });
-        hasLoggedIn = true;
       }
       const { roomId, playerId } = useGameStore.getState();
       if (roomId && playerId) {

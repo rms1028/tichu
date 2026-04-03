@@ -683,46 +683,41 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── play_cards ─────────────────────────────────────────
     socket.on('play_cards', (data: { cards: Card[]; phoenixAs?: Rank; wish?: Rank }) => {
-      console.log(`[play_cards] seat=${playerSeat}, cards=${data.cards.length}, phoenixAs=${data.phoenixAs}, wish=${data.wish}`);
-      const room = getRoom();
-      if (!room) { console.log('[play_cards] no room'); return; }
-      console.log(`[play_cards] phase=${room.phase}, currentTurn=${room.currentTurn}, bombWindow=${!!room.bombWindow}`);
-      const result = playCards(room, playerSeat, data.cards, data.phoenixAs, data.wish);
-      if (!result.ok) { console.log(`[play_cards] REJECTED: ${result.error}`); socket.emit('invalid_play', { reason: result.error }); return; }
-      broadcastEvents(io, room, result.events);
-
-      handlePostPlay(io, room);
+      try {
+        const room = getRoom();
+        if (!room) return;
+        const result = playCards(room, playerSeat, data.cards, data.phoenixAs, data.wish);
+        if (!result.ok) { socket.emit('invalid_play', { reason: result.error }); return; }
+        broadcastEvents(io, room, result.events);
+        handlePostPlay(io, room);
+      } catch (err) { console.error('[play_cards] ERROR:', err); }
     });
 
     // ── pass_turn ──────────────────────────────────────────
     socket.on('pass_turn', () => {
-      const room = getRoom();
-      if (!room) return;
-      const result = passTurn(room, playerSeat);
-      if (!result.ok) { socket.emit('invalid_play', { reason: result.error }); return; }
-      broadcastEvents(io, room, result.events);
-
-      handlePostPlay(io, room);
+      try {
+        const room = getRoom();
+        if (!room) return;
+        const result = passTurn(room, playerSeat);
+        if (!result.ok) { socket.emit('invalid_play', { reason: result.error }); return; }
+        broadcastEvents(io, room, result.events);
+        handlePostPlay(io, room);
+      } catch (err) { console.error('[pass_turn] ERROR:', err); }
     });
 
     // ── dragon_give ────────────────────────────────────────
     socket.on('dragon_give', (data: { targetSeat: number }) => {
-      if (!isValidSeat(data.targetSeat)) { socket.emit('invalid_play', { reason: 'invalid_seat' }); return; }
-      const room = getRoom();
-      if (!room) return;
-      // Authorization: only the player who won the dragon trick may choose
-      if (!room.dragonGivePending) {
-        socket.emit('invalid_play', { reason: 'no_dragon_pending' }); return;
-      }
-      if (room.dragonGivePending.winningSeat !== playerSeat) {
-        socket.emit('invalid_play', { reason: 'not_your_dragon' }); return;
-      }
-      console.log(`[dragon_give] playerSeat=${playerSeat}, target=${data.targetSeat}`);
-      const result = dragonGive(room, playerSeat, data.targetSeat);
-      if (!result.ok) { console.log(`[dragon_give] REJECTED: ${result.error}`); socket.emit('invalid_play', { reason: result.error }); return; }
-      broadcastEvents(io, room, result.events);
-
-      handlePostPlay(io, room);
+      try {
+        if (!isValidSeat(data.targetSeat)) { socket.emit('invalid_play', { reason: 'invalid_seat' }); return; }
+        const room = getRoom();
+        if (!room) return;
+        if (!room.dragonGivePending) { socket.emit('invalid_play', { reason: 'no_dragon_pending' }); return; }
+        if (room.dragonGivePending.winningSeat !== playerSeat) { socket.emit('invalid_play', { reason: 'not_your_dragon' }); return; }
+        const result = dragonGive(room, playerSeat, data.targetSeat);
+        if (!result.ok) { socket.emit('invalid_play', { reason: result.error }); return; }
+        broadcastEvents(io, room, result.events);
+        handlePostPlay(io, room);
+      } catch (err) { console.error('[dragon_give] ERROR:', err); }
     });
 
     // ── submit_bomb ────────────────────────────────────────
@@ -1351,6 +1346,7 @@ function scheduleBotBombWindow(io: Server, room: GameRoom): void {
 }
 
 function handlePostPlay(io: Server, room: GameRoom): void {
+  try {
   console.log(`[postPlay] phase=${room.phase}, currentTurn=${room.currentTurn}, bombWindow=${!!room.bombWindow}, dragonGive=${!!room.dragonGivePending}`);
   // 라운드/게임 종료 체크
   if (room.phase === 'ROUND_END' || room.phase === 'SCORING') {
@@ -1393,6 +1389,7 @@ function handlePostPlay(io: Server, room: GameRoom): void {
     }
     startTurnTimer(io, room);
   }
+  } catch (err) { console.error('[handlePostPlay] ERROR:', err); }
 }
 
 function startDragonGiveTimer(io: Server, room: GameRoom): void {

@@ -30,8 +30,9 @@ const io = new Server(httpServer, {
     origin: allowedOrigins,
     methods: ['GET', 'POST'],
   },
-  pingInterval: 10_000,
-  pingTimeout: 30_000,
+  pingInterval: 25_000,
+  pingTimeout: 60_000,
+  connectTimeout: 30_000,
 });
 
 registerSocketHandlers(io);
