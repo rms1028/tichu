@@ -193,7 +193,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
             </View>
             <View style={PS.nameRow}>
               <Text style={PS.name}>{name}</Text>
-              <TouchableOpacity onPress={() => setShowNickEdit(true)}><Text style={PS.editIcon}>{'✏️'}</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => { setPage('main'); setTimeout(() => setShowNickEdit(true), 100); }}><Text style={PS.editIcon}>{'✏️'}</Text></TouchableOpacity>
             </View>
             <View style={[PS.tierPill, { borderColor: tier.color, backgroundColor: `${tier.color}22` }]}>
               <Text style={[PS.tierText, { color: tier.color }]}>{tier.icon} {tier.name}</Text>
