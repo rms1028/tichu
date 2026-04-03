@@ -281,14 +281,12 @@ export const useGameStore = create<GameState>((set, get) => ({
   })),
 
   onTrickWon: (winningSeat, cards, points) => {
-    // 트릭 승리 표시 — tableCards를 1.5초 유지 후 클리어
     set({
       trickWonEvent: { winningSeat, cards, points },
+      tableCards: null,
+      lastPlayEvent: null,
       passedSeats: [],
     });
-    setTimeout(() => {
-      set({ tableCards: null, lastPlayEvent: null });
-    }, 1500);
   },
 
   onPlayerFinished: (seat, rank) => set((state) => ({

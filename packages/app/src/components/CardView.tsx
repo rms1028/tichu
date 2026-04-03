@@ -61,10 +61,6 @@ export function CardView({
           <View style={styles.specialIconWrap}>
             <Text style={[styles.specialIconCenter, size === 'small' && styles.specialIconSmall, size === 'large' && styles.specialIconLarge]}>{specialIcon}</Text>
           </View>
-          {/* 하단 이름 (large) */}
-          {size === 'large' && (
-            <Text style={[styles.specialBottomName, { color: `${color}88` }]}>{name}</Text>
-          )}
         </View>
       </TouchableOpacity>
     );
@@ -109,7 +105,7 @@ export function CardView({
 function getSpecialCardBg(card: Card): string {
   if (card.type !== 'special') return COLORS.card;
   switch (card.specialType) {
-    case 'mahjong': return '#e8f5e9';
+    case 'mahjong': return '#fff9e6';
     case 'dog': return '#eceff1';
     case 'phoenix': return '#fff3e0';
     case 'dragon': return '#ffebee';
@@ -119,7 +115,7 @@ function getSpecialCardBg(card: Card): string {
 function getSpecialBorderColor(card: Card): string {
   if (card.type !== 'special') return '#ccc';
   switch (card.specialType) {
-    case 'mahjong': return '#4caf50';
+    case 'mahjong': return '#d4a017';
     case 'dog': return '#607d8b';
     case 'phoenix': return '#ff9800';
     case 'dragon': return '#f44336';
@@ -129,23 +125,23 @@ function getSpecialBorderColor(card: Card): string {
 function getSpecialGlowColor(card: Card): string | undefined {
   if (card.type !== 'special') return undefined;
   switch (card.specialType) {
-    case 'mahjong': return '#4caf50';
+    case 'mahjong': return '#d4a017';
     case 'dog': return undefined;
     case 'phoenix': return '#ff9800';
     case 'dragon': return '#f44336';
   }
 }
 
-import { isMobile } from '../utils/responsive';
+import { isMobile, mob } from '../utils/responsive';
 
 const SIZE_MAP = isMobile ? {
-  small: { width: 34, height: 48 },
-  normal: { width: 42, height: 60 },
-  large: { width: 50, height: 72 },
+  small: { width: 42, height: 59 },
+  normal: { width: 56, height: 78 },
+  large: { width: 70, height: 98 },
 } : {
-  small: { width: 52, height: 74 },
-  normal: { width: 72, height: 102 },
-  large: { width: 88, height: 124 },
+  small: { width: 62, height: 87 },
+  normal: { width: 80, height: 112 },
+  large: { width: 96, height: 134 },
 };
 
 const styles = StyleSheet.create({
@@ -220,29 +216,29 @@ const styles = StyleSheet.create({
   },
   topLeft: {
     position: 'absolute',
-    top: 3,
-    left: 4,
+    top: mob(2, 4),
+    left: mob(3, 6),
   },
   rank: {
-    fontSize: FONT.md,
+    fontSize: mob(FONT.md, 18),
     fontWeight: '900',
-    lineHeight: 16,
+    lineHeight: mob(16, 22),
   },
   rankSmall: {
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: mob(10, 14),
+    lineHeight: mob(12, 17),
   },
   rankLarge: {
-    fontSize: FONT.lg,
-    lineHeight: 20,
+    fontSize: mob(FONT.lg, 22),
+    lineHeight: mob(20, 26),
   },
   suitTop: {
-    fontSize: 8,
-    lineHeight: 10,
+    fontSize: mob(8, 14),
+    lineHeight: mob(10, 17),
     marginTop: -1,
   },
   suitTopSmall: {
-    fontSize: 6,
+    fontSize: mob(6, 10),
   },
   suitCenter: {
     position: 'absolute',
@@ -262,14 +258,14 @@ const styles = StyleSheet.create({
   // 특수카드
   specialTopName: {
     position: 'absolute',
-    top: 4,
-    left: 5,
-    fontSize: 10,
-    fontWeight: '800',
+    top: mob(2, 4),
+    left: mob(3, 6),
+    fontSize: mob(FONT.md, 18),
+    fontWeight: '900',
     zIndex: 1,
   },
   specialTopNameSmall: {
-    fontSize: 7,
+    fontSize: mob(9, 14),
   },
   specialIconWrap: {
     flex: 1,

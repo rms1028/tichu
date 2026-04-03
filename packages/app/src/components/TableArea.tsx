@@ -16,7 +16,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useGameStore } from '../stores/gameStore';
 import { CardView } from './CardView';
-import { mob } from '../utils/responsive';
+import { mob, isMobile } from '../utils/responsive';
 import { COLORS, FONT } from '../utils/theme';
 
 export function TableArea() {
@@ -140,7 +140,7 @@ export function TableArea() {
                   { zIndex: i },
                 ]}
               >
-                <CardView card={card} size="normal" disabled />
+                <CardView card={card} size="large" disabled />
               </Animated.View>
             ))}
           </View>
@@ -149,7 +149,7 @@ export function TableArea() {
               entering={FadeIn.delay(150).duration(200)}
               style={styles.playInfo}
             >
-              {players[lastPlay.seat]?.nickname ?? '?'} {'\u2192'} {valueLabel(lastPlay.hand.value)} {handTypeLabel(lastPlay.hand.type)}
+              {players[lastPlay.seat]?.nickname ?? '?'} {'\u2192'} {valueLabel(lastPlay.hand.value)}{lastPlay.hand.type !== 'single' || (lastPlay.hand.value >= 2 && lastPlay.hand.value <= 14) ? ` ${handTypeLabel(lastPlay.hand.type)}` : ''}
             </Animated.Text>
           )}
         </Animated.View>
@@ -170,11 +170,13 @@ export function TableArea() {
 
 function valueLabel(v: number | null | undefined): string {
   if (v === null || v === undefined || v === Infinity || !isFinite(v)) return '용';
+  if (v === 0) return '개';
+  if (v === 1) return '참새';
+  if (v % 1 !== 0) return '봉황'; // 봉황 싱글 (직전+0.5)
   if (v === 11) return 'J';
   if (v === 12) return 'Q';
   if (v === 13) return 'K';
   if (v === 14) return 'A';
-  if (v % 1 !== 0) return String(Math.floor(v)); // 봉황 float
   return String(v);
 }
 
@@ -196,21 +198,21 @@ const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
     flexDirection: 'column',
-    padding: 8,
+    padding: mob(0, 8),
   },
   centerContent: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: mob(20, 30),
+    paddingBottom: mob(0, 30),
   },
   turnBanner: {
     backgroundColor: COLORS.surface,
     paddingHorizontal: mob(16, 28),
-    paddingVertical: mob(6, 10),
+    paddingVertical: mob(4, 10),
     borderRadius: mob(16, 24),
-    marginBottom: mob(8, 10),
-    transform: [{ translateY: -20 }],
+    marginBottom: mob(2, 10),
+    transform: [{ translateY: mob(-10, -20) }],
     borderWidth: 1,
     borderColor: COLORS.surfaceLight,
     shadowColor: '#000',

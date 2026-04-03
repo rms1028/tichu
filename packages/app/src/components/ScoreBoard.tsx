@@ -55,8 +55,8 @@ const mS = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, gap: 4,
   },
-  score: { fontSize: 14, fontWeight: '900' },
-  sep: { color: 'rgba(255,255,255,0.4)', fontSize: 14, fontWeight: '700' },
+  score: { fontSize: 13, fontWeight: '900' },
+  sep: { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '700' },
   target: { color: 'rgba(255,255,255,0.25)', fontSize: 10, marginLeft: 2 },
 });
 // 데스크탑 스타일

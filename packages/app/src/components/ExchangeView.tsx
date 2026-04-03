@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import type { Card } from '@tichu/shared';
 import { useGameStore } from '../stores/gameStore';
 import { sortHand } from '../hooks/useGame';
 import { CardView } from './CardView';
 import { COLORS, FONT } from '../utils/theme';
+import { isMobile, mob } from '../utils/responsive';
 
 function cardEquals(a: Card, b: Card): boolean {
   if (a.type === 'special' && b.type === 'special') return a.specialType === b.specialType;
@@ -50,182 +51,143 @@ export function ExchangeView({ onExchange }: ExchangeViewProps) {
     setSubmitted(true);
   };
 
-  const labels = ['← 왼쪽 상대', '↑ 파트너', '→ 오른쪽 상대'];
+  const labels = ['← 왼쪽', '↑ 파트너', '→ 오른쪽'];
+  const n = sorted.length;
+  // PC/모바일 모두 2줄 배치 (9장 이상)
+  const useTwoRows = n >= 9;
+  const cardSize = isMobile ? 'normal' : 'normal';
+  const slotSize = 'normal';
+  const cardW = isMobile ? 56 : 80;
+  const rowWidth = isMobile ? 360 : 750;
+
+  const renderCardRow = (cards: Card[]) => {
+    const ov = cards.length > 1 ? -Math.max(isMobile ? 12 : 16, cardW - (rowWidth - cardW) / (cards.length - 1)) : 0;
+    return (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.hand}>
+        {cards.map((card, i) => {
+          const isSelected = selected.some(c => cardEquals(c, card));
+          return (
+            <View key={i} style={{ marginLeft: i === 0 ? 0 : ov, zIndex: i }}>
+              <CardView card={card} selected={isSelected} size={cardSize} onPress={() => toggleCard(card)} />
+            </View>
+          );
+        })}
+      </ScrollView>
+    );
+  };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.titleRow}>
-        <Text style={styles.title}>카드 교환</Text>
-        <View style={[styles.timerBadge, remaining <= 10 && styles.timerUrgent]}>
-          <Text style={[styles.timerText, remaining <= 10 && styles.timerTextUrgent]}>{remaining}초</Text>
+    <View style={S.root}>
+      {/* 타이틀 + 타이머 */}
+      <View style={S.titleRow}>
+        <Text style={S.title}>카드 교환</Text>
+        <View style={[S.timerBadge, remaining <= 10 && S.timerUrgent]}>
+          <Text style={[S.timerText, remaining <= 10 && S.timerTextUrgent]}>{remaining}초</Text>
         </View>
       </View>
-      <Text style={styles.subtitle}>3장을 선택하세요 (왼쪽상대, 파트너, 오른쪽상대 순)</Text>
-      <View style={styles.selectedRow}>
+      <Text style={S.subtitle}>3장을 선택하세요 (왼쪽, 파트너, 오른쪽 순)</Text>
+      {/* 교환 슬롯 */}
+      <View style={S.slotRow}>
         {[0, 1, 2].map(i => (
-          <View key={i} style={styles.selectedSlot}>
-            <Text style={styles.slotLabel}>{labels[i]}</Text>
+          <View key={i} style={S.slot}>
+            <Text style={S.slotLabel}>{labels[i]}</Text>
             {selected[i] ? (
-              <CardView card={selected[i]!} size="normal" onPress={() => toggleCard(selected[i]!)} />
+              <CardView card={selected[i]!} size={slotSize} onPress={() => toggleCard(selected[i]!)} />
             ) : (
-              <View style={styles.emptySlot} />
+              <View style={S.emptySlot} />
             )}
           </View>
         ))}
       </View>
-      <View style={styles.handRow}>
-        {sorted.map((card, i) => {
-          const isSelected = selected.some(c => cardEquals(c, card));
-          return (
-            <CardView
-              key={i}
-              card={card}
-              selected={isSelected}
-              size="normal"
-              onPress={() => toggleCard(card)}
-            />
-          );
-        })}
-      </View>
+      {/* 손패 — 2줄 또는 1줄 */}
+      {useTwoRows ? (
+        <View style={S.twoRowWrap}>
+          {renderCardRow(sorted.slice(0, Math.ceil(n / 2)))}
+          {renderCardRow(sorted.slice(Math.ceil(n / 2)))}
+        </View>
+      ) : (
+        renderCardRow(sorted)
+      )}
+      {/* 버튼 */}
       {submitted && exchangeReceived ? (
-        <View style={styles.receivedContainer}>
-          <Text style={styles.receivedTitle}>교환 완료!</Text>
-          <Text style={styles.receivedSubtitle}>받은 카드:</Text>
-          <View style={styles.receivedRow}>
-            <View style={styles.receivedSlot}>
-              <Text style={styles.slotLabel}>← 왼쪽에서</Text>
-              <CardView card={exchangeReceived.fromLeft} size="normal" />
-            </View>
-            <View style={styles.receivedSlot}>
-              <Text style={styles.slotLabel}>↑ 파트너에서</Text>
-              <CardView card={exchangeReceived.fromPartner} size="normal" />
-            </View>
-            <View style={styles.receivedSlot}>
-              <Text style={styles.slotLabel}>→ 오른쪽에서</Text>
-              <CardView card={exchangeReceived.fromRight} size="normal" />
-            </View>
+        <View style={S.receivedWrap}>
+          <Text style={S.receivedTitle}>받은 카드</Text>
+          <View style={S.slotRow}>
+            {[
+              { l: '← 왼쪽', c: exchangeReceived.fromLeft },
+              { l: '↑ 파트너', c: exchangeReceived.fromPartner },
+              { l: '→ 오른쪽', c: exchangeReceived.fromRight },
+            ].map((r, i) => (
+              <View key={i} style={S.slot}>
+                <Text style={S.slotLabel}>{r.l}</Text>
+                <CardView card={r.c} size={slotSize} />
+              </View>
+            ))}
           </View>
         </View>
       ) : submitted ? (
-        <Text style={styles.waitingText}>교환 완료! 다른 플레이어 대기 중...</Text>
+        <Text style={S.waitText}>교환 완료! 대기 중...</Text>
       ) : (
         <TouchableOpacity
-          style={[styles.confirmBtn, selected.length !== 3 && styles.disabled]}
+          style={[S.confirmBtn, selected.length !== 3 && S.disabled]}
           onPress={handleConfirm}
           disabled={selected.length !== 3}
         >
-          <Text style={styles.confirmText}>교환 확정</Text>
+          <Text style={S.confirmText}>교환 확정 ({selected.length}/3)</Text>
         </TouchableOpacity>
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
+const S = StyleSheet.create({
+  root: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
+    paddingHorizontal: mob(4, 24),
+    gap: mob(6, 10),
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 4,
+    gap: mob(10, 14),
   },
-  title: {
-    color: COLORS.text,
-    fontSize: FONT.xl,
-    fontWeight: 'bold',
-  },
-  timerBadge: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  timerUrgent: {
-    backgroundColor: 'rgba(239,68,68,0.2)',
-  },
-  timerText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  timerTextUrgent: {
-    color: '#ef4444',
-  },
-  subtitle: {
-    color: COLORS.textDim,
-    fontSize: FONT.sm,
-    marginBottom: 16,
-  },
-  selectedRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 16,
-  },
-  selectedSlot: {
-    alignItems: 'center',
-  },
-  slotLabel: {
-    color: COLORS.textDim,
-    fontSize: 10,
-    marginBottom: 4,
-  },
+  title: { color: COLORS.text, fontSize: mob(24, 32), fontWeight: '900' },
+  timerBadge: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, paddingHorizontal: mob(10, 16), paddingVertical: mob(4, 6) },
+  timerUrgent: { backgroundColor: 'rgba(239,68,68,0.2)' },
+  timerText: { color: 'rgba(255,255,255,0.6)', fontSize: mob(18, 22), fontWeight: '800' },
+  timerTextUrgent: { color: '#ef4444' },
+  subtitle: { color: COLORS.textDim, fontSize: mob(15, 18) },
+  slotRow: { flexDirection: 'row', gap: mob(12, 24) },
+  slot: { alignItems: 'center' },
+  slotLabel: { color: COLORS.textDim, fontSize: mob(13, 16), marginBottom: mob(3, 6), fontWeight: '600' },
   emptySlot: {
-    width: 42,
-    height: 60,
-    borderWidth: 1,
+    width: mob(56, 80),
+    height: mob(78, 112),
+    borderWidth: mob(1, 2),
     borderStyle: 'dashed',
     borderColor: COLORS.textDim,
-    borderRadius: 6,
+    borderRadius: mob(8, 10),
   },
-  handRow: {
+  twoRowWrap: { gap: mob(2, 4) },
+  hand: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'flex-end',
     justifyContent: 'center',
-    marginBottom: 16,
+    paddingHorizontal: mob(4, 16),
+    paddingVertical: mob(2, 4),
+    minWidth: '100%',
   },
   confirmBtn: {
     backgroundColor: COLORS.success,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingHorizontal: mob(32, 40),
+    paddingVertical: mob(12, 14),
+    borderRadius: 12,
   },
-  disabled: {
-    opacity: 0.4,
-  },
-  confirmText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: FONT.lg,
-  },
-  waitingText: {
-    color: COLORS.accent,
-    fontSize: FONT.md,
-    fontWeight: 'bold',
-  },
-  receivedContainer: {
-    alignItems: 'center',
-  },
-  receivedTitle: {
-    color: COLORS.accent,
-    fontSize: FONT.lg,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  receivedSubtitle: {
-    color: COLORS.textDim,
-    fontSize: FONT.sm,
-    marginBottom: 8,
-  },
-  receivedRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  receivedSlot: {
-    alignItems: 'center',
-  },
+  disabled: { opacity: 0.4 },
+  confirmText: { color: '#fff', fontWeight: '900', fontSize: mob(16, 20) },
+  waitText: { color: COLORS.accent, fontSize: mob(16, 20), fontWeight: 'bold' },
+  receivedWrap: { alignItems: 'center', gap: mob(4, 8) },
+  receivedTitle: { color: COLORS.accent, fontSize: mob(16, 20), fontWeight: 'bold' },
 });

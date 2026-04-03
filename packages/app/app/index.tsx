@@ -1,7 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, LogBox } from 'react-native';
-LogBox.ignoreLogs(['Unexpected text node']);
+import { View, LogBox, Platform } from 'react-native';
 import { useGameStore } from '../src/stores/gameStore';
+
+// React Native Web에서 Reanimated가 만드는 공백 텍스트 노드 경고 무시
+LogBox.ignoreLogs(['Unexpected text node']);
+if (Platform.OS === 'web') {
+  const origWarn = console.warn;
+  console.warn = (...args: any[]) => {
+    if (typeof args[0] === 'string' && args[0].includes('Unexpected text node')) return;
+    origWarn(...args);
+  };
+}
 import { useSocket } from '../src/hooks/useSocket';
 import { LobbyScreen } from '../src/screens/LobbyScreen';
 import { MatchmakingScreen } from '../src/screens/MatchmakingScreen';

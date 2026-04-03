@@ -101,7 +101,7 @@ export function getSuitSymbol(card: Card): string {
 export function getCardColor(card: Card): string {
   if (card.type === 'special') {
     switch (card.specialType) {
-      case 'mahjong': return '#1b5e20';  // 짙은 초록
+      case 'mahjong': return '#8b6914';  // 짙은 금색
       case 'dog': return '#37474f';      // 짙은 회색
       case 'phoenix': return '#e65100';  // 주황
       case 'dragon': return '#b71c1c';   // 짙은 빨강

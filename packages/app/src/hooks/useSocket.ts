@@ -115,10 +115,6 @@ export function useSocket() {
     socket.on('trick_won', (data: { winningSeat: number; cards: Card[]; points: number }) => {
       store.onTrickWon(data.winningSeat, data.cards, data.points);
       try { SFX.trickWon(); } catch {}
-      try {
-        const name = useGameStore.getState().players[data.winningSeat]?.nickname ?? '?';
-        TTS.trickWon(name, data.points);
-      } catch {}
     });
 
     // ── 나감 ───────────────────────────────────────────────
@@ -138,7 +134,6 @@ export function useSocket() {
 
     socket.on('wish_fulfilled', () => {
       store.onWishFulfilled();
-      try { TTS.wishFulfilled(); } catch {}
     });
 
     // ── 티츄 선언 ──────────────────────────────────────────

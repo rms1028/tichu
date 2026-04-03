@@ -21,9 +21,13 @@ const httpServer = http.createServer((req, res) => {
   res.end();
 });
 
+const allowedOrigins = process.env['CORS_ORIGINS']
+  ? process.env['CORS_ORIGINS'].split(',').map(o => o.trim())
+  : ['http://localhost:3000', 'http://localhost:8081', 'http://localhost:19006', 'https://tichu-app.vercel.app'];
+
 const io = new Server(httpServer, {
   cors: {
-    origin: '*',
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
   },
   pingInterval: 10_000,

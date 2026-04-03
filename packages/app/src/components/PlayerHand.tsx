@@ -26,12 +26,9 @@ interface BombGroupInfo {
   playedHand: PlayedHand | null;
 }
 
-/** 핸드에서 폭탄 그룹을 찾는다 */
 function findBombGroups(hand: Card[]): BombGroupInfo[] {
   const groups: BombGroupInfo[] = [];
   const normals = hand.filter(isNormalCard);
-
-  // 포카드
   const byValue = new Map<number, Card[]>();
   for (const c of normals) {
     const arr = byValue.get((c as any).value) ?? [];
@@ -45,8 +42,6 @@ function findBombGroups(hand: Card[]): BombGroupInfo[] {
       groups.push({ cards: group, keys: new Set(group.map(cardKey)), label: `${rank}×4`, playedHand: ph });
     }
   }
-
-  // SF: 같은 문양 연속 5장+
   const bySuit = new Map<string, Card[]>();
   for (const c of normals) {
     const arr = bySuit.get((c as any).suit) ?? [];
@@ -79,7 +74,6 @@ function findBombGroups(hand: Card[]): BombGroupInfo[] {
       groups.push({ cards: [...run], keys: new Set(run.map(cardKey)), label: `${sym}${(run[0] as any).rank}-${(run[run.length - 1] as any).rank}`, playedHand: ph });
     }
   }
-
   return groups;
 }
 
@@ -97,10 +91,7 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
   const phase = useGameStore((s) => s.phase);
 
   const sorted = sortHand(myHand);
-
   const bombGroups = useMemo(() => findBombGroups(myHand), [myHand]);
-
-  // 폭탄 그룹에 속하는 카드 키
   const bombCardKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const g of bombGroups) {
@@ -109,25 +100,16 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
     return keys;
   }, [bombGroups]);
 
-  // 폭탄 분리 모드 토글 (false = 합침, true = 분리)
   const [bombSplit, setBombSplit] = useState(true);
-
-  // 리드 시(테이블 비어있음)에는 폭탄 분리 안 함
   const isLead = tableCards === null;
-
-  // 실제 분리 여부: 리드 시 또는 토글 OFF면 합침
   const effectiveSplit = !isLead && bombSplit && bombGroups.length > 0;
-
-  // 폭탄을 낼 수 있는 상태: 트릭 진행 중 + 테이블에 카드가 있으면 언제든
   const canBomb = phase === 'TRICK_PLAY' && !isLead && bombGroups.length > 0;
-
-  // 일반 카드 선택은 내 턴이거나 폭탄 윈도우일 때만
   const canSelectNormal = isMyTurn || (bombWindow !== null && bombWindow.canSubmitBomb);
 
   const normalCards = effectiveSplit ? sorted.filter(c => !bombCardKeys.has(cardKey(c))) : sorted;
   const showBombGroups = effectiveSplit;
+  const normalCount = normalCards.length;
 
-  // 폭탄 카드 탭 → 즉시 제출
   const handleBombGroupPress = (group: BombGroupInfo) => {
     if (!canBomb || !onSubmitBombCards) return;
     onSubmitBombCards(group.cards);
@@ -138,40 +120,19 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
     toggleCard(card);
   };
 
-  const cardOverlap = isMobile ? -22 : -28;
-  const bombCardOverlap = isMobile ? -20 : -22;
+  // 모바일 2줄 모드: 9장 이상이면 2줄
+  const useTwoRows = isMobile && normalCount >= 9;
 
-  const normalCount = normalCards.length;
-
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.container}
-      style={styles.scroll}
-    >
-      {/* 일반 카드 */}
-      {normalCards.map((card, i) => {
+  // 1줄 렌더링
+  const renderSingleRow = (cards: Card[], overlapPx: number) => (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rowContainer}>
+      {cards.map((card, i) => {
         const isSelected = selectedCards.some(c => cardEquals(c, card));
         const isBombMember = bombCardKeys.has(cardKey(card));
-        const centerIdx = (normalCount - 1) / 2;
-        const signedOffset = i - centerIdx;
-        const absOffset = Math.abs(signedOffset);
-        const archDrop = absOffset * 0.7;
-        const rotation = signedOffset * 0.6;
-
         return (
           <View
-            key={`${card.type}-${card.type === 'normal' ? `${card.suit}-${card.rank}` : card.specialType}-${i}`}
-            style={[
-              styles.cardSlot,
-              {
-                marginLeft: i === 0 ? 0 : cardOverlap,
-                marginTop: archDrop,
-                zIndex: i,
-                transform: [{ rotate: `${rotation}deg` }],
-              },
-            ]}
+            key={`${cardKey(card)}-${i}`}
+            style={[styles.cardSlot, { marginLeft: i === 0 ? 0 : overlapPx, zIndex: i }]}
           >
             <CardView
               card={card}
@@ -183,50 +144,103 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
           </View>
         );
       })}
-      {/* 폭탄 토글 버튼 (폭탄이 있고 팔로우 시) */}
+    </ScrollView>
+  );
+
+  if (useTwoRows) {
+    // 2줄: 윗줄 = 낮은 카드, 아랫줄 = 높은 카드
+    const half = Math.ceil(normalCount / 2);
+    const topRow = normalCards.slice(0, half);   // 낮은 카드
+    const botRow = normalCards.slice(half);       // 높은 카드
+    // 오버랩 계산: 카드폭 50, 화면 380
+    const calcOverlap = (count: number) => count > 1 ? -Math.max(14, 56 - (370 - 56) / (count - 1)) : 0;
+
+    return (
+      <View style={styles.twoRowWrap}>
+        {renderSingleRow(topRow, calcOverlap(topRow.length))}
+        {renderSingleRow(botRow, calcOverlap(botRow.length))}
+        {/* 폭탄 그룹 */}
+        {canBomb && (
+          <View style={styles.bombRow}>
+            <TouchableOpacity style={styles.splitToggle} onPress={() => setBombSplit(!bombSplit)} activeOpacity={0.7}>
+              <Text style={styles.splitToggleIcon}>{bombSplit ? '🔓' : '🔗'}</Text>
+            </TouchableOpacity>
+            {showBombGroups && bombGroups.map((group, gi) => (
+              <TouchableOpacity key={`bomb-${gi}`} onPress={() => handleBombGroupPress(group)} activeOpacity={0.7} disabled={!canBomb} style={styles.bombChip}>
+                <Text style={styles.bombChipText}>💣 {group.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  // PC / 모바일 8장 이하: 기존 1줄 아치형
+  const cardWidth = isMobile ? 56 : 72;
+  const screenWidth = isMobile ? 380 : 900;
+  const autoOverlap = normalCount > 1 ? -Math.max(20, cardWidth - (screenWidth - cardWidth) / (normalCount - 1)) : 0;
+  const cardOverlap = isMobile ? autoOverlap : -28;
+  const bombCardOverlap = isMobile ? Math.min(-20, autoOverlap + 4) : -22;
+
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.container} style={styles.scroll}>
+      {normalCards.map((card, i) => {
+        const isSelected = selectedCards.some(c => cardEquals(c, card));
+        const isBombMember = bombCardKeys.has(cardKey(card));
+        const centerIdx = (normalCount - 1) / 2;
+        const signedOffset = i - centerIdx;
+        const absOffset = Math.abs(signedOffset);
+        const archDrop = absOffset * 0.7;
+        const rotation = signedOffset * 0.6;
+        return (
+          <View
+            key={`${cardKey(card)}-${i}`}
+            style={[styles.cardSlot, {
+              marginLeft: i === 0 ? 0 : cardOverlap,
+              marginTop: archDrop,
+              zIndex: i,
+              transform: [{ rotate: `${rotation}deg` }],
+            }]}
+          >
+            <CardView
+              card={card}
+              selected={isSelected}
+              isBombCard={isBombMember}
+              onPress={() => handleCardPress(card)}
+              disabled={!canSelectNormal}
+            />
+          </View>
+        );
+      })}
       {canBomb && (
         <TouchableOpacity style={styles.splitToggle} onPress={() => setBombSplit(!bombSplit)} activeOpacity={0.7}>
           <Text style={styles.splitToggleIcon}>{bombSplit ? '🔓' : '🔗'}</Text>
           <Text style={styles.splitToggleText}>{bombSplit ? '합침' : '분리'}</Text>
         </TouchableOpacity>
       )}
-      {/* 폭탄 그룹 (분리 모드일 때만) */}
       {showBombGroups && (
         <>{bombGroups.map((group, gi) => (
-            <TouchableOpacity
-              key={`bomb-${gi}`}
-              onPress={() => handleBombGroupPress(group)}
-              activeOpacity={0.7}
-              disabled={!canBomb}
-              style={[styles.bombGroup, gi > 0 && { marginLeft: 8 }]}
-            >
-              {/* 폭탄 라벨 */}
-              <View style={[styles.bombLabel, canBomb && styles.bombLabelActive]}>
-                <Text style={styles.bombLabelIcon}>{'💣'}</Text>
-                <Text style={[styles.bombLabelText, canBomb && styles.bombLabelTextActive]}>{group.label}</Text>
-              </View>
-              {/* 폭탄 카드들 */}
-              <View style={styles.bombCards}>
-                {group.cards.map((card, ci) => (
-                  <View
-                    key={cardKey(card)}
-                    style={[
-                      styles.cardSlot,
-                      { marginLeft: ci === 0 ? 0 : bombCardOverlap, zIndex: ci },
-                    ]}
-                  >
-                    <CardView
-                      card={card}
-                      isBombCard={true}
-                      disabled={!canBomb}
-                      onPress={() => handleBombGroupPress(group)}
-                    />
-                  </View>
-                ))}
-              </View>
-            </TouchableOpacity>
-          ))}
-        </>
+          <TouchableOpacity
+            key={`bomb-${gi}`}
+            onPress={() => handleBombGroupPress(group)}
+            activeOpacity={0.7}
+            disabled={!canBomb}
+            style={[styles.bombGroup, gi > 0 && { marginLeft: 8 }]}
+          >
+            <View style={[styles.bombLabel, canBomb && styles.bombLabelActive]}>
+              <Text style={styles.bombLabelIcon}>{'💣'}</Text>
+              <Text style={[styles.bombLabelText, canBomb && styles.bombLabelTextActive]}>{group.label}</Text>
+            </View>
+            <View style={styles.bombCards}>
+              {group.cards.map((card, ci) => (
+                <View key={cardKey(card)} style={[styles.cardSlot, { marginLeft: ci === 0 ? 0 : bombCardOverlap, zIndex: ci }]}>
+                  <CardView card={card} isBombCard={true} disabled={!canBomb} onPress={() => handleBombGroupPress(group)} />
+                </View>
+              ))}
+            </View>
+          </TouchableOpacity>
+        ))}</>
       )}
     </ScrollView>
   );
@@ -242,9 +256,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: mob(4, 4),
+    paddingHorizontal: 8,
+    paddingVertical: mob(2, 4),
     minWidth: '100%',
+  },
+  // 2줄 모드
+  twoRowWrap: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    minWidth: '100%',
+  },
+  bombRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingTop: 2,
+  },
+  bombChip: {
+    backgroundColor: 'rgba(155,89,182,0.3)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: '#9b59b6',
+  },
+  bombChipText: {
+    color: '#D4A5E5',
+    fontSize: 11,
+    fontWeight: '800',
   },
   cardSlot: {
     shadowColor: '#000',

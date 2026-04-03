@@ -47,14 +47,20 @@ export function mustFulfillWish(
     };
   }
 
-  // 팔로우: 폭탄으로만 가능하면 면제
+  // 팔로우: 일반 조합으로 가능하면 일반 조합만 강제
   const nonBombPlays = playsWithWish.filter(ph => !isBomb(ph));
 
   if (nonBombPlays.length > 0) {
     return { mustPlay: true, validPlaysWithWish: nonBombPlays };
   }
 
-  // 폭탄으로만 가능 → 면제
+  // 일반 조합으로 못 내지만 폭탄으로 가능하면 폭탄 강제
+  const bombPlays = playsWithWish.filter(ph => isBomb(ph));
+  if (bombPlays.length > 0) {
+    return { mustPlay: true, validPlaysWithWish: bombPlays };
+  }
+
+  // 어떤 조합으로도 불가 → 패스 허용
   return { mustPlay: false, validPlaysWithWish: [] };
 }
 

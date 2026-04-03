@@ -40,15 +40,17 @@ describe('mustFulfillWish — follow', () => {
   });
 
   // Edge #19: 폭탄으로만 소원 가능 → 면제
-  it('폭탄으로만 소원 충족 가능 → 면제', () => {
+  it('폭탄으로만 소원 충족 가능 → 폭탄 강제', () => {
     // 바닥이 페어, 소원=9, 핸드에 9가 4장(폭탄)만 있고 페어로는 못 냄
     const pairTable: PlayedHand = {
       type: 'pair', cards: [S('K'), T('K')], value: 13, length: 2,
     };
-    // 9 페어는 K 페어보다 낮으므로 못 냄, 9 포카드 폭탄만 가능
+    // 9 페어는 K 페어보다 낮으므로 못 냄, 9 포카드 폭탄만 가능 → 폭탄 강제
     const hand = [S('9'), T('9'), J('9'), P('9'), S('2')];
     const result = mustFulfillWish(hand, pairTable, '9', false);
-    expect(result.mustPlay).toBe(false);
+    expect(result.mustPlay).toBe(true);
+    expect(result.validPlaysWithWish.length).toBeGreaterThan(0);
+    expect(result.validPlaysWithWish.every(p => p.type === 'four_bomb' || p.type === 'straight_flush_bomb')).toBe(true);
   });
 });
 

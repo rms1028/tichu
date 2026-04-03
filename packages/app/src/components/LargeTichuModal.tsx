@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from '
 import Animated, { ZoomIn, FadeIn } from 'react-native-reanimated';
 import { useGameStore } from '../stores/gameStore';
 import { COLORS } from '../utils/theme';
+import { isMobile, mob } from '../utils/responsive';
 import { CardView } from './CardView';
 import { sortHand } from '../hooks/useGame';
 
@@ -63,13 +64,32 @@ export function LargeTichuModal({ onDeclare, onPass }: LargeTichuModalProps) {
           </View>
           <Text style={S.title}>{'라지 티츄 선언'}</Text>
           <Text style={S.desc}>{'8장을 확인했습니다. 라지 티츄를 선언하시겠습니까?'}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.cardsScroll}>
-            {sorted.map((card, i) => (
-              <View key={i} style={i > 0 ? S.cardOverlap : undefined}>
-                <CardView card={card} size="normal" disabled />
+          {isMobile ? (
+            <View style={S.cardsTwoRow}>
+              <View style={S.cardsRow}>
+                {sorted.slice(0, 4).map((card, i) => (
+                  <View key={i} style={i > 0 ? S.cardOverlap : undefined}>
+                    <CardView card={card} size="normal" disabled />
+                  </View>
+                ))}
               </View>
-            ))}
-          </ScrollView>
+              <View style={S.cardsRow}>
+                {sorted.slice(4).map((card, i) => (
+                  <View key={i} style={i > 0 ? S.cardOverlap : undefined}>
+                    <CardView card={card} size="normal" disabled />
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : (
+            <View style={S.cardsRow}>
+              {sorted.map((card, i) => (
+                <View key={i} style={i > 0 ? S.cardOverlap : undefined}>
+                  <CardView card={card} size="normal" disabled />
+                </View>
+              ))}
+            </View>
+          )}
           <View style={S.scoreRow}>
             <Text style={S.scoreGood}>{'성공 +200'}</Text>
             <Text style={S.scoreSep}>{'/'}</Text>
@@ -98,24 +118,25 @@ const S = StyleSheet.create({
     flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
     justifyContent: 'center', alignItems: 'center', paddingHorizontal: 12,
   },
-  modal: { backgroundColor: COLORS.bgDark, borderRadius: 22, padding: 24, alignItems: 'center', width: '100%', maxWidth: 540, borderWidth: 2, borderColor: 'rgba(231,76,60,0.4)', shadowColor: '#e74c3c', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 16 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
-  icon: { fontSize: 36 },
-  timerBadge: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
+  modal: { backgroundColor: COLORS.bgDark, borderRadius: 22, padding: mob(20, 32), alignItems: 'center', width: mob('90%', '100%') as any, maxWidth: mob(500, 600), borderWidth: 2, borderColor: 'rgba(231,76,60,0.4)', shadowColor: '#e74c3c', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 16 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: mob(10, 14), marginBottom: mob(4, 6) },
+  icon: { fontSize: mob(36, 48) },
+  timerBadge: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, paddingHorizontal: mob(10, 14), paddingVertical: mob(4, 6) },
   timerUrgent: { backgroundColor: 'rgba(239,68,68,0.2)' },
-  timerText: { color: 'rgba(255,255,255,0.6)', fontSize: 16, fontWeight: '800' },
+  timerText: { color: 'rgba(255,255,255,0.6)', fontSize: mob(18, 20), fontWeight: '800' },
   timerTextUrgent: { color: '#ef4444' },
-  title: { color: '#e74c3c', fontSize: 22, fontWeight: '900', marginBottom: 6, textShadowColor: 'rgba(231,76,60,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 },
-  desc: { color: 'rgba(255,255,255,0.6)', fontSize: 13, textAlign: 'center', lineHeight: 18, marginBottom: 12 },
-  cardsScroll: { flexDirection: 'row', justifyContent: 'center', paddingHorizontal: 4, paddingVertical: 8 },
-  cardOverlap: { marginLeft: -10 },
-  scoreRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: 14 },
-  scoreGood: { color: '#10b981', fontSize: 15, fontWeight: '800' },
-  scoreSep: { color: 'rgba(255,255,255,0.3)', fontSize: 14 },
-  scoreBad: { color: '#ef4444', fontSize: 15, fontWeight: '800' },
-  btnRow: { flexDirection: 'row', gap: 12, width: '100%' },
-  passBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  passBtnText: { color: 'rgba(255,255,255,0.6)', fontSize: 16, fontWeight: '700' },
-  declareBtn: { flex: 1, backgroundColor: '#e74c3c', borderRadius: 12, paddingVertical: 14, alignItems: 'center', shadowColor: '#e74c3c', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.5, shadowRadius: 10, elevation: 6 },
-  declareBtnText: { color: '#fff', fontSize: 16, fontWeight: '900' },
+  title: { color: '#e74c3c', fontSize: mob(22, 30), fontWeight: '900', marginBottom: mob(4, 8), textShadowColor: 'rgba(231,76,60,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 },
+  desc: { color: 'rgba(255,255,255,0.6)', fontSize: mob(15, 18), textAlign: 'center', lineHeight: mob(20, 26), marginBottom: mob(8, 16) },
+  cardsTwoRow: { gap: 4, alignItems: 'center' },
+  cardsRow: { flexDirection: 'row', justifyContent: 'center', paddingHorizontal: mob(8, 12), paddingVertical: mob(2, 10) },
+  cardOverlap: { marginLeft: mob(-4, -14) },
+  scoreRow: { flexDirection: 'row', alignItems: 'center', gap: mob(8, 12), marginTop: mob(6, 10), marginBottom: mob(10, 18) },
+  scoreGood: { color: '#10b981', fontSize: mob(16, 20), fontWeight: '800' },
+  scoreSep: { color: 'rgba(255,255,255,0.3)', fontSize: mob(14, 18) },
+  scoreBad: { color: '#ef4444', fontSize: mob(16, 20), fontWeight: '800' },
+  btnRow: { flexDirection: 'row', gap: mob(10, 16), width: '100%' },
+  passBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, paddingVertical: mob(14, 16), alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  passBtnText: { color: 'rgba(255,255,255,0.6)', fontSize: mob(16, 20), fontWeight: '700' },
+  declareBtn: { flex: 1, backgroundColor: '#e74c3c', borderRadius: 12, paddingVertical: mob(14, 16), alignItems: 'center', shadowColor: '#e74c3c', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.5, shadowRadius: 10, elevation: 6 },
+  declareBtnText: { color: '#fff', fontSize: mob(16, 20), fontWeight: '900' },
 });

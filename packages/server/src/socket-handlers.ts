@@ -38,6 +38,51 @@ import {
   claimSeasonReward, getOrCreateCurrentSeason,
 } from './season.js';
 
+// ── 입력 검증 헬퍼 ──────────────────────────────────────────
+
+function isValidSeat(seat: unknown): seat is number {
+  return typeof seat === 'number' && Number.isInteger(seat) && seat >= 0 && seat <= 3;
+}
+
+function isValidNickname(nickname: unknown): nickname is string {
+  return typeof nickname === 'string' && nickname.length > 0 && nickname.length <= 20;
+}
+
+function isValidRoomName(name: unknown): name is string {
+  return typeof name === 'string' && name.length > 0 && name.length <= 30;
+}
+
+function isValidPassword(pw: unknown): pw is string {
+  return typeof pw === 'string' && pw.length <= 20;
+}
+
+function isValidPlayerId(id: unknown): id is string {
+  return typeof id === 'string' && id.length > 0 && id.length <= 100;
+}
+
+// ── 레이트 리미터 ───────────────────────────────────────────
+
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function rateLimitCheck(socketId: string, limit: number = 30, windowMs: number = 1000): boolean {
+  const now = Date.now();
+  let entry = rateLimitMap.get(socketId);
+  if (!entry || now >= entry.resetAt) {
+    entry = { count: 0, resetAt: now + windowMs };
+    rateLimitMap.set(socketId, entry);
+  }
+  entry.count++;
+  return entry.count <= limit;
+}
+
+// Clean up stale rate limit entries every 30 seconds
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitMap) {
+    if (now >= entry.resetAt) rateLimitMap.delete(key);
+  }
+}, 30_000);
+
 // ── 방 관리 ──────────────────────────────────────────────────
 
 const rooms = new Map<string, GameRoom>();
@@ -267,6 +312,16 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── 커스텀 방 생성 ──────────────────────────────────────
     socket.on('create_custom_room', (data: { roomName: string; password?: string; playerId: string; nickname: string }) => {
+      if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
+      if (!isValidPlayerId(data.playerId) || !isValidNickname(data.nickname)) {
+        socket.emit('error', { message: 'invalid_input' }); return;
+      }
+      if (data.roomName && !isValidRoomName(data.roomName)) {
+        socket.emit('error', { message: 'room_name_too_long' }); return;
+      }
+      if (data.password !== undefined && data.password !== null && !isValidPassword(data.password)) {
+        socket.emit('error', { message: 'password_too_long' }); return;
+      }
       const roomId = `custom_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
       const room = getOrCreateRoom(roomId);
       room.settings.isCustom = true;
@@ -301,6 +356,13 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── join_room ──────────────────────────────────────────
     socket.on('join_room', (data: { roomId: string; playerId: string; nickname: string; password?: string }) => {
+      if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
+      if (!isValidPlayerId(data.playerId) || !isValidNickname(data.nickname)) {
+        socket.emit('error', { message: 'invalid_input' }); return;
+      }
+      if (typeof data.roomId !== 'string' || data.roomId.length === 0 || data.roomId.length > 60) {
+        socket.emit('error', { message: 'invalid_input' }); return;
+      }
       const room = getOrCreateRoom(data.roomId);
 
       // 비밀번호 체크
@@ -442,12 +504,13 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── add_bot_to_seat (특정 자리에 봇 추가) ─────────────
     socket.on('add_bot_to_seat', (data: { seat: number }) => {
+      if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
+      if (!isValidSeat(data.seat)) { socket.emit('error', { message: 'invalid_seat' }); return; }
       console.log(`[add_bot_to_seat] seat=${data.seat}, playerRoomId=${playerRoomId}, playerSeat=${playerSeat}`);
       const room = getRoom();
       if (!room) { console.log('[add_bot_to_seat] no room'); return; }
       if (room.phase !== 'WAITING_FOR_PLAYERS') { console.log('[add_bot_to_seat] wrong phase:', room.phase); return; }
       const s = data.seat;
-      if (s < 0 || s > 3) return;
       if (room.players[s] !== null) { console.log('[add_bot_to_seat] seat occupied'); return; }
 
       const botNames = ['봇 A', '봇 B', '봇 C', '봇 D'];
@@ -466,11 +529,11 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── remove_bot (봇 제거) ────────────────────────────────
     socket.on('remove_bot', (data: { seat: number }) => {
+      if (!isValidSeat(data.seat)) { socket.emit('error', { message: 'invalid_seat' }); return; }
       const room = getRoom();
       if (!room) return;
       if (room.phase !== 'WAITING_FOR_PLAYERS') return;
       const s = data.seat;
-      if (s < 0 || s > 3) return;
       if (!room.players[s]?.isBot) return; // 봇이 아님
 
       room.players[s] = null;
@@ -484,6 +547,8 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── swap_seat (대기 중 좌석 교환 → 팀 변경) ──────────
     socket.on('swap_seat', (data: { targetSeat: number }) => {
+      if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
+      if (!isValidSeat(data.targetSeat)) { socket.emit('error', { message: 'invalid_seat' }); return; }
       const room = getRoom();
       if (!room) return;
       if (room.phase !== 'WAITING_FOR_PLAYERS') {
@@ -491,7 +556,7 @@ export function registerSocketHandlers(io: Server): void {
         return;
       }
       const target = data.targetSeat;
-      if (target < 0 || target > 3 || target === playerSeat) return;
+      if (target === playerSeat) return;
 
       // 두 좌석의 플레이어 교환
       const myPlayer = room.players[playerSeat];
@@ -612,12 +677,7 @@ export function registerSocketHandlers(io: Server): void {
       if (!result.ok) { console.log(`[play_cards] REJECTED: ${result.error}`); socket.emit('invalid_play', { reason: result.error }); return; }
       broadcastEvents(io, room, result.events);
 
-      // Start bomb window if applicable (not for dog leads, which set tableCards=null)
-      if (room.phase === 'TRICK_PLAY' && !room.bombWindow && room.tableCards) {
-        startBombWindowPhase(io, room);
-      } else {
-        handlePostPlay(io, room);
-      }
+      handlePostPlay(io, room);
     });
 
     // ── pass_turn ──────────────────────────────────────────
@@ -633,12 +693,18 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── dragon_give ────────────────────────────────────────
     socket.on('dragon_give', (data: { targetSeat: number }) => {
+      if (!isValidSeat(data.targetSeat)) { socket.emit('invalid_play', { reason: 'invalid_seat' }); return; }
       const room = getRoom();
       if (!room) return;
-      // dragonGivePending의 winningSeat을 사용 (모달은 해당 플레이어에게만 뜸)
-      const giveSeat = room.dragonGivePending?.winningSeat ?? playerSeat;
-      console.log(`[dragon_give] playerSeat=${playerSeat}, giveSeat=${giveSeat}, target=${data.targetSeat}`);
-      const result = dragonGive(room, giveSeat, data.targetSeat);
+      // Authorization: only the player who won the dragon trick may choose
+      if (!room.dragonGivePending) {
+        socket.emit('invalid_play', { reason: 'no_dragon_pending' }); return;
+      }
+      if (room.dragonGivePending.winningSeat !== playerSeat) {
+        socket.emit('invalid_play', { reason: 'not_your_dragon' }); return;
+      }
+      console.log(`[dragon_give] playerSeat=${playerSeat}, target=${data.targetSeat}`);
+      const result = dragonGive(room, playerSeat, data.targetSeat);
       if (!result.ok) { console.log(`[dragon_give] REJECTED: ${result.error}`); socket.emit('invalid_play', { reason: result.error }); return; }
       broadcastEvents(io, room, result.events);
 
@@ -678,40 +744,67 @@ export function registerSocketHandlers(io: Server): void {
         const result = playCards(room, playerSeat, data.cards);
         if (!result.ok) { socket.emit('invalid_play', { reason: result.error }); return; }
         broadcastEvents(io, room, result.events);
-        if (room.phase === 'TRICK_PLAY' && !room.bombWindow && room.tableCards) {
-          startBombWindowPhase(io, room);
-        } else {
-          handlePostPlay(io, room);
-        }
+        handlePostPlay(io, room);
         return;
       }
 
-      // 내 턴이 아닌데 폭탄 인터럽트
+      // 내 턴이 아닌데 폭탄 인터럽트 — 즉시 처리
       const topPlay = room.tableCards;
       if (!topPlay) { socket.emit('invalid_play', { reason: 'no_table_cards' }); return; }
-      const lastSeat = room.currentTrick.lastPlayedSeat;
 
-      // 턴 타이머 정지 + bombWindow 생성
-      const bwEvents = startBombWindow(room, lastSeat, topPlay);
-      broadcastEvents(io, room, bwEvents);
-
-      // 이제 bombWindow가 있으므로 submitBomb 가능
-      const result = submitBomb(room, playerSeat, data.cards);
-      if (!result.ok) {
-        // 실패 시 bombWindow 롤백 + 턴 타이머 복원
-        room.bombWindow = null;
-        startTurnTimer(io, room);
-        socket.emit('invalid_play', { reason: result.error });
+      // 폭탄 검증 + 적용
+      const { validateHand, canBeat } = require('@tichu/shared');
+      const hand = validateHand(data.cards);
+      if (!hand || (hand.type !== 'four_bomb' && hand.type !== 'straight_flush_bomb')) {
+        socket.emit('invalid_play', { reason: 'not_a_bomb' });
         return;
       }
-      broadcastEvents(io, room, result.events);
+      if (!canBeat(topPlay, hand)) {
+        socket.emit('invalid_play', { reason: 'bomb_not_strong_enough' });
+        return;
+      }
 
-      // bombWindow 해소 타이머 시작
-      startBombWindowResolveTimer(io, room);
+      // 핸드에서 카드 제거
+      const bombCards = data.cards;
+      room.hands[playerSeat] = room.hands[playerSeat]!.filter((c: Card) => {
+        return !bombCards.some((bc: Card) => {
+          if (bc.type === 'special' && c.type === 'special') return bc.specialType === c.specialType;
+          if (bc.type === 'normal' && c.type === 'normal') return bc.suit === c.suit && bc.rank === c.rank;
+          return false;
+        });
+      });
+
+      // 테이블 갱신
+      clearTurnTimer(room);
+      room.tableCards = hand;
+      room.currentTrick.plays.push({ seat: playerSeat, hand });
+      room.currentTrick.consecutivePasses = 0;
+      room.currentTrick.lastPlayedSeat = playerSeat;
+
+      // 나감 처리
+      if (room.hands[playerSeat]!.length === 0 && !room.finishOrder.includes(playerSeat)) {
+        room.finishOrder.push(playerSeat);
+        io.to(room.roomId).emit('player_finished', { seat: playerSeat, rank: room.finishOrder.length });
+      }
+
+      // 브로드캐스트
+      io.to(room.roomId).emit('bomb_played', { seat: playerSeat, bomb: hand });
+      // 핸드 카운트 업데이트
+      const counts: Record<number, number> = {};
+      for (let s = 0; s < 4; s++) counts[s] = room.hands[s]!.length;
+      io.to(room.roomId).emit('hand_counts', { counts });
+
+      // 턴을 폭탄 낸 사람에게 이전
+      room.currentTurn = playerSeat;
+      handlePostPlay(io, room);
     });
 
     // ── queue_match (자동 매칭 큐 참가) ─────────────────────
     socket.on('queue_match', (data: { playerId: string; nickname: string }) => {
+      if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
+      if (!isValidPlayerId(data.playerId) || !isValidNickname(data.nickname)) {
+        socket.emit('error', { message: 'invalid_input' }); return;
+      }
       playerOnline({ playerId: data.playerId, nickname: data.nickname, socketId: socket.id, status: 'matching' });
       addToQueue({
         playerId: data.playerId,
@@ -761,6 +854,10 @@ export function registerSocketHandlers(io: Server): void {
 
     // 친구 요청 보내기
     socket.on('friend_request', (data: { fromId: string; fromNickname: string; toId: string }) => {
+      if (!rateLimitCheck(socket.id, 10)) { socket.emit('friend_error', { error: 'rate_limited' }); return; }
+      if (!isValidPlayerId(data.fromId) || !isValidNickname(data.fromNickname) || !isValidPlayerId(data.toId)) {
+        socket.emit('friend_error', { error: 'invalid_input' }); return;
+      }
       const result = sendFriendRequest(data.fromId, data.fromNickname, data.toId);
       if (!result.ok) {
         socket.emit('friend_error', { error: result.error });
@@ -783,6 +880,10 @@ export function registerSocketHandlers(io: Server): void {
 
     // 친구 요청 수락
     socket.on('friend_accept', (data: { fromId: string; myId: string }) => {
+      if (!rateLimitCheck(socket.id, 10)) { socket.emit('friend_error', { error: 'rate_limited' }); return; }
+      if (!isValidPlayerId(data.fromId) || !isValidPlayerId(data.myId)) {
+        socket.emit('friend_error', { error: 'invalid_input' }); return;
+      }
       if (acceptFriendRequest(data.fromId, data.myId)) {
         socket.emit('friend_list', { friends: getFriendList(data.myId) });
         socket.emit('friend_requests', { requests: getPendingRequests(data.myId) });
@@ -796,12 +897,20 @@ export function registerSocketHandlers(io: Server): void {
 
     // 친구 요청 거절
     socket.on('friend_reject', (data: { fromId: string; myId: string }) => {
+      if (!rateLimitCheck(socket.id, 10)) { socket.emit('friend_error', { error: 'rate_limited' }); return; }
+      if (!isValidPlayerId(data.fromId) || !isValidPlayerId(data.myId)) {
+        socket.emit('friend_error', { error: 'invalid_input' }); return;
+      }
       rejectFriendRequest(data.fromId, data.myId);
       socket.emit('friend_requests', { requests: getPendingRequests(data.myId) });
     });
 
     // 친구 삭제
     socket.on('friend_remove', (data: { myId: string; friendId: string }) => {
+      if (!rateLimitCheck(socket.id, 10)) { socket.emit('friend_error', { error: 'rate_limited' }); return; }
+      if (!isValidPlayerId(data.myId) || !isValidPlayerId(data.friendId)) {
+        socket.emit('friend_error', { error: 'invalid_input' }); return;
+      }
       removeFriend(data.myId, data.friendId);
       socket.emit('friend_list', { friends: getFriendList(data.myId) });
       const friend = getOnlinePlayer(data.friendId);
@@ -1067,12 +1176,7 @@ function startTurnTimer(io: Server, room: GameRoom): void {
     const result = handleTurnTimeout(room);
     if (result.ok) {
       broadcastEvents(io, room, result.events);
-      // Auto-play on lead timeout may need bomb window
-      if (room.phase === 'TRICK_PLAY' && !room.bombWindow && room.tableCards) {
-        startBombWindowPhase(io, room);
-      } else {
-        handlePostPlay(io, room);
-      }
+      handlePostPlay(io, room);
     }
   }, room.settings.turnTimeLimit);
 
@@ -1096,19 +1200,18 @@ function scheduleBotAction(io: Server, room: GameRoom, seat: number, turnId: num
     if (decision.action === 'play' && decision.cards) {
       console.log(`[bot] seat=${seat} play ${decision.cards.length} cards, phoenixAs=${decision.phoenixAs}`);
       result = playCards(room, seat, decision.cards, decision.phoenixAs, decision.wish);
-    } else {
+    } else if (decision.action === 'pass' && room.tableCards !== null) {
       console.log(`[bot] seat=${seat} pass`);
       result = passTurn(room, seat);
+    } else {
+      // 리드에서 패스 시도 → 타임아웃 처리로 폴백
+      console.warn(`[bot] seat=${seat} tried to pass on lead, falling back to timeout`);
+      result = handleTurnTimeout(room);
     }
 
     if (result.ok) {
       broadcastEvents(io, room, result.events);
-      // Bot play: start bomb window if applicable
-      if (decision.action === 'play' && room.phase === 'TRICK_PLAY' && !room.bombWindow && room.tableCards) {
-        startBombWindowPhase(io, room);
-      } else {
-        handlePostPlay(io, room);
-      }
+      handlePostPlay(io, room);
     } else {
       console.warn(`[bot] seat=${seat} action failed: ${result.error}, falling back to timeout`);
       // 실패 시 즉시 타임아웃 처리로 폴백

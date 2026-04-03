@@ -10,12 +10,8 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 
-// 좌석별 고유 색상 (시인성 좋은 4색)
 const SEAT_COLORS = [
-  '#22d3ee', // seat 0: 시안
-  '#f472b6', // seat 1: 핑크
-  '#a78bfa', // seat 2: 보라
-  '#fb923c', // seat 3: 오렌지
+  '#22d3ee', '#f472b6', '#a78bfa', '#fb923c',
 ];
 
 interface CircleTimerProps {
@@ -26,12 +22,11 @@ interface CircleTimerProps {
   seatColor?: string;
 }
 
-// 시간 비율에 따라 색상을 연속적으로 변화
 function getTimerColor(ratio: number): string {
-  if (ratio > 0.6) return '#22d3ee';  // 형광 시안 (여유 — 선명하게 빛남)
-  if (ratio > 0.35) return '#fbbf24'; // 앰버 (주의)
-  if (ratio > 0.17) return '#f97316'; // 오렌지 (경고)
-  return '#ef4444';                    // 빨강 (긴급)
+  if (ratio > 0.6) return '#22d3ee';
+  if (ratio > 0.35) return '#fbbf24';
+  if (ratio > 0.17) return '#f97316';
+  return '#ef4444';
 }
 
 export { SEAT_COLORS };
@@ -39,175 +34,155 @@ export { SEAT_COLORS };
 export function CircleTimer({ remainingSec, totalSec, playerName, isMyTurn, seatColor }: CircleTimerProps) {
   const ratio = totalSec > 0 ? remainingSec / totalSec : 0;
   const color = getTimerColor(ratio);
+  const urgent = remainingSec <= 5 && remainingSec > 0;
+  const warning = remainingSec <= 10 && remainingSec > 0;
 
-  // 글로우/pulse 애니메이션
-  const glowOpacity = useSharedValue(0.7);
-  const ringScale = useSharedValue(1);
-  // 흔들림 (10초 이하부터 시작, 5초 이하에서 강하게)
-  const shakeX = useSharedValue(0);
+  // 흔들림 애니메이션
+  const shakeRotate = useSharedValue(0);
+  const bellScale = useSharedValue(1);
 
   useEffect(() => {
-    if (remainingSec <= 5 && remainingSec > 0) {
-      // 5초 이하: 강한 pulse + 빠른 흔들림
-      glowOpacity.value = withRepeat(
+    if (urgent) {
+      shakeRotate.value = withRepeat(
         withSequence(
-          withTiming(1, { duration: 300, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0.3, { duration: 300, easing: Easing.inOut(Easing.ease) }),
-        ),
-        -1, false,
+          withTiming(-8, { duration: 50 }),
+          withTiming(8, { duration: 50 }),
+          withTiming(-6, { duration: 50 }),
+          withTiming(6, { duration: 50 }),
+          withTiming(0, { duration: 50 }),
+        ), -1, false,
       );
-      ringScale.value = withRepeat(
+      bellScale.value = withRepeat(
         withSequence(
-          withTiming(1.08, { duration: 300 }),
-          withTiming(0.97, { duration: 300 }),
-        ),
-        -1, false,
+          withTiming(1.1, { duration: 150 }),
+          withTiming(0.95, { duration: 150 }),
+        ), -1, false,
       );
-      shakeX.value = withRepeat(
+    } else if (warning) {
+      shakeRotate.value = withRepeat(
         withSequence(
-          withTiming(-3, { duration: 60 }),
-          withTiming(3, { duration: 60 }),
-          withTiming(-2, { duration: 60 }),
-          withTiming(2, { duration: 60 }),
-          withTiming(0, { duration: 60 }),
-        ),
-        -1, false,
-      );
-    } else if (remainingSec <= 10 && remainingSec > 0) {
-      // 10초 이하: 부드러운 pulse + 약한 흔들림
-      glowOpacity.value = withRepeat(
-        withSequence(
-          withTiming(0.9, { duration: 500, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0.5, { duration: 500, easing: Easing.inOut(Easing.ease) }),
-        ),
-        -1, false,
-      );
-      ringScale.value = withRepeat(
-        withSequence(
-          withTiming(1.04, { duration: 500 }),
-          withTiming(1, { duration: 500 }),
-        ),
-        -1, false,
-      );
-      shakeX.value = withRepeat(
-        withSequence(
-          withTiming(-1.5, { duration: 100 }),
-          withTiming(1.5, { duration: 100 }),
+          withTiming(-3, { duration: 100 }),
+          withTiming(3, { duration: 100 }),
           withTiming(0, { duration: 100 }),
-        ),
-        -1, false,
+        ), -1, false,
       );
+      bellScale.value = withTiming(1, { duration: 200 });
     } else {
-      glowOpacity.value = withTiming(0.7, { duration: 300 });
-      ringScale.value = withTiming(1, { duration: 300 });
-      shakeX.value = withTiming(0, { duration: 200 });
+      shakeRotate.value = withTiming(0, { duration: 200 });
+      bellScale.value = withTiming(1, { duration: 200 });
     }
-  }, [remainingSec <= 5, remainingSec <= 10]);
+  }, [urgent, warning]);
 
-  const animStyle = useAnimatedStyle(() => ({
-    opacity: glowOpacity.value,
+  const shakeStyle = useAnimatedStyle(() => ({
     transform: [
-      { scale: ringScale.value },
-      { translateX: shakeX.value },
+      { rotate: `${shakeRotate.value}deg` },
+      { scale: bellScale.value },
     ],
   }));
 
+  const size = mob(52, 72);
+  const bellSize = mob(14, 18);
+  const legH = mob(6, 8);
+
   return (
-    <View style={styles.container}>
-      {isMyTurn ? (
-        <Text style={styles.playerNameMine}>{'내 차례'}</Text>
-      ) : playerName ? (
-        <Text style={styles.playerName}>
-          <Text style={{ color: '#fff', fontWeight: '900', textShadowColor: seatColor ?? '#000', textShadowRadius: 6, textShadowOffset: { width: 0, height: 0 } }}>{playerName}</Text>
-          <Text style={{ color: 'rgba(255,255,255,0.45)', fontWeight: '600' }}>{'의 차례'}</Text>
-        </Text>
-      ) : null}
-      <Animated.View style={[
-        styles.outerRing,
-        animStyle,
-        {
-          borderColor: color,
-          shadowColor: color,
-        },
-      ]}>
-        <View style={styles.innerCircle}>
-          <Text style={styles.timerNumber}>
-            {remainingSec}
-          </Text>
-          <Text style={styles.timerUnit}>초</Text>
+    <View style={S.container}>
+      <Animated.View style={[S.alarmWrap, shakeStyle]}>
+        {/* 상단 종 2개 */}
+        <View style={S.bellRow}>
+          <View style={[S.bell, { width: bellSize, height: bellSize, borderRadius: bellSize / 2, borderColor: color }]} />
+          <View style={[S.bellBar, { backgroundColor: color }]} />
+          <View style={[S.bell, { width: bellSize, height: bellSize, borderRadius: bellSize / 2, borderColor: color }]} />
+        </View>
+        {/* 시계 본체 */}
+        <View style={[S.clockBody, { width: size, height: size, borderRadius: size / 2, borderColor: color, shadowColor: color }]}>
+          <View style={[S.clockFace, { width: size - mob(8, 10), height: size - mob(8, 10), borderRadius: (size - mob(8, 10)) / 2 }]}>
+            <Text style={[S.number, { color: urgent ? '#ef4444' : '#fff' }]}>
+              {remainingSec}
+            </Text>
+          </View>
+        </View>
+        {/* 하단 다리 2개 */}
+        <View style={S.legRow}>
+          <View style={[S.leg, { height: legH, backgroundColor: color }]} />
+          <View style={{ width: mob(20, 30) }} />
+          <View style={[S.leg, { height: legH, backgroundColor: color }]} />
         </View>
       </Animated.View>
-      {/* 하단 바 (진행률) */}
-      <View style={styles.barBg}>
-        <View style={[
-          styles.barFill,
-          { width: `${ratio * 100}%`, backgroundColor: color },
-        ]} />
+      {/* 진행률 바 */}
+      <View style={S.barBg}>
+        <View style={[S.barFill, { width: `${ratio * 100}%`, backgroundColor: color }]} />
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const S = StyleSheet.create({
   container: {
     alignItems: 'center',
-    gap: 3,
+    gap: mob(2, 4),
   },
-  playerName: {
-    color: '#a0c4a0',
-    fontSize: 13,
-    fontWeight: 'bold',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+  alarmWrap: {
+    alignItems: 'center',
   },
-  playerNameMine: {
-    color: '#FFD700',
-    textShadowColor: 'rgba(255,215,0,0.5)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
+  // 종
+  bellRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    marginBottom: mob(-4, -5),
+    zIndex: 1,
   },
-  outerRing: {
-    width: mob(48, 68),
-    height: mob(48, 68),
-    borderRadius: mob(24, 34),
+  bell: {
+    borderWidth: mob(2, 3),
+    backgroundColor: 'rgba(0,0,0,0.3)',
+  },
+  bellBar: {
+    width: mob(16, 22),
+    height: mob(3, 4),
+    borderRadius: 2,
+    marginHorizontal: mob(-2, -3),
+    marginBottom: mob(2, 3),
+  },
+  // 시계 본체
+  clockBody: {
     borderWidth: mob(3, 4),
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.2)',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 18,
-    elevation: 12,
-    backgroundColor: 'rgba(0,0,0,0.15)',
+    shadowOpacity: 0.7,
+    shadowRadius: 12,
+    elevation: 10,
   },
-  innerCircle: {
-    width: mob(38, 54),
-    height: mob(38, 54),
-    borderRadius: mob(19, 27),
-    backgroundColor: 'rgba(8, 20, 12, 0.9)',
+  clockFace: {
+    backgroundColor: 'rgba(8,20,12,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.06)',
   },
-  timerNumber: {
-    color: '#ffffff',
-    fontSize: mob(18, 26),
+  number: {
+    fontSize: mob(20, 28),
     fontWeight: '900',
-    lineHeight: 28,
-    textShadowColor: 'rgba(255,255,255,0.3)',
+    textShadowColor: 'rgba(255,255,255,0.2)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 4,
   },
-  timerUnit: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 10,
-    fontWeight: '600',
-    marginTop: -2,
+  // 다리
+  legRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: mob(-3, -4),
   },
+  leg: {
+    width: mob(3, 4),
+    borderRadius: mob(1, 2),
+    transform: [{ rotate: '20deg' }],
+  },
+  // 진행률 바
   barBg: {
-    width: 60,
-    height: 4,
+    width: mob(50, 70),
+    height: mob(3, 4),
     backgroundColor: 'rgba(0,0,0,0.4)',
     borderRadius: 2,
     overflow: 'hidden',

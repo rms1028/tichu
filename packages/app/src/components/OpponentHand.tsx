@@ -121,12 +121,7 @@ export function OpponentHand({
       <View style={[styles.partnerRow, finished && styles.finishedContainer]}>
         {/* 좌: 아바타 + 이름 */}
         <View style={styles.partnerLeft}>
-          {wonBubble !== null && (
-            <View style={styles.wonBubble}>
-              <Text style={styles.wonBubbleText}>🏆 {wonBubble > 0 ? `+${wonBubble}` : '승리!'}</Text>
-            </View>
-          )}
-          {passBubble && !wonBubble && (
+          {passBubble && (
             <View style={styles.passBubble}>
               <Text style={styles.passBubbleText}>패스!</Text>
             </View>
@@ -174,15 +169,9 @@ export function OpponentHand({
 
   return (
     <View style={[styles.container, finished && styles.finishedContainer]}>
-      {/* 트릭 승리 말풍선 */}
-      {wonBubble !== null && (
-        <View style={[styles.wonBubble, position === 'left' && styles.bubbleRight, position === 'right' && styles.bubbleLeft]}>
-          <Text style={styles.wonBubbleText}>🏆 {wonBubble > 0 ? `+${wonBubble}` : '승리!'}</Text>
-        </View>
-      )}
-      {/* 패스 말풍선 */}
-      {passBubble && !wonBubble && (
-        <View style={[styles.passBubble, position === 'left' && styles.bubbleRight, position === 'right' && styles.bubbleLeft]}>
+      {/* 패스 말풍선 — flow 배치, 아바타 위에 자연스럽게 */}
+      {passBubble && (
+        <View style={styles.passBubble}>
           <Text style={styles.passBubbleText}>패스!</Text>
         </View>
       )}
@@ -193,6 +182,10 @@ export function OpponentHand({
           <View style={styles.emoteTail} />
         </View>
       )}
+      {/* 이름 (아바타 위) */}
+      <Text style={[styles.nickname, !connected && styles.nicknameDimmed, nickColor ? { color: nickColor } : undefined]} numberOfLines={1}>
+        {nickname}
+      </Text>
       {/* 아바타 프레임 */}
       <View style={styles.avatarFrame}>
         <View style={[
@@ -207,10 +200,6 @@ export function OpponentHand({
           </View>
         </View>
       </View>
-      {/* 이름 */}
-      <Text style={[styles.nickname, !connected && styles.nicknameDimmed, nickColor ? { color: nickColor } : undefined]} numberOfLines={1}>
-        {nickname}
-      </Text>
       {/* 카드 더미 + 숫자 */}
       {!finished && (
         <View style={styles.deckWrap}>
@@ -272,6 +261,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 2,
     gap: 2,
+    overflow: 'visible' as const,
   },
   finishedContainer: {
     opacity: 0.35,
@@ -397,60 +387,41 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 
-  // 말풍선 방향 (좌측 상대→오른쪽에 표시, 우측 상대→왼쪽에 표시)
-  bubbleRight: {
-    top: undefined,
-    left: '100%',
-    marginLeft: 6,
-  },
-  bubbleLeft: {
-    top: undefined,
-    right: '100%',
-    left: undefined,
-    marginRight: 6,
-  },
   // 트릭 승리 말풍선
   wonBubble: {
     position: 'absolute',
-    top: -28,
+    top: mob(-28, -50),
+    left: mob(-14, -40),
     zIndex: 100,
     backgroundColor: 'rgba(16,185,129,0.9)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    borderRadius: mob(10, 14),
+    paddingHorizontal: mob(10, 24),
+    paddingVertical: mob(4, 10),
     shadowColor: '#10b981',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.4,
     shadowRadius: 4,
     elevation: 8,
-    flexDirection: 'row',
+    width: mob(65, 120),
+    alignItems: 'center' as const,
   },
   wonBubbleText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: mob(12, 22),
     fontWeight: '900',
   },
-  // 패스 말풍선
+  // 패스 말풍선 — 일반 flow, 아바타 위에 배치
   passBubble: {
-    position: 'absolute',
-    top: -28,
-    zIndex: 100,
     backgroundColor: 'rgba(100,116,139,0.9)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 8,
-    flexDirection: 'row',
+    borderRadius: mob(8, 12),
+    paddingHorizontal: mob(6, 14),
+    paddingVertical: mob(2, 4),
+    marginBottom: mob(2, 4),
   },
   passBubbleText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: mob(10, 16),
     fontWeight: '900',
-    borderTopColor: 'rgba(100,116,139,0.9)',
   },
   // 패스 뱃지 (작은 표시)
   passBadge: {

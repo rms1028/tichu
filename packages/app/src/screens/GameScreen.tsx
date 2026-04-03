@@ -600,9 +600,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: mob(8, 16),
-    paddingTop: mob(2, 2),
-    paddingBottom: mob(1, 1),
+    paddingHorizontal: mob(4, 16),
+    paddingTop: mob(1, 2),
+    paddingBottom: mob(0, 1),
   },
   partnerCenter: {
     flex: 1,
@@ -617,10 +617,11 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
   sideOpponent: {
-    width: mob(65, 100),
+    width: mob(56, 100),
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: mob(3, 10),
+    overflow: 'visible' as const,
+    paddingHorizontal: mob(2, 10),
   },
   tableCenter: {
     flex: 1,
@@ -628,8 +629,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tableCenterGlow: {
-    borderWidth: 1,
-    borderColor: 'transparent',
+    borderWidth: 0,
     borderRadius: 16,
     marginVertical: 2,
     shadowOffset: { width: 0, height: 0 },
@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   bottomArea: {
-    paddingBottom: mob(4, 16),
+    paddingBottom: mob(2, 16),
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.06)',
     shadowColor: '#000',
@@ -869,8 +869,8 @@ const styles = StyleSheet.create({
   },
   turnAndActions: {
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: mob(4, 2),
+    paddingHorizontal: 8,
+    paddingVertical: mob(1, 2),
     position: 'relative',
   },
   topActionRow: {
