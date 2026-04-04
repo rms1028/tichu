@@ -1,0 +1,9 @@
+{
+  "buildCommand": "cd packages/shared && npm run build && cd ../app && npx expo export --platform web",
+  "outputDirectory": "packages/app/dist",
+  "installCommand": "npm install",
+  "framework": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
