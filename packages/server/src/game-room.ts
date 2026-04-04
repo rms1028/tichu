@@ -142,6 +142,8 @@ export interface GameRoom {
   isFirstLead: boolean;
   // 각 플레이어가 이번 라운드에서 카드를 낸 적 있는지
   hasPlayedCards: Record<number, boolean>;
+  // 방장 playerId (좌석 이동해도 유지)
+  hostPlayerId: string | null;
 }
 
 // ── 생성 / 초기화 ───────────────────────────────────────────
@@ -173,6 +175,7 @@ export function createGameRoom(roomId: string, settings?: Partial<RoomSettings>)
     bombWindowIdCounter: 0,
     isFirstLead: true,
     hasPlayedCards: { 0: false, 1: false, 2: false, 3: false },
+    hostPlayerId: null,
   };
 }
 

@@ -99,8 +99,9 @@ export function useSocket() {
     });
 
     // ── 방 참가 ────────────────────────────────────────────
-    socket.on('room_joined', (data: { seat: number; roomId: string; players: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> }) => {
+    socket.on('room_joined', (data: { seat: number; roomId: string; players: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null>; hostPlayerId?: string }) => {
       store.setRoomInfo(data.roomId, data.seat, data.players);
+      if (data.hostPlayerId) useGameStore.setState({ hostPlayerId: data.hostPlayerId });
     });
 
     socket.on('room_list', (data: { rooms: { roomId: string; roomName: string; playerCount: number; hasPassword: boolean }[] }) => {
@@ -429,8 +430,10 @@ export function useSocket() {
     });
 
     // ── 좌석 교환 ──────────────────────────────────────────
-    socket.on('seats_updated', (data: { players: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> }) => {
-      useGameStore.setState({ players: data.players });
+    socket.on('seats_updated', (data: { players: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null>; hostPlayerId?: string }) => {
+      const updates: any = { players: data.players };
+      if (data.hostPlayerId) updates.hostPlayerId = data.hostPlayerId;
+      useGameStore.setState(updates);
     });
 
     socket.on('my_seat_changed', (data: { seat: number }) => {

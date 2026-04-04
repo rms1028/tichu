@@ -117,6 +117,7 @@ export interface GameState {
   dbUserId: string | null;
   leaderboard: { id: string; nickname: string; xp: number; wins: number; totalGames: number }[];
   customRoomList: { roomId: string; roomName: string; playerCount: number; hasPassword: boolean }[];
+  hostPlayerId: string | null;
   seasonInfo: {
     seasonNumber: number; seasonName: string; remainingDays: number;
     myRating: number; myPeakRating: number; myRank: number;
@@ -212,6 +213,7 @@ const INITIAL_STATE = {
   dbUserId: null as string | null,
   leaderboard: [] as { id: string; nickname: string; xp: number; wins: number; totalGames: number }[],
   customRoomList: [] as { roomId: string; roomName: string; playerCount: number; hasPassword: boolean }[],
+  hostPlayerId: null as string | null,
   seasonInfo: null as {
     seasonNumber: number; seasonName: string; remainingDays: number;
     myRating: number; myPeakRating: number; myRank: number;

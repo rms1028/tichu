@@ -65,7 +65,9 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
 
   const filledCount = slots.filter(s => s.name !== null).length;
   const humanCount = slots.filter(s => s.name !== null && !s.isBot).length;
-  const isHost = mySeat === 0 || (!hasJoinedRoom && mode === 'custom');
+  const hostPlayerId = useGameStore((s) => s.hostPlayerId);
+  const myPlayerId = useGameStore((s) => s.playerId);
+  const isHost = (hostPlayerId && myPlayerId) ? hostPlayerId === myPlayerId : (mySeat === 0 || (!hasJoinedRoom && mode === 'custom'));
   const canStart = filledCount === 4;
 
   // 경과 시간
@@ -237,15 +239,20 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
           {mode === 'custom' && isHost && (
             <View style={S.hostActions}>
               <TouchableOpacity style={S.shuffleBtn} onPress={onShuffleTeams} activeOpacity={0.7}>
-                <Text style={S.shuffleBtnText}>{'🔀 팀 셔플'}</Text>
+                <Text style={S.shuffleBtnText}>{'🔀 셔플'}</Text>
               </TouchableOpacity>
+              {filledCount < 4 && (
+                <TouchableOpacity style={S.botFillBtn} onPress={onAddBots} activeOpacity={0.7}>
+                  <Text style={S.botFillText}>{'🤖 봇 채우기'}</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={[S.startGameBtn, !canStart && S.startGameBtnDisabled]}
                 onPress={onStartGame}
                 disabled={!canStart}
               >
                 <Text style={[S.startGameText, !canStart && { opacity: 0.5 }]}>
-                  {canStart ? '🎮 게임 시작' : `🎮 게임 시작 (${filledCount}/4)`}
+                  {canStart ? '🎮 시작' : `🎮 시작 (${filledCount}/4)`}
                 </Text>
               </TouchableOpacity>
             </View>

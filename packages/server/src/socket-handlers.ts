@@ -204,6 +204,12 @@ export function registerSocketHandlers(io: Server): void {
     let playerSeat: number = -1;
     let dbUserId: string | null = null;
 
+    function isRoomHost(room: GameRoom): boolean {
+      if (!room.hostPlayerId) return playerSeat === 0;
+      const player = room.players[playerSeat];
+      return player?.playerId === room.hostPlayerId;
+    }
+
     // 소켓 에러 핸들링 — 연결 끊김 방지
     socket.on('error', (err) => {
       console.error(`[socket error] ${socket.id}:`, err);
@@ -338,6 +344,7 @@ export function registerSocketHandlers(io: Server): void {
       room.settings.isCustom = true;
       room.settings.roomName = data.roomName || '티츄 방';
       if (data.password) room.settings.password = data.password;
+      room.hostPlayerId = data.playerId;
 
       // 방장 seat 0으로 입장
       room.players[0] = {
@@ -358,7 +365,7 @@ export function registerSocketHandlers(io: Server): void {
         playersInfo[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
       }
 
-      socket.emit('room_joined', { seat: 0, roomId, players: playersInfo });
+      socket.emit('room_joined', { seat: 0, roomId, players: playersInfo, hostPlayerId: room.hostPlayerId });
       playerOnline({ playerId: data.playerId, nickname: data.nickname, socketId: socket.id, status: 'ingame', roomId });
 
       // 전체에게 방 목록 갱신 알림
@@ -411,7 +418,7 @@ export function registerSocketHandlers(io: Server): void {
         playersInfo[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
       }
 
-      socket.emit('room_joined', { seat, roomId: data.roomId, players: playersInfo });
+      socket.emit('room_joined', { seat, roomId: data.roomId, players: playersInfo, hostPlayerId: room.hostPlayerId });
 
       // 온라인 상태 등록
       playerOnline({ playerId: data.playerId, nickname: data.nickname, socketId: socket.id, status: 'ingame', roomId: data.roomId });
@@ -438,7 +445,7 @@ export function registerSocketHandlers(io: Server): void {
       if (!room) return;
       if (room.phase !== 'WAITING_FOR_PLAYERS') return;
       // 커스텀 방은 seat 0이 방장
-      if (room.settings.isCustom && playerSeat !== 0) {
+      if (room.settings.isCustom && !isRoomHost(room)) {
         socket.emit('error', { message: 'not_room_host' });
         return;
       }
@@ -478,7 +485,7 @@ export function registerSocketHandlers(io: Server): void {
         return;
       }
       // 커스텀 방은 방장만
-      if (room.settings.isCustom && playerSeat !== 0) {
+      if (room.settings.isCustom && !isRoomHost(room)) {
         socket.emit('error', { message: 'not_room_host' });
         return;
       }
@@ -520,7 +527,7 @@ export function registerSocketHandlers(io: Server): void {
       const room = getRoom();
       if (!room) return;
       if (room.phase !== 'WAITING_FOR_PLAYERS') return;
-      if (room.settings.isCustom && playerSeat !== 0) { socket.emit('error', { message: 'not_room_host' }); return; }
+      if (room.settings.isCustom && !isRoomHost(room)) { socket.emit('error', { message: 'not_room_host' }); return; }
       const s = data.seat;
       if (room.players[s] !== null) return;
 
@@ -547,7 +554,7 @@ export function registerSocketHandlers(io: Server): void {
       const room = getRoom();
       if (!room) return;
       if (room.phase !== 'WAITING_FOR_PLAYERS') return;
-      if (room.settings.isCustom && playerSeat !== 0) { socket.emit('error', { message: 'not_room_host' }); return; }
+      if (room.settings.isCustom && !isRoomHost(room)) { socket.emit('error', { message: 'not_room_host' }); return; }
       const s = data.seat;
       if (!room.players[s]?.isBot) return;
 
@@ -619,10 +626,7 @@ export function registerSocketHandlers(io: Server): void {
       const room = getRoom();
       if (!room) return;
       if (room.phase !== 'WAITING_FOR_PLAYERS') return;
-      // 방장(seat 0에 있는 사람이 방장이 아닐 수 있으므로, 방을 만든 사람 = 첫 번째 접속자 체크)
-      // 간소화: 커스텀 방에서 seat 0이 방장
-      const hostSeat = [0, 1, 2, 3].find(s => room.players[s] && !room.players[s]!.isBot);
-      if (playerSeat !== 0 && playerSeat !== hostSeat) {
+      if (!isRoomHost(room)) {
         socket.emit('error', { message: 'not_room_host' }); return;
       }
 
@@ -1086,7 +1090,7 @@ export function registerSocketHandlers(io: Server): void {
       const p = room.players[s];
       playersInfo[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
     }
-    io.to(room.roomId).emit('seats_updated', { players: playersInfo });
+    io.to(room.roomId).emit('seats_updated', { players: playersInfo, hostPlayerId: room.hostPlayerId });
   }
 
   // ── 끊긴 플레이어 → 봇 대체 ──────────────────────────────────
