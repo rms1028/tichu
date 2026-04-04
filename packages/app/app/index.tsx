@@ -53,7 +53,7 @@ function AppInner() {
     queueMatch, cancelMatch,
     createCustomRoom, listRooms, startGame, addBotToSeat, removeBot,
     friendInit, friendSearch, friendRequest, friendAccept, friendReject, friendRemove, friendInvite,
-    guestLogin, firebaseLogin, getLeaderboard,
+    guestLogin, firebaseLogin, getLeaderboard, leaveRoom,
   } = useSocket();
 
   const connected = useGameStore((s) => s.connected);
@@ -214,7 +214,7 @@ function AppInner() {
         nickname={nickname}
         onCancel={() => {
           if (matchMode === 'quick') cancelMatch();
-          useGameStore.getState().reset();
+          leaveRoom();
           setScreen('lobby');
         }}
         onStart={() => {
@@ -288,14 +288,14 @@ function AppInner() {
         tierUp={tierUp}
         onRematch={() => {
           resultRecorded.current = false;
-          useGameStore.getState().reset();
+          leaveRoom();
           setScreen('matchmaking');
           setMatchMode('quick');
           queueMatch(useUserStore.getState().playerId, nickname);
         }}
         onLobby={() => {
           resultRecorded.current = false;
-          useGameStore.getState().reset();
+          leaveRoom();
           setScreen('lobby');
         }}
       />
@@ -324,11 +324,11 @@ function AppInner() {
         submitBomb(cards);
       }}
       onBackToLobby={() => {
-        useGameStore.getState().reset();
+        leaveRoom();
         setScreen('lobby');
       }}
     />
-    <DisconnectOverlay onLobby={() => { resultRecorded.current = false; useGameStore.getState().reset(); setScreen('lobby'); }} />
+    <DisconnectOverlay onLobby={() => { resultRecorded.current = false; leaveRoom(); setScreen('lobby'); }} />
     </View>
   );
 }

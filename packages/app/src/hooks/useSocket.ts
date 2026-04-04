@@ -7,6 +7,12 @@ import { haptics } from '../utils/haptics';
 
 const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL ?? 'http://localhost:3001';
 
+/** 현재 게임 방에 있는지 확인 — 로비에서는 사운드 재생 안 함 */
+function isInGame(): boolean {
+  const { roomId, phase } = useGameStore.getState();
+  return !!roomId && phase !== 'WAITING_FOR_PLAYERS' && phase !== 'GAME_OVER';
+}
+
 export function useSocket() {
   const socketRef = useRef<Socket | null>(null);
   const store = useGameStore();
@@ -142,6 +148,7 @@ export function useSocket() {
     // ── 턴 변경 ────────────────────────────────────────────
     socket.on('your_turn', (data: { seat: number; turnDuration?: number }) => {
       store.onTurnChanged(data.seat, data.turnDuration);
+      if (!isInGame()) return;
       const { mySeat } = useGameStore.getState();
       if (data.seat === mySeat) {
         try { SFX.myTurn(); } catch {}
@@ -156,12 +163,14 @@ export function useSocket() {
     // ── 카드 플레이 ────────────────────────────────────────
     socket.on('card_played', (data: { seat: number; hand: PlayedHand; remainingCards: number }) => {
       store.onCardPlayed(data.seat, data.hand, data.remainingCards);
+      if (!isInGame()) return;
       try { SFX.cardPlay(); } catch {}
       try { TTS.cardPlayed(data.hand.value, data.hand.type); } catch {}
     });
 
     socket.on('player_passed', (data: { seat: number }) => {
       store.onPlayerPassed(data.seat);
+      if (!isInGame()) return;
       try { SFX.pass(); } catch {}
       try { TTS.pass(); } catch {}
     });
@@ -169,12 +178,14 @@ export function useSocket() {
     // ── 트릭 승리 ──────────────────────────────────────────
     socket.on('trick_won', (data: { winningSeat: number; cards: Card[]; points: number }) => {
       store.onTrickWon(data.winningSeat, data.cards, data.points);
+      if (!isInGame()) return;
       try { SFX.trickWon(); } catch {}
     });
 
     // ── 나감 ───────────────────────────────────────────────
     socket.on('player_finished', (data: { seat: number; rank: number }) => {
       store.onPlayerFinished(data.seat, data.rank);
+      if (!isInGame()) return;
       try {
         const name = useGameStore.getState().players[data.seat]?.nickname ?? '?';
         TTS.playerFinished(name, data.rank);
@@ -184,6 +195,7 @@ export function useSocket() {
     // ── 소원 ───────────────────────────────────────────────
     socket.on('wish_active', (data: { wish: Rank }) => {
       store.onWishActive(data.wish);
+      if (!isInGame()) return;
       try { TTS.wishActive(data.wish); } catch {}
     });
 
@@ -194,6 +206,7 @@ export function useSocket() {
     // ── 티츄 선언 ──────────────────────────────────────────
     socket.on('tichu_declared', (data: { seat: number; tichuType: 'large' | 'small' }) => {
       store.onTichuDeclared(data.seat, data.tichuType);
+      if (!isInGame()) return;
       try { SFX.tichu(); } catch {}
       try {
         const name = useGameStore.getState().players[data.seat]?.nickname ?? '?';
@@ -231,6 +244,7 @@ export function useSocket() {
         updates.selectedCards = [];
       }
       useGameStore.setState(updates as any);
+      if (!isInGame()) return;
       try { SFX.bomb(); } catch {}
       try { TTS.cardPlayed(data.bomb.value, data.bomb.type); } catch {}
       haptics.heavyTap();
@@ -293,6 +307,7 @@ export function useSocket() {
       tichuDeclarations?: Record<number, 'large' | 'small' | null>;
     }) => {
       store.onRoundResult(data.team1, data.team2, data.scores, data.details, data.finishOrder, data.tichuDeclarations);
+      if (!isInGame()) return;
       try { SFX.roundEnd(); } catch {}
       try {
         const { mySeat } = useGameStore.getState();
@@ -552,6 +567,11 @@ export function useSocket() {
     socketRef.current?.emit('cancel_match');
   }, []);
 
+  const leaveRoom = useCallback(() => {
+    socketRef.current?.emit('leave_room');
+    store.reset();
+  }, []);
+
   return {
     socket: socketRef,
     joinRoom,
@@ -584,5 +604,6 @@ export function useSocket() {
     startGame,
     addBotToSeat,
     removeBot,
+    leaveRoom,
   };
 }

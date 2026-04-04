@@ -601,6 +601,15 @@ export function registerSocketHandlers(io: Server): void {
       socket.emit('my_seat_changed', { seat: target });
     });
 
+    // ── leave_room ─────────────────────────────────────────
+    socket.on('leave_room', () => {
+      if (!playerRoomId) return;
+      socket.leave(playerRoomId);
+      console.log(`[leave_room] seat=${playerSeat} left room ${playerRoomId}`);
+      playerRoomId = null;
+      playerSeat = -1;
+    });
+
     // ── rejoin_room ────────────────────────────────────────
     socket.on('rejoin_room', (data: { roomId: string; playerId: string }) => {
       const room = rooms.get(data.roomId);
