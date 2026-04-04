@@ -26,6 +26,7 @@ import { SplashScreen } from '../src/screens/SplashScreen';
 import { DisconnectOverlay } from '../src/components/DisconnectOverlay';
 import { LoginScreen } from '../src/screens/LoginScreen';
 import { signInWithGoogle, signInAsGuest, signOutUser } from '../src/utils/firebase';
+import { playBgm, setBgmEnabled } from '../src/utils/bgm';
 
 type AppScreen = 'splash' | 'login' | 'lobby' | 'matchmaking' | 'game' | 'result';
 
@@ -79,7 +80,21 @@ function AppInner() {
   const [emoteMsg, setEmoteMsg] = useState<{ emoji: string; label: string } | null>(null);
   const resultRecorded = useRef(false);
 
-  // roomId는 매칭 대기실에서 이미 설정됨 — 게임 전환은 MatchmakingScreen의 onStart에서 처리
+  // ── BGM 전환 ─────────────────────────────────────────────
+  useEffect(() => {
+    const musicOn = useUserStore.getState().musicOn;
+    setBgmEnabled(musicOn);
+  }, []);
+
+  useEffect(() => {
+    if (screen === 'game') {
+      playBgm('game');
+    } else if (screen === 'lobby' || screen === 'matchmaking') {
+      playBgm('lobby');
+    } else if (screen === 'result') {
+      playBgm('lobby');
+    }
+  }, [screen]);
 
   // gameOver 시 결과 화면으로
   useEffect(() => {

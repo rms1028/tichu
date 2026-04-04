@@ -294,6 +294,9 @@ export const useUserStore = create<UserState>((set, get) => ({
     if (key === 'ttsOn') {
       try { const { setTtsEnabled } = require('../utils/sound'); setTtsEnabled(value); } catch {}
     }
+    if (key === 'musicOn') {
+      try { const { setBgmEnabled } = require('../utils/bgm'); setBgmEnabled(value); } catch {}
+    }
     set(s => { const ns = { ...s, [key]: value }; saveState(ns); return ns; });
   },
   setPlayerId: (id) => set(s => { const ns = { ...s, playerId: id }; saveState(ns); return ns; }),
