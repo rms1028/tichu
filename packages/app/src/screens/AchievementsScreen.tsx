@@ -70,8 +70,8 @@ export function AchievementsScreen({ onBack }: Props) {
         </View>
       </View>
 
-      {/* 탭 필터 */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.tabs}>
+      {/* 탭 필터 — 가로 균등 배치 */}
+      <View style={S.tabs}>
         {CATEGORIES.map(c => {
           const isActive = tab === c.key;
           return (
@@ -86,7 +86,7 @@ export function AchievementsScreen({ onBack }: Props) {
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
 
       {/* 업적 목록 */}
       <ScrollView style={S.scroll} contentContainerStyle={S.list}>
@@ -182,10 +182,13 @@ const S = StyleSheet.create({
   miniProgFill: { height: '100%', backgroundColor: '#60A5FA', borderRadius: 2 },
 
   // 탭 필터
-  tabs: { paddingHorizontal: mob(10, 16), gap: mob(6, 8), paddingBottom: mob(8, 12), zIndex: 5 },
+  tabs: {
+    flexDirection: 'row', paddingHorizontal: mob(10, 16), gap: mob(4, 8),
+    marginBottom: mob(8, 12), zIndex: 5,
+  },
   tab: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: mob(12, 16), paddingVertical: mob(7, 9),
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3,
+    paddingVertical: mob(6, 8),
     borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.2)',
     borderWidth: 1.5, borderColor: 'transparent',
   },
