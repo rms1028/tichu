@@ -560,51 +560,103 @@ export function registerSocketHandlers(io: Server): void {
       io.to(room.roomId).emit('seats_updated', { players: playersInfo, swapped: [] });
     });
 
-    // ── swap_seat (대기 중 좌석 교환 — 방장만) ─────────────
+    // ── move_seat (대기 중 빈 자리로 이동 — 모든 플레이어) ──
+    socket.on('move_seat', (data: { targetSeat: number }) => {
+      if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
+      if (!isValidSeat(data.targetSeat)) { socket.emit('error', { message: 'invalid_seat' }); return; }
+      const room = getRoom();
+      if (!room) return;
+      if (room.phase !== 'WAITING_FOR_PLAYERS') {
+        socket.emit('invalid_play', { reason: 'game_already_started' }); return;
+      }
+      const target = data.targetSeat;
+      if (target === playerSeat) return;
+
+      // 빈 자리로만 이동 가능
+      if (room.players[target] !== null) {
+        socket.emit('error', { message: 'seat_occupied' }); return;
+      }
+
+      room.players[target] = room.players[playerSeat] ?? null;
+      room.players[playerSeat] = null;
+      playerSeat = target;
+
+      broadcastSeats(io, room);
+      socket.emit('my_seat_changed', { seat: target });
+    });
+
+    // ── swap_seat (대기 중 좌석 교환 — 모든 플레이어) ─────
     socket.on('swap_seat', (data: { targetSeat: number }) => {
       if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
       if (!isValidSeat(data.targetSeat)) { socket.emit('error', { message: 'invalid_seat' }); return; }
       const room = getRoom();
       if (!room) return;
       if (room.phase !== 'WAITING_FOR_PLAYERS') {
-        socket.emit('invalid_play', { reason: 'game_already_started' });
-        return;
-      }
-      // 커스텀 방: 방장만 자리 교환 가능
-      if (room.settings.isCustom && playerSeat !== 0) {
-        socket.emit('error', { message: 'not_room_host' });
-        return;
+        socket.emit('invalid_play', { reason: 'game_already_started' }); return;
       }
       const target = data.targetSeat;
       if (target === playerSeat) return;
 
-      // 두 좌석의 플레이어 교환
       const myPlayer = room.players[playerSeat];
       const targetPlayer = room.players[target];
 
       room.players[playerSeat] = targetPlayer ?? null;
       room.players[target] = myPlayer ?? null;
 
-      // 교환 상대가 실제 플레이어이면 그 소켓의 playerSeat도 갱신해야 함
-      // → seats_swapped 이벤트로 클라이언트에서 처리
-
-      // 내 좌석 갱신
       const oldSeat = playerSeat;
       playerSeat = target;
 
-      // 전체 플레이어 목록 브로드캐스트
-      const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
-      for (let s = 0; s < 4; s++) {
-        const p = room.players[s];
-        playersInfo[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
-      }
-      io.to(room.roomId).emit('seats_updated', { players: playersInfo, swapped: [oldSeat, target] });
+      broadcastSeats(io, room);
 
-      // 교환 상대에게 좌석 변경 알림
       if (targetPlayer?.socketId) {
         io.to(targetPlayer.socketId).emit('my_seat_changed', { seat: oldSeat });
       }
       socket.emit('my_seat_changed', { seat: target });
+    });
+
+    // ── shuffle_teams (랜덤 팀 셔플 — 방장만) ────────────
+    socket.on('shuffle_teams', () => {
+      const room = getRoom();
+      if (!room) return;
+      if (room.phase !== 'WAITING_FOR_PLAYERS') return;
+      // 방장(seat 0에 있는 사람이 방장이 아닐 수 있으므로, 방을 만든 사람 = 첫 번째 접속자 체크)
+      // 간소화: 커스텀 방에서 seat 0이 방장
+      const hostSeat = [0, 1, 2, 3].find(s => room.players[s] && !room.players[s]!.isBot);
+      if (playerSeat !== 0 && playerSeat !== hostSeat) {
+        socket.emit('error', { message: 'not_room_host' }); return;
+      }
+
+      // 현재 플레이어들 수집
+      const playerList = [0, 1, 2, 3].map(s => room.players[s]);
+
+      // Fisher-Yates 셔플
+      const shuffled = [...playerList];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+      }
+
+      // 적용
+      for (let s = 0; s < 4; s++) {
+        room.players[s] = shuffled[s]!;
+      }
+
+      // 각 소켓의 playerSeat 갱신
+      for (let s = 0; s < 4; s++) {
+        const p = room.players[s];
+        if (p?.socketId) {
+          const sock = io.sockets.sockets.get(p.socketId);
+          if (sock) {
+            (sock as any)._playerSeat = s;
+            sock.emit('my_seat_changed', { seat: s });
+          }
+        }
+      }
+      // 내 좌석 찾기
+      playerSeat = [0, 1, 2, 3].find(s => room.players[s]?.socketId === socket.id) ?? playerSeat;
+
+      broadcastSeats(io, room);
+      io.to(room.roomId).emit('teams_shuffled');
     });
 
     // ── leave_room ─────────────────────────────────────────
@@ -1026,6 +1078,16 @@ export function registerSocketHandlers(io: Server): void {
       return rooms.get(playerRoomId) ?? null;
     }
   });
+
+  // ── 좌석 브로드캐스트 헬퍼 ──────────────────────────────
+  function broadcastSeats(io: Server, room: GameRoom): void {
+    const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
+    for (let s = 0; s < 4; s++) {
+      const p = room.players[s];
+      playersInfo[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
+    }
+    io.to(room.roomId).emit('seats_updated', { players: playersInfo });
+  }
 
   // ── 끊긴 플레이어 → 봇 대체 ──────────────────────────────────
 

@@ -514,6 +514,14 @@ export function useSocket() {
     socketRef.current?.emit('swap_seat', { targetSeat });
   }, []);
 
+  const moveSeat = useCallback((targetSeat: number) => {
+    socketRef.current?.emit('move_seat', { targetSeat });
+  }, []);
+
+  const shuffleTeams = useCallback(() => {
+    socketRef.current?.emit('shuffle_teams');
+  }, []);
+
   const guestLogin = useCallback((guestId: string, nickname: string) => {
     socketRef.current?.emit('guest_login', { guestId, nickname });
   }, []);
@@ -615,5 +623,7 @@ export function useSocket() {
     addBotToSeat,
     removeBot,
     leaveRoom,
+    moveSeat,
+    shuffleTeams,
   };
 }

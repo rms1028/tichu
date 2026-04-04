@@ -16,6 +16,8 @@ interface Props {
   onStart: () => void;
   onAddBots: () => void;
   onSwapSeat?: (targetSeat: number) => void;
+  onMoveSeat?: (targetSeat: number) => void;
+  onShuffleTeams?: () => void;
   onStartGame?: () => void;
   onAddBotToSeat?: (seat: number) => void;
   onRemoveBot?: (seat: number) => void;
@@ -23,7 +25,7 @@ interface Props {
 
 interface Slot { name: string | null; avatar: string; tier: string; ready: boolean; isBot: boolean; }
 
-export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart, onAddBots, onSwapSeat, onStartGame, onAddBotToSeat, onRemoveBot }: Props) {
+export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart, onAddBots, onSwapSeat, onMoveSeat, onShuffleTeams, onStartGame, onAddBotToSeat, onRemoveBot }: Props) {
   const [elapsed, setElapsed] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
@@ -121,13 +123,13 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
     if (!slot) return;
 
     if (slot.name === null) {
-      // 빈 자리 → 봇 추가
-      if (onAddBotToSeat) onAddBotToSeat(idx);
-    } else if (slot.isBot) {
-      // 봇 자리 → 봇 제거
+      // 빈 자리 → 내가 이동 (모든 플레이어 가능)
+      if (onMoveSeat) onMoveSeat(idx);
+    } else if (slot.isBot && isHost) {
+      // 봇 자리 → 봇 제거 (방장만)
       if (onRemoveBot) onRemoveBot(idx);
-    } else {
-      // 다른 플레이어 → 자리 교환
+    } else if (!slot.isBot && isHost) {
+      // 다른 플레이어 → 자리 교환 (방장만)
       if (onSwapSeat) onSwapSeat(idx);
     }
   };
@@ -140,7 +142,15 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
     const borderColor = isMe
       ? '#F59E0B'
       : slot.name ? (isTeam1 ? 'rgba(59,130,246,0.3)' : 'rgba(239,68,68,0.3)') : 'rgba(255,255,255,0.1)';
-    const canSwap = mode === 'custom' && !isMe && isHost;
+    const canInteract = mode === 'custom' && !isMe;
+
+    // 힌트 텍스트
+    let hint = '';
+    if (canInteract) {
+      if (!slot.name) hint = '탭하여 이동';
+      else if (slot.isBot && isHost) hint = '탭하여 제거';
+      else if (!slot.isBot && isHost) hint = '탭하여 교환';
+    }
 
     const content = (
       <Animated.View key={idx} entering={slot.name ? ZoomIn.delay(idx * 200).duration(350).springify() : undefined} style={[S.slot, { backgroundColor: teamColor, borderColor, borderStyle: isMe ? 'solid' : 'dashed' }]}>
@@ -151,21 +161,20 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
             <Text style={S.slotName} numberOfLines={1}>{slot.name}</Text>
             <Text style={S.slotTier}>{slot.tier}</Text>
             {slot.isBot && <View style={S.botBadge}><Text style={S.botBadgeText}>BOT</Text></View>}
-            {slot.isBot && canSwap && <Text style={S.swapHint}>탭하여 제거</Text>}
-            {!slot.isBot && !isMe && canSwap && <Text style={S.swapHint}>탭하여 교환</Text>}
+            {hint ? <Text style={S.swapHint}>{hint}</Text> : null}
             {slot.ready && !slot.isBot && <View style={S.readyMark}><Text style={S.readyMarkText}>{'\u2713'}</Text></View>}
           </>
         ) : (
           <>
             <View style={S.emptyCircle}><Animated.Text style={[S.emptyDots, dotStyle]}>...</Animated.Text></View>
             <Text style={S.emptyText}>{mode === 'custom' ? '대기 중' : '상대를 찾는 중...'}</Text>
-            {canSwap && <Text style={S.swapHint}>탭하여 봇 추가</Text>}
+            {hint ? <Text style={S.swapHint}>{hint}</Text> : null}
           </>
         )}
       </Animated.View>
     );
 
-    if (mode === 'custom' && !isMe && isHost) {
+    if (canInteract && (hint || !slot.name)) {
       return (
         <TouchableOpacity key={idx} onPress={() => handleSlotPress(idx)} activeOpacity={0.7}>
           {content}
@@ -218,23 +227,28 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
             <View style={S.teamLabelRow}><Text style={S.teamLabel}>Team 2</Text><View style={[S.teamDot, { backgroundColor: COLORS.team2 }]} /></View>
           </View>
           <View style={S.slotsGrid}>
-            <View style={S.teamCol}>{[0, 1].map(i => renderSlot(slots[i]!, i))}</View>
+            <View style={S.teamCol}>{[0, 2].map(i => renderSlot(slots[i]!, i))}</View>
             <View style={S.vsCol}><Text style={S.vsText}>VS</Text></View>
-            <View style={S.teamCol}>{[2, 3].map(i => renderSlot(slots[i]!, i))}</View>
+            <View style={S.teamCol}>{[1, 3].map(i => renderSlot(slots[i]!, i))}</View>
           </View>
         </View>
         {/* 하단 */}
         <View style={S.bottom}>
           {mode === 'custom' && isHost && (
-            <TouchableOpacity
-              style={[S.startGameBtn, !canStart && S.startGameBtnDisabled]}
-              onPress={onStartGame}
-              disabled={!canStart}
-            >
-              <Text style={[S.startGameText, !canStart && { opacity: 0.5 }]}>
-                {canStart ? '🎮 게임 시작' : `🎮 게임 시작 (${filledCount}/4)`}
-              </Text>
-            </TouchableOpacity>
+            <View style={S.hostActions}>
+              <TouchableOpacity style={S.shuffleBtn} onPress={onShuffleTeams} activeOpacity={0.7}>
+                <Text style={S.shuffleBtnText}>{'🔀 팀 셔플'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[S.startGameBtn, !canStart && S.startGameBtnDisabled]}
+                onPress={onStartGame}
+                disabled={!canStart}
+              >
+                <Text style={[S.startGameText, !canStart && { opacity: 0.5 }]}>
+                  {canStart ? '🎮 게임 시작' : `🎮 게임 시작 (${filledCount}/4)`}
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
           <TouchableOpacity style={S.cancelBtn} onPress={onCancel}>
             <Text style={S.cancelText}>{mode === 'quick' ? '매칭 취소' : '나가기'}</Text>
@@ -298,6 +312,9 @@ const S = StyleSheet.create({
 
   // 하단
   bottom: { alignItems: 'center', gap: 10 },
+  hostActions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  shuffleBtn: { backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)' },
+  shuffleBtnText: { color: '#818CF8', fontSize: 14, fontWeight: '800' },
   startGameBtn: { backgroundColor: '#2ecc71', borderRadius: 12, paddingHorizontal: 32, paddingVertical: 12, shadowColor: '#2ecc71', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6 },
   startGameBtnDisabled: { backgroundColor: 'rgba(46,204,113,0.25)', shadowOpacity: 0 },
   startGameText: { color: '#fff', fontSize: 16, fontWeight: '900' },

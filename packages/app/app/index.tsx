@@ -53,7 +53,7 @@ function AppInner() {
     queueMatch, cancelMatch,
     createCustomRoom, listRooms, startGame, addBotToSeat, removeBot,
     friendInit, friendSearch, friendRequest, friendAccept, friendReject, friendRemove, friendInvite,
-    guestLogin, firebaseLogin, getLeaderboard, leaveRoom,
+    guestLogin, firebaseLogin, getLeaderboard, leaveRoom, moveSeat, shuffleTeams,
   } = useSocket();
 
   const connected = useGameStore((s) => s.connected);
@@ -222,6 +222,8 @@ function AppInner() {
         }}
         onAddBots={addBots}
         onSwapSeat={swapSeat}
+        onMoveSeat={moveSeat}
+        onShuffleTeams={shuffleTeams}
         onStartGame={startGame}
         onAddBotToSeat={addBotToSeat}
         onRemoveBot={removeBot}
