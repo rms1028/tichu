@@ -58,7 +58,7 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
     const hand = validateHand(selectedCards, phoenixAs);
     if (!hand) return false;
     return canBeat(tableCards, hand);
-  }, [selectedCards, tableCards, hasSelection, hasPhoenix]);
+  }, [selectedCards, tableCards, hasSelection, hasPhoenix, wish]);
 
   const canPlay = hasSelection && isMyTurn && isValidPlay;
 

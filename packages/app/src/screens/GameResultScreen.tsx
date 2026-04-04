@@ -61,6 +61,11 @@ export function GameResultScreen({
   const isWin = winner === myTeam;
   const team1Players = players.filter(p => p.seat === 0 || p.seat === 2);
   const team2Players = players.filter(p => p.seat === 1 || p.seat === 3);
+  // XP 브레이크다운 (reactive Zustand selectors)
+  const xpBreakdown = useGameStore(s => s.lastXpBreakdown);
+  const tierAfterInfo = useGameStore(s => s.lastTierAfter);
+  const tierChangedInfo = useGameStore(s => s.lastTierChanged);
+  const newRankXp = useGameStore(s => s.lastNewRankXp);
   // XP 바 애니메이션
   const xpW = useSharedValue((xpBefore / xpMax) * 100);
   useEffect(() => {
@@ -142,10 +147,10 @@ export function GameResultScreen({
         {/* 보상 + XP 브레이크다운 */}
         <Animated.View entering={FadeIn.delay(1200).duration(500)} style={S.rewardWrap}>
           {(() => {
-            const bd = useGameStore.getState().lastXpBreakdown;
-            const ta = useGameStore.getState().lastTierAfter;
-            const tc = useGameStore.getState().lastTierChanged;
-            const newXp = useGameStore.getState().lastNewRankXp;
+            const bd = xpBreakdown;
+            const ta = tierAfterInfo;
+            const tc = tierChangedInfo;
+            const newXp = newRankXp;
             const nt = newXp ? getNextTier(newXp) : null;
             const tierColor = ta?.color ?? '#F59E0B';
 
