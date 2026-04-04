@@ -31,6 +31,19 @@ model User {
   winStreak     Int      @default(0)
   maxWinStreak  Int      @default(0)
 
+  // 랭킹
+  rankXp           Int      @default(0)       // 랭크 XP (Iron~Dragon 판별)
+  highestXp        Int      @default(0)       // 역대 최고 XP
+  currentTier      String   @default("iron")  // 현재 티어
+  highestTier      String   @default("iron")  // 역대 최고 티어
+
+  // 탈주/어뷰징
+  suspicionScore   Int      @default(0)       // 의심 점수 (0~100)
+  leaveCount24h    Int      @default(0)       // 최근 24시간 탈주 횟수
+  lastLeaveAt      DateTime?                  // 마지막 탈주 시간
+  matchCooldownUntil DateTime?                // 매칭 제한 해제 시간
+  lastActiveAt     DateTime @default(now())   // 마지막 활동 시간
+
   // 관계
   sentRequests     FriendRequest[]  @relation("SentRequests")
   receivedRequests FriendRequest[]  @relation("ReceivedRequests")
@@ -83,6 +96,11 @@ model GameResult {
   tichuSuccess  Boolean  @default(false)
   finishRank    Int                  // 1~4등
   roundCount    Int      @default(1)
+  xpGained      Int      @default(0)      // 획득/차감 XP
+  xpBreakdown   String?                   // JSON: XpBreakdown
+  tierBefore    String?                    // 게임 전 티어
+  tierAfter     String?                    // 게임 후 티어
+  abusingFlags  String?                    // JSON: string[]
   createdAt     DateTime @default(now())
 
   @@index([userId, createdAt])

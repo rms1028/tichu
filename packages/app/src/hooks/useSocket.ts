@@ -328,10 +328,20 @@ export function useSocket() {
       } catch {}
     });
 
-    // 서버에서 보상 수신 → userStore에 반영
-    socket.on('game_rewards', (data: { xp: number; coins: number; won: boolean; tichuBonus: number }) => {
+    // 서버에서 보상 수신 → userStore + gameStore에 반영
+    socket.on('game_rewards', (data: any) => {
       const us = require('../stores/userStore').useUserStore.getState();
       us.applyServerRewards(data.xp, data.coins, data.won, data.tichuBonus > 0);
+      // XP 브레이크다운 + 티어 정보를 gameStore에 저장
+      if (data.xpBreakdown || data.tierAfter) {
+        useGameStore.setState({
+          lastXpBreakdown: data.xpBreakdown ?? null,
+          lastTierBefore: data.tierBefore ?? null,
+          lastTierAfter: data.tierAfter ?? null,
+          lastTierChanged: data.tierChanged ?? false,
+          lastNewRankXp: data.newRankXp ?? 0,
+        });
+      }
     });
 
     // ── 로그인 ──────────────────────────────────────────────

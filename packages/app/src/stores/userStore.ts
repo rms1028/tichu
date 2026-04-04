@@ -1,13 +1,17 @@
 import { create } from 'zustand';
 import { Platform } from 'react-native';
 
-// 티어 정의
+// 티어 정의 (서버 ranking.ts와 동일)
+export type TierKey = 'iron' | 'bronze' | 'silver' | 'gold' | 'diamond' | 'dragon';
+export type SubTier = 'III' | 'II' | 'I';
+
 export const TIERS = [
-  { name: '브론즈', icon: '🥉', color: '#CD7F32', min: 0, max: 1000 },
-  { name: '실버', icon: '🥈', color: '#C0C0C0', min: 1000, max: 2000 },
-  { name: '골드', icon: '🥇', color: '#FFD700', min: 2000, max: 3500 },
-  { name: '다이아', icon: '💎', color: '#00BFFF', min: 3500, max: 5000 },
-  { name: '마스터', icon: '💜', color: '#9333EA', min: 5000, max: 99999 },
+  { key: 'iron' as TierKey,    name: '아이언',     icon: '🔩', color: '#888880', min: 0,    max: 499 },
+  { key: 'bronze' as TierKey,  name: '브론즈',     icon: '🥉', color: '#CD7F32', min: 500,  max: 1199 },
+  { key: 'silver' as TierKey,  name: '실버',       icon: '🥈', color: '#C0C0C0', min: 1200, max: 2199 },
+  { key: 'gold' as TierKey,    name: '골드',       icon: '🥇', color: '#DAA520', min: 2200, max: 3499 },
+  { key: 'diamond' as TierKey, name: '다이아몬드', icon: '💎', color: '#00AADD', min: 3500, max: 4999 },
+  { key: 'dragon' as TierKey,  name: '드래곤',     icon: '🐲', color: '#CC3333', min: 5000, max: 99999 },
 ];
 
 export function getTier(xp: number) {
@@ -15,6 +19,17 @@ export function getTier(xp: number) {
     if (xp >= TIERS[i]!.min) return TIERS[i]!;
   }
   return TIERS[0]!;
+}
+
+export function getSubTier(xp: number): SubTier | null {
+  const tier = getTier(xp);
+  if (tier.key === 'dragon') return null;
+  const range = tier.max - tier.min + 1;
+  const offset = xp - tier.min;
+  const third = range / 3;
+  if (offset < third) return 'III';
+  if (offset < third * 2) return 'II';
+  return 'I';
 }
 
 export function getNextTier(xp: number) {

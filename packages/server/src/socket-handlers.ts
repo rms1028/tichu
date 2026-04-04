@@ -37,6 +37,12 @@ import {
   getSeasonInfo, getSeasonLeaderboard, updateSeasonRating,
   claimSeasonReward, getOrCreateCurrentSeason,
 } from './season.js';
+import {
+  getTierInfo as rankGetTierInfo,
+  calculateXp as rankCalculateXp,
+  type GameResultInput as RankGameResultInput,
+} from './ranking.js';
+import { prisma } from './db.js';
 
 // ── 입력 검증 헬퍼 ──────────────────────────────────────────
 
@@ -1615,13 +1621,51 @@ async function recordGameResults(io: Server, room: GameRoom): Promise<void> {
     const won = team === winner;
     const tichu = room.tichuDeclarations[seat];
     const tichuSuccess = tichu !== null && room.finishOrder[0] === seat;
+    const tichuFail = tichu !== null && !tichuSuccess;
+    const grandTichu = tichu === 'large';
     const finishRank = room.finishOrder.indexOf(seat) + 1;
+    const scoreDiff = Math.abs(room.scores.team1 - room.scores.team2);
+    const isOneTwo = room.finishOrder.length >= 2
+      && getTeamForSeat(room, room.finishOrder[0]!) === getTeamForSeat(room, room.finishOrder[1]!);
 
-    // XP/코인 계산
-    const xpGain = won ? 30 : 10;
-    const coinGain = (won ? 50 : 20) + (tichuSuccess ? 10 : 0);
+    // 현재 유저 XP 조회
+    let currentXp = 0;
+    try {
+      const user = await prisma.user.findFirst({
+        where: { OR: [{ guestId: player.playerId }, { id: player.playerId }] },
+        select: { rankXp: true },
+      });
+      currentXp = user?.rankXp ?? 0;
+    } catch {}
 
-    // DB에 기록 (비동기, 실패해도 게임 진행에 영향 없음)
+    const myTierIndex = rankGetTierInfo(currentXp).tierIndex;
+
+    // XP 계산
+    const xpInput: RankGameResultInput = {
+      isWin: won,
+      scoreDiff,
+      tichuCall: !grandTichu && tichu ? (tichuSuccess ? 'success' : 'fail') : 'none',
+      grandTichuCall: grandTichu ? (tichuSuccess ? 'success' : 'fail') : 'none',
+      isOneTwoFinish: won && isOneTwo,
+      bombCount: 0,
+      myTierIndex,
+      opponentTierIndex: myTierIndex, // 간소화: 같은 티어로 계산
+      gameDurationSeconds: 300,
+      totalCardsPlayed: 14 - (room.hands[seat]?.length ?? 0),
+      totalTurns: Math.max(1, room.roundHistory.length * 4),
+      passCount: 0,
+      isDisconnected: !player.connected,
+      disconnectCount24h: 0,
+    };
+
+    const breakdown = rankCalculateXp(xpInput, currentXp);
+    const newXp = Math.max(0, currentXp + breakdown.totalXp);
+    const tierBefore = rankGetTierInfo(currentXp);
+    const tierAfter = rankGetTierInfo(newXp);
+    const tierChanged = tierBefore.tier !== tierAfter.tier || tierBefore.subTier !== tierAfter.subTier;
+    const coinGain = (won ? 50 : 20) + (tichuSuccess ? 15 : 0);
+
+    // DB 기록
     try {
       await dbRecordGameResult({
         userId: player.playerId,
@@ -1635,17 +1679,32 @@ async function recordGameResults(io: Server, room: GameRoom): Promise<void> {
         finishRank,
         roundCount: room.roundNumber,
       });
+      // rankXp 업데이트
+      await prisma.user.updateMany({
+        where: { OR: [{ guestId: player.playerId }, { id: player.playerId }] },
+        data: {
+          rankXp: newXp,
+          highestXp: Math.max(newXp, currentXp),
+          currentTier: tierAfter.tier,
+          lastActiveAt: new Date(),
+        },
+      });
     } catch (e) {
       console.error(`[recordGameResults] DB error for ${player.playerId}:`, e);
     }
 
-    // 클라이언트에 보상 정보 전송
+    // 클라이언트에 상세 보상 전송
     if (player.socketId) {
       io.to(player.socketId).emit('game_rewards', {
-        xp: xpGain,
+        xp: breakdown.totalXp,
+        xpBreakdown: breakdown,
         coins: coinGain,
         won,
-        tichuBonus: tichuSuccess ? 10 : 0,
+        tichuBonus: tichuSuccess ? 15 : 0,
+        newRankXp: newXp,
+        tierBefore: { tier: tierBefore.tier, subTier: tierBefore.subTier, name: tierBefore.name, icon: tierBefore.icon, color: tierBefore.color },
+        tierAfter: { tier: tierAfter.tier, subTier: tierAfter.subTier, name: tierAfter.name, icon: tierAfter.icon, color: tierAfter.color },
+        tierChanged,
       });
     }
   }

@@ -9,6 +9,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { COLORS } from '../utils/theme';
 import { BackgroundWatermark } from '../components/BackgroundWatermark';
+import { useGameStore } from '../stores/gameStore';
+import { getTier, getSubTier, getNextTier } from '../stores/userStore';
 
 interface PlayerResult {
   seat: number; name: string; avatar: string; tier: string;
@@ -137,23 +139,75 @@ export function GameResultScreen({
           <View style={S.divider} />
           <View style={S.teamGroup}>{team2Players.map((p, i) => renderPlayer(p, i + 2))}</View>
         </View>
-        {/* 보상 */}
+        {/* 보상 + XP 브레이크다운 */}
         <Animated.View entering={FadeIn.delay(1200).duration(500)} style={S.rewardWrap}>
-          <View style={S.rewardRow}>
-            <View style={S.rewardItem}><Text style={S.rIcon}>{'\uD83E\uDE99'}</Text><Text style={S.rText}>+{rewards.coins}</Text></View>
-            <View style={S.rewardItem}><Text style={S.rIcon}>{'\u2B50'}</Text><Text style={S.rText}>+{rewards.xp} XP</Text></View>
-            {rewards.bonusCoins > 0 && <View style={S.rewardItem}><Text style={S.rIcon}>{'\uD83C\uDFC6'}</Text><Text style={S.rText}>+{rewards.bonusCoins}</Text></View>}
-            {rewards.tichuBonus > 0 && <View style={S.rewardItem}><Text style={S.rIcon}>{'\uD83C\uDFAF'}</Text><Text style={S.rText}>+{rewards.tichuBonus}</Text></View>}
-          </View>
-          <View style={S.xpWrap}>
-            <View style={S.xpBg}><Animated.View style={[S.xpFill, xpStyle]} /></View>
-            <Text style={S.xpText}>{xpAfter} / {xpMax} XP</Text>
-          </View>
-          {tierUp && (
-            <Animated.View entering={ZoomIn.delay(2500).duration(400).springify()} style={S.tierUp}>
-              <Text style={S.tierUpText}>{'\uD83C\uDF8A \uACE8\uB4DC \uC2B9\uAE09!'}</Text>
-            </Animated.View>
-          )}
+          {(() => {
+            const bd = useGameStore.getState().lastXpBreakdown;
+            const ta = useGameStore.getState().lastTierAfter;
+            const tc = useGameStore.getState().lastTierChanged;
+            const newXp = useGameStore.getState().lastNewRankXp;
+            const nt = newXp ? getNextTier(newXp) : null;
+            const tierColor = ta?.color ?? '#F59E0B';
+
+            // XP 항목 목록
+            const items: { label: string; value: number; icon: string }[] = [];
+            if (bd) {
+              items.push({ label: '기본', value: bd.baseXp, icon: isWin ? '✅' : '❌' });
+              if (bd.scoreDiffBonus !== 0) items.push({ label: '점수차', value: bd.scoreDiffBonus, icon: '📊' });
+              if (bd.tichuBonus !== 0) items.push({ label: '티츄', value: bd.tichuBonus, icon: '🎯' });
+              if (bd.grandTichuBonus !== 0) items.push({ label: '대티츄', value: bd.grandTichuBonus, icon: '🔥' });
+              if (bd.oneTwoBonus !== 0) items.push({ label: '원투', value: bd.oneTwoBonus, icon: '🤝' });
+              if (bd.bombBonus !== 0) items.push({ label: '폭탄', value: bd.bombBonus, icon: '💣' });
+              if (bd.tierAdjustment !== 0) items.push({ label: '티어 보정', value: bd.tierAdjustment, icon: '⚖️' });
+            }
+
+            return (
+              <>
+                {/* 코인 */}
+                <View style={S.rewardRow}>
+                  <View style={S.rewardItem}><Text style={S.rIcon}>{'🪙'}</Text><Text style={S.rText}>+{rewards.coins}</Text></View>
+                </View>
+                {/* XP 브레이크다운 */}
+                {items.length > 0 && (
+                  <View style={S.bdList}>
+                    {items.map((it, i) => (
+                      <Animated.View key={it.label} entering={FadeIn.delay(1400 + i * 150).duration(300)} style={S.bdRow}>
+                        <Text style={S.bdIcon}>{it.icon}</Text>
+                        <Text style={S.bdLabel}>{it.label}</Text>
+                        <Text style={[S.bdValue, { color: it.value >= 0 ? '#4ADE80' : '#EF4444' }]}>
+                          {it.value >= 0 ? '+' : ''}{it.value}
+                        </Text>
+                      </Animated.View>
+                    ))}
+                    <View style={S.bdDivider} />
+                    <Animated.View entering={FadeIn.delay(1400 + items.length * 150).duration(300)} style={S.bdRow}>
+                      <Text style={S.bdIcon}>{'⭐'}</Text>
+                      <Text style={[S.bdLabel, { fontWeight: '900', color: '#fff' }]}>총 XP</Text>
+                      <Text style={[S.bdValue, { color: tierColor, fontWeight: '900', fontSize: 16 }]}>
+                        {bd ? (bd.totalXp >= 0 ? '+' : '') + bd.totalXp : `+${rewards.xp}`}
+                      </Text>
+                    </Animated.View>
+                  </View>
+                )}
+                {/* 티어 + 진행 바 */}
+                {ta && (
+                  <View style={S.tierRow}>
+                    <Text style={{ fontSize: 20 }}>{ta.icon}</Text>
+                    <Text style={[S.tierName, { color: ta.color }]}>{ta.name}{ta.subTier ? ` ${ta.subTier}` : ''}</Text>
+                  </View>
+                )}
+                <View style={S.xpWrap}>
+                  <View style={S.xpBg}><Animated.View style={[S.xpFill, xpStyle, { backgroundColor: tierColor }]} /></View>
+                  <Text style={S.xpText}>{newXp || xpAfter} XP{nt ? ` / ${nt.min} (${nt.name})` : ''}</Text>
+                </View>
+                {tc && (
+                  <Animated.View entering={ZoomIn.delay(2500).duration(400).springify()} style={[S.tierUp, { borderColor: tierColor + '40' }]}>
+                    <Text style={[S.tierUpText, { color: tierColor }]}>{ta?.icon} {ta?.name} 승급!</Text>
+                  </Animated.View>
+                )}
+              </>
+            );
+          })()}
         </Animated.View>
         {/* 버튼 */}
         <Animated.View entering={FadeIn.delay(1600).duration(400)} style={S.buttons}>
@@ -211,8 +265,18 @@ const S = StyleSheet.create({
   xpBg: { width: '100%', height: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' },
   xpFill: { height: '100%', backgroundColor: '#F59E0B', borderRadius: 4 },
   xpText: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '600' },
-  tierUp: { backgroundColor: 'rgba(255,215,0,0.1)', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 6 },
+  tierUp: { backgroundColor: 'rgba(255,215,0,0.1)', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,215,0,0.2)' },
   tierUpText: { color: '#FFD700', fontSize: 16, fontWeight: '900' },
+
+  // XP 브레이크다운
+  bdList: { width: '100%', gap: 4 },
+  bdRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2 },
+  bdIcon: { fontSize: 13, width: 20, textAlign: 'center' },
+  bdLabel: { flex: 1, color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '600' },
+  bdValue: { fontSize: 13, fontWeight: '800', minWidth: 40, textAlign: 'right' },
+  bdDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 4 },
+  tierRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  tierName: { fontSize: 14, fontWeight: '800' },
 
   // 버튼
   buttons: { flexDirection: 'row', justifyContent: 'center', gap: 12 },

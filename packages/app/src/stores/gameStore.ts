@@ -124,6 +124,16 @@ export interface GameState {
     tierName: string; tierIcon: string; tierColor: string;
   } | null;
   seasonLeaderboard: { seasonName: string; entries: { userId: string; nickname: string; ratingPoints: number; wins: number; gamesPlayed: number }[] } | null;
+
+  // XP 브레이크다운 (결과 화면용)
+  lastXpBreakdown: {
+    baseXp: number; scoreDiffBonus: number; tichuBonus: number; grandTichuBonus: number;
+    oneTwoBonus: number; bombBonus: number; tierAdjustment: number; abusingPenalty: number; totalXp: number;
+  } | null;
+  lastTierBefore: { tier: string; subTier: string | null; name: string; icon: string; color: string } | null;
+  lastTierAfter: { tier: string; subTier: string | null; name: string; icon: string; color: string } | null;
+  lastTierChanged: boolean;
+  lastNewRankXp: number;
   seasonRewardClaimed: { tier: string; coins: number; xp: number } | null;
 
   // 액션
@@ -210,6 +220,11 @@ const INITIAL_STATE = {
   } | null,
   seasonLeaderboard: null as { seasonName: string; entries: { userId: string; nickname: string; ratingPoints: number; wins: number; gamesPlayed: number }[] } | null,
   seasonRewardClaimed: null as { tier: string; coins: number; xp: number } | null,
+  lastXpBreakdown: null as GameState['lastXpBreakdown'],
+  lastTierBefore: null as GameState['lastTierBefore'],
+  lastTierAfter: null as GameState['lastTierAfter'],
+  lastTierChanged: false,
+  lastNewRankXp: 0,
 };
 
 // 재접속 직후 지연된 이벤트로부터 핸드 보호
