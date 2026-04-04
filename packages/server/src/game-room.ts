@@ -12,6 +12,13 @@ export interface PlayerInfo {
   connected: boolean;
   disconnectedAt?: number;
   isBot: boolean;
+  /** 봇 대체 전 원래 플레이어 정보 (재접속 시 복원용) */
+  originalPlayer?: {
+    playerId: string;
+    nickname: string;
+  };
+  /** 봇 대체 예약 타이머 */
+  botReplaceTimer?: ReturnType<typeof setTimeout>;
 }
 
 // ── 현재 트릭 ────────────────────────────────────────────────

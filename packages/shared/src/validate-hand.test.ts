@@ -25,10 +25,10 @@ describe('validateHand — single', () => {
     expect(h!.value).toBe(1);
   });
 
-  it('용 싱글 (value Infinity)', () => {
+  it('용 싱글 (value 999)', () => {
     const h = validateHand([DRAGON]);
     expect(h!.type).toBe('single');
-    expect(h!.value).toBe(Infinity);
+    expect(h!.value).toBe(999);
   });
 
   it('개 싱글 (value 0)', () => {

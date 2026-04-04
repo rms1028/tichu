@@ -11,7 +11,7 @@ import Animated, {
   ZoomIn,
 } from 'react-native-reanimated';
 import type { Card, Rank } from '@tichu/shared';
-import { isMahjong, isPhoenix, isNormalCard, mustFulfillWish } from '@tichu/shared';
+import { isMahjong, isPhoenix, isNormalCard, mustFulfillWish, validateHand, canBeat, inferPhoenixAs } from '@tichu/shared';
 import { useGameStore } from '../stores/gameStore';
 import { COLORS, FONT } from '../utils/theme';
 import { mob, isMobile } from '../utils/responsive';
@@ -20,23 +20,6 @@ interface ActionBarProps {
   onPlay: (cards: Card[], phoenixAs?: Rank, wish?: Rank) => void;
   onPass: () => void;
   onDeclareTichu: (type: 'small') => void;
-}
-
-function inferPhoenixAs(cards: Card[]): Rank | undefined {
-  const normals = cards.filter(isNormalCard);
-  if (normals.length === 0) return undefined;
-  const values = normals.map(c => c.value);
-  const sorted = [...new Set(values)].sort((a, b) => a - b);
-  if (sorted.length === 1) return valueToRank(sorted[0]!);
-  for (let v = sorted[0]!; v <= sorted[sorted.length - 1]!; v++) {
-    if (!values.includes(v)) return valueToRank(v);
-  }
-  return valueToRank(sorted[sorted.length - 1]!);
-}
-
-function valueToRank(v: number): Rank {
-  const map: Record<number, Rank> = { 2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'10',11:'J',12:'Q',13:'K',14:'A' };
-  return map[v] ?? '2';
 }
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
@@ -67,7 +50,17 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
   })();
   const hasMahjong = selectedCards.some(isMahjong);
   const hasPhoenix = selectedCards.some(isPhoenix);
-  const canPlay = hasSelection && isMyTurn;
+
+  // 선택한 카드가 유효한 족보인지 + 바닥을 이길 수 있는지 검증
+  const isValidPlay = (() => {
+    if (!hasSelection) return false;
+    const phoenixAs = hasPhoenix && selectedCards.length > 1 ? inferPhoenixAs(selectedCards) : undefined;
+    const hand = validateHand(selectedCards, phoenixAs);
+    if (!hand) return false;
+    return canBeat(tableCards, hand);
+  })();
+
+  const canPlay = hasSelection && isMyTurn && isValidPlay;
 
   // Play 버튼 글로우 펄스
   const playGlow = useSharedValue(0);

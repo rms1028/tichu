@@ -606,14 +606,44 @@ export function registerSocketHandlers(io: Server): void {
       const room = rooms.get(data.roomId);
       if (!room) { socket.emit('rejoin_failed', { reason: 'room_not_found' }); return; }
 
-      const seat = [0, 1, 2, 3].find(s =>
+      // 직접 매칭: playerId로 좌석 찾기
+      let seat = [0, 1, 2, 3].find(s =>
         room.players[s]?.playerId === data.playerId
       );
-      if (seat === undefined) { socket.emit('error', { message: 'player_not_found' }); return; }
 
-      room.players[seat]!.socketId = socket.id;
-      room.players[seat]!.connected = true;
-      room.players[seat]!.disconnectedAt = undefined;
+      // 봇 대체된 경우: originalPlayer.playerId로 좌석 찾기
+      if (seat === undefined) {
+        seat = [0, 1, 2, 3].find(s =>
+          room.players[s]?.originalPlayer?.playerId === data.playerId
+        );
+      }
+
+      if (seat === undefined) { socket.emit('rejoin_failed', { reason: 'player_not_found' }); return; }
+
+      const player = room.players[seat]!;
+
+      // 봇 대체 예약 타이머 취소
+      if (player.botReplaceTimer) {
+        clearTimeout(player.botReplaceTimer);
+        player.botReplaceTimer = undefined;
+      }
+
+      // 봇 대체된 상태라면 → 사람으로 복원
+      if (player.isBot && player.originalPlayer) {
+        console.log(`[rejoin] seat=${seat} restoring human player ${player.originalPlayer.playerId}`);
+        player.playerId = player.originalPlayer.playerId;
+        player.nickname = player.originalPlayer.nickname;
+        player.isBot = false;
+        player.originalPlayer = undefined;
+        io.to(data.roomId).emit('player_restored', {
+          seat,
+          nickname: player.nickname,
+        });
+      }
+
+      player.socketId = socket.id;
+      player.connected = true;
+      player.disconnectedAt = undefined;
 
       playerRoomId = data.roomId;
       playerSeat = seat;
@@ -959,6 +989,15 @@ export function registerSocketHandlers(io: Server): void {
         player.connected = false;
         player.disconnectedAt = Date.now();
         io.to(playerRoomId).emit('player_disconnected', { seat: playerSeat });
+
+        // 게임 진행 중이면 10초 후 봇 대체 예약
+        if (room.phase !== 'WAITING_FOR_PLAYERS' && room.phase !== 'GAME_OVER' && !player.isBot) {
+          const savedRoomId = playerRoomId;
+          const savedSeat = playerSeat;
+          player.botReplaceTimer = setTimeout(() => {
+            replaceWithBot(io, savedRoomId, savedSeat);
+          }, 10_000);
+        }
       }
     });
 
@@ -972,6 +1011,98 @@ export function registerSocketHandlers(io: Server): void {
       return rooms.get(playerRoomId) ?? null;
     }
   });
+
+  // ── 끊긴 플레이어 → 봇 대체 ──────────────────────────────────
+
+  function replaceWithBot(io: Server, roomId: string, seat: number): void {
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    const player = room.players[seat];
+    if (!player || player.connected || player.isBot) return;
+
+    // 게임이 이미 끝났으면 대체 불필요
+    if (room.phase === 'WAITING_FOR_PLAYERS' || room.phase === 'GAME_OVER') return;
+
+    console.log(`[botReplace] seat=${seat} replacing ${player.nickname} with bot`);
+
+    // 원래 플레이어 정보 저장 (재접속 복원용)
+    player.originalPlayer = {
+      playerId: player.playerId,
+      nickname: player.nickname,
+    };
+    player.isBot = true;
+    player.nickname = `봇 (${player.originalPlayer.nickname})`;
+    player.botReplaceTimer = undefined;
+
+    io.to(roomId).emit('bot_replaced', {
+      seat,
+      nickname: player.nickname,
+      originalNickname: player.originalPlayer.nickname,
+    });
+
+    // 현재 페이즈에 따라 봇 행동 즉시 트리거
+    triggerBotActionForPhase(io, room, seat);
+  }
+
+  function triggerBotActionForPhase(io: Server, room: GameRoom, seat: number): void {
+    // 라지 티츄 페이즈: 아직 응답 안 했으면 봇으로 처리
+    if (room.phase === 'LARGE_TICHU_WINDOW' && !room.largeTichuResponses[seat]) {
+      setTimeout(() => {
+        if (room.phase !== 'LARGE_TICHU_WINDOW') return;
+        const shouldDeclare = decideBotTichu(room, seat, 'large');
+        if (shouldDeclare) {
+          const result = declareTichu(room, seat, 'large');
+          if (result.ok) broadcastEvents(io, room, result.events);
+        } else {
+          passLargeTichu(room, seat);
+        }
+        if (allLargeTichuResponded(room)) {
+          finishLargeTichuPhase(io, room);
+        }
+      }, 500);
+    }
+
+    // 교환 페이즈: 아직 교환 안 했으면 봇으로 처리
+    if (room.phase === 'PASSING' && room.pendingExchanges[seat] === null) {
+      setTimeout(() => {
+        if (room.phase !== 'PASSING') return;
+        const exchange = decideBotExchange(room, seat);
+        const result = submitExchange(room, seat, exchange.left, exchange.partner, exchange.right);
+        if (result.ok) broadcastEvents(io, room, result.events);
+        if (allExchangesComplete(room)) {
+          if ((room as any)._exchangeTimer) {
+            clearTimeout((room as any)._exchangeTimer);
+            delete (room as any)._exchangeTimer;
+          }
+          const events = finishExchange(room);
+          broadcastEvents(io, room, events);
+          startTurnTimer(io, room);
+        }
+      }, 500);
+    }
+
+    // 트릭 플레이: 현재 이 봇의 턴이면 봇 액션 스케줄
+    if (room.phase === 'TRICK_PLAY' && room.currentTurn === seat && !room.bombWindow) {
+      scheduleBotAction(io, room, seat, room.turnTimer.turnId);
+    }
+
+    // 용 양도 대기: 이 봇이 양도해야 하면 처리
+    if (room.dragonGivePending && room.dragonGivePending.winningSeat === seat) {
+      setTimeout(() => {
+        if (!room.dragonGivePending) return;
+        const opponents = [0, 1, 2, 3].filter(
+          s => s !== seat && (s + 2) % 4 !== seat
+        );
+        const target = opponents[Math.floor(Math.random() * opponents.length)]!;
+        const result = dragonGive(room, seat, target);
+        if (result.ok) {
+          broadcastEvents(io, room, result.events);
+          handlePostPlay(io, room);
+        }
+      }, 500);
+    }
+  }
 
   // ── 매칭 타이머 (1초마다 체크, 한 번만 등록) ─────────────────
   if (!(globalThis as any).__matchmakingTimer) {
@@ -1396,6 +1527,13 @@ function startDragonGiveTimer(io: Server, room: GameRoom): void {
   if (!room.dragonGivePending) return;
 
   const seat = room.dragonGivePending.winningSeat;
+  console.log(`[dragonGiveTimer] started for seat=${seat}`);
+
+  // 클라이언트에 용 양도 요청 전송 (broadcastEvents default에서도 보내지만 확실하게 재전송)
+  const player = room.players[seat];
+  if (player?.socketId && !player.isBot) {
+    io.to(player.socketId).emit('dragon_give_required', { seat });
+  }
 
   room.dragonGivePending.timeoutHandle = setTimeout(() => {
     if (!room.dragonGivePending) return;
@@ -1418,7 +1556,6 @@ function startDragonGiveTimer(io: Server, room: GameRoom): void {
   }, room.settings.dragonGiveTimeLimit);
 
   // 봇이면 빠르게 결정
-  const player = room.players[seat];
   if (player?.isBot) {
     setTimeout(() => {
       if (!room.dragonGivePending) return;
@@ -1495,10 +1632,10 @@ function broadcastEvents(io: Server, room: GameRoom, events: GameEvent[]): void 
   for (const event of events) {
     switch (event.type) {
       case 'cards_dealt':
-        // 각 플레이어에게 자기 카드만 전송
+        // 각 플레이어에게 자기 카드만 전송 (연결된 플레이어만)
         for (let s = 0; s < 4; s++) {
           const player = room.players[s];
-          if (player?.socketId) {
+          if (player?.socketId && player.connected) {
             io.to(player.socketId).emit('cards_dealt', {
               cards: room.hands[s],
             });

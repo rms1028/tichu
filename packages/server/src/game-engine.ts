@@ -3,7 +3,7 @@ import {
   validateHand, canBeat, getValidPlays, mustFulfillWish,
   calculateRoundScore, sumPoints,
   isMahjong, isDog, isDragon, isNormalCard, isPhoenix, isBomb,
-  RANK_VALUES,
+  RANK_VALUES, DRAGON_VALUE,
 } from '@tichu/shared';
 import type { GameRoom, TrickRecord } from './game-room.js';
 import {
@@ -299,7 +299,7 @@ export function playCards(
 
   // Edge #4: 봉황 싱글, 직전=용 → 불가
   if (isPhoenix(cards[0]!) && cards.length === 1 && !isLead &&
-      room.tableCards?.value === Infinity) {
+      room.tableCards?.value === DRAGON_VALUE) {
     return { ok: false, error: 'phoenix_cannot_beat_dragon', events: [] };
   }
 

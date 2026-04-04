@@ -1,6 +1,6 @@
 import type { Card, PlayedHand, Rank } from './types.js';
 import { isNormalCard, isPhoenix, isDragon, isDog, isMahjong, isBomb } from './types.js';
-import { RANK_VALUES, ALL_RANKS, MAHJONG_VALUE } from './constants.js';
+import { RANK_VALUES, ALL_RANKS, MAHJONG_VALUE, DRAGON_VALUE } from './constants.js';
 import { validateHand } from './validate-hand.js';
 import { canBeat } from './can-beat.js';
 
@@ -64,7 +64,7 @@ export function getValidPlays(
   if (phoenix) {
     const lastVal = currentTable?.type === 'single' ? currentTable.value : undefined;
     // 봉황 싱글: 용 위에는 불가
-    if (lastVal !== Infinity) {
+    if (lastVal !== DRAGON_VALUE) {
       const ph = validateHand([phoenix], undefined, lastVal ?? undefined);
       if (ph && canBeat(currentTable, ph)) addResult(ph);
     }

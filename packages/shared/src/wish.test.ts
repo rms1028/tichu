@@ -52,6 +52,27 @@ describe('mustFulfillWish — follow', () => {
     expect(result.validPlaysWithWish.length).toBeGreaterThan(0);
     expect(result.validPlaysWithWish.every(p => p.type === 'four_bomb' || p.type === 'straight_flush_bomb')).toBe(true);
   });
+
+  // 소원=2, 바닥=용 → 2를 가지고 있지만 용을 이길 수 없으므로 패스 가능
+  it('소원=2, 바닥=용 → 폭탄 없으면 패스 가능', () => {
+    const dragonTable: PlayedHand = {
+      type: 'single', cards: [DRAGON], value: 999, length: 1,
+    };
+    const hand = [S('2'), T('5'), J('8'), P('K')];
+    const result = mustFulfillWish(hand, dragonTable, '2', false);
+    expect(result.mustPlay).toBe(false);
+  });
+
+  // 소원=2, 바닥=용, 2222 폭탄 보유 → 폭탄 강제
+  it('소원=2, 바닥=용, 2222 폭탄 보유 → 폭탄 강제', () => {
+    const dragonTable: PlayedHand = {
+      type: 'single', cards: [DRAGON], value: 999, length: 1,
+    };
+    const hand = [S('2'), T('2'), J('2'), P('2'), S('K')];
+    const result = mustFulfillWish(hand, dragonTable, '2', false);
+    expect(result.mustPlay).toBe(true);
+    expect(result.validPlaysWithWish.every(p => p.type === 'four_bomb')).toBe(true);
+  });
 });
 
 // ── 리드 시 소원 강제 ────────────────────────────────────────

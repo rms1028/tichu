@@ -41,4 +41,28 @@ httpServer.listen(PORT, () => {
   console.log(`Tichu server listening on port ${PORT}`);
 });
 
+// ── Graceful Shutdown ─────────────────────────────────────────
+function gracefulShutdown(signal: string) {
+  console.log(`[${signal}] Graceful shutdown started...`);
+
+  // 모든 클라이언트에게 서버 재시작 알림
+  io.emit('server_restarting');
+
+  // 1초 대기 후 연결 종료 (클라이언트가 이벤트 수신할 시간)
+  setTimeout(() => {
+    io.close(() => {
+      console.log('[shutdown] Socket.IO closed');
+      httpServer.close(() => {
+        console.log('[shutdown] HTTP server closed');
+        process.exit(0);
+      });
+    });
+    // 5초 후 강제 종료
+    setTimeout(() => process.exit(1), 5000);
+  }, 1000);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 export { io, httpServer };

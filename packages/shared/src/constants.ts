@@ -32,7 +32,7 @@ export function getCardPoints(card: Card): number {
 // ── Mahjong value ────────────────────────────────────────────
 
 export const MAHJONG_VALUE = 1;
-export const DRAGON_VALUE = Infinity;
+export const DRAGON_VALUE = 999;  // Infinity를 사용하면 JSON 직렬화 시 null이 됨
 export const PHOENIX_LEAD_VALUE = 1.5;
 
 // ── Factory helpers ──────────────────────────────────────────

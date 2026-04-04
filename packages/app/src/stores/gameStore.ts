@@ -1,5 +1,41 @@
 import { create } from 'zustand';
+import { Platform } from 'react-native';
 import type { Card, PlayedHand, Rank, GamePhase } from '@tichu/shared';
+
+// roomId 영속 저장 (재접속용)
+let gameStorage: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    const { MMKV } = require('react-native-mmkv');
+    gameStorage = new MMKV({ id: 'game-session' });
+  } catch { /* */ }
+} else {
+  gameStorage = {
+    getString: (key: string) => { try { return localStorage.getItem('game_' + key); } catch { return null; } },
+    set: (key: string, val: string) => { try { localStorage.setItem('game_' + key, val); } catch {} },
+    delete: (key: string) => { try { localStorage.removeItem('game_' + key); } catch {} },
+  };
+}
+
+function saveSession(roomId: string | null, mySeat: number) {
+  if (!gameStorage) return;
+  if (roomId) {
+    gameStorage.set('roomId', roomId);
+    gameStorage.set('mySeat', String(mySeat));
+  } else {
+    gameStorage.delete('roomId');
+    gameStorage.delete('mySeat');
+  }
+}
+
+export function loadSession(): { roomId: string | null; mySeat: number } {
+  if (!gameStorage) return { roomId: null, mySeat: -1 };
+  try {
+    const roomId = gameStorage.getString('roomId') ?? null;
+    const mySeat = parseInt(gameStorage.getString('mySeat') ?? '-1', 10);
+    return { roomId, mySeat };
+  } catch { return { roomId: null, mySeat: -1 }; }
+}
 
 // ── 클라이언트 게임 상태 ─────────────────────────────────────
 
@@ -176,28 +212,38 @@ const INITIAL_STATE = {
   seasonRewardClaimed: null as { tier: string; coins: number; xp: number } | null,
 };
 
+// 재접속 직후 지연된 이벤트로부터 핸드 보호
+let lastSyncAt = 0;
+const SYNC_GUARD_MS = 3000;
+
 export const useGameStore = create<GameState>((set, get) => ({
   ...INITIAL_STATE,
 
   setConnection: (connected) => set({ connected }),
 
-  setRoomInfo: (roomId, seat, players?) => set({
-    roomId, mySeat: seat,
-    ...(players ? { players } : {}),
-  }),
+  setRoomInfo: (roomId, seat, players?) => {
+    saveSession(roomId, seat);
+    set({
+      roomId, mySeat: seat,
+      ...(players ? { players } : {}),
+    });
+  },
 
   setPlayerInfo: (playerId, nickname) => set({ playerId, nickname }),
 
-  syncGameState: (state) => set((prev) => {
-    // 서버에서 빈 핸드가 왔는데 게임 진행 중이면 기존 핸드 유지 (재접속 타이밍 이슈 방지)
-    const myHand = (state.myHand && state.myHand.length > 0) ? state.myHand : prev.myHand;
-    return {
-      ...prev,
-      ...state,
-      myHand,
-      isMyTurn: (state.currentTurn ?? prev.currentTurn) === prev.mySeat,
-    };
-  }),
+  syncGameState: (state) => {
+    lastSyncAt = Date.now();
+    set((prev) => {
+      // 서버에서 빈 핸드가 왔는데 게임 진행 중이면 기존 핸드 유지 (재접속 타이밍 이슈 방지)
+      const myHand = (state.myHand && state.myHand.length > 0) ? state.myHand : prev.myHand;
+      return {
+        ...prev,
+        ...state,
+        myHand,
+        isMyTurn: (state.currentTurn ?? prev.currentTurn) === prev.mySeat,
+      };
+    });
+  },
 
   toggleCardSelection: (card) => set((state) => {
     const idx = state.selectedCards.findIndex(c => cardEquals(c, card));
@@ -217,7 +263,14 @@ export const useGameStore = create<GameState>((set, get) => ({
     otherHandCounts: { ...state.otherHandCounts, ...counts },
   })),
 
-  onCardDealt: (cards) => set({ myHand: cards }),
+  onCardDealt: (cards) => {
+    // 재접속 직후 지연된 cards_dealt 이벤트 무시 (game_state_sync가 이미 올바른 핸드 제공)
+    if (Date.now() - lastSyncAt < SYNC_GUARD_MS) {
+      console.log('[onCardDealt] ignoring stale cards_dealt (within sync guard window)');
+      return;
+    }
+    set({ myHand: cards });
+  },
 
   onPhaseChanged: (phase) => set((state) => {
     const partner = (state.mySeat + 2) % 4;
@@ -322,7 +375,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     isMyTurn: seat === state.mySeat,
     turnStartedAt: Date.now(),
     trickWonEvent: null,
-    dragonGiveRequired: false,
+    // 용 양도 중에는 dragonGiveRequired를 유지 (턴 변경이 양도 완료 후에만 와야 하지만 안전장치)
+    dragonGiveRequired: state.dragonGiveRequired ? state.dragonGiveRequired : false,
     ...(turnDuration ? { turnDuration } : {}),
   })),
 
@@ -342,17 +396,23 @@ export const useGameStore = create<GameState>((set, get) => ({
     scores,
   }),
 
-  onGameOver: (winner, scores) => set({
-    gameOver: { winner, scores },
-    scores,
-  }),
+  onGameOver: (winner, scores) => {
+    saveSession(null, -1);
+    set({
+      gameOver: { winner, scores },
+      scores,
+    });
+  },
 
   onError: (msg) => {
     set({ errorMsg: translateError(msg) });
     setTimeout(() => set({ errorMsg: null }), 3000);
   },
 
-  reset: () => set(INITIAL_STATE),
+  reset: () => {
+    saveSession(null, -1);
+    set(INITIAL_STATE);
+  },
 }));
 
 // ── 에러 메시지 번역 ─────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { Card, Rank, PlayedHand, GamePhase } from '@tichu/shared';
-import { useGameStore } from '../stores/gameStore';
+import { useGameStore, loadSession } from '../stores/gameStore';
 import { SFX, TTS } from '../utils/sound';
 import { haptics } from '../utils/haptics';
 
@@ -17,13 +17,38 @@ export function useSocket() {
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: Infinity,
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 3000,
-      timeout: 10000,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+      timeout: 15000,
       upgrade: true,
     });
 
     socketRef.current = socket;
+
+    // ── 재접속 재시도 상태 ──────────────────────────────────
+    let serverRestarting = false;
+    let rejoinRetryCount = 0;
+    const MAX_REJOIN_RETRIES = 5;
+    let rejoinRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function attemptRejoin() {
+      // 먼저 스토어에서 확인, 없으면 영속 저장된 세션에서 복원
+      let { roomId, playerId } = useGameStore.getState();
+      if (!roomId) {
+        const session = loadSession();
+        if (session.roomId) {
+          roomId = session.roomId;
+          const us = require('../stores/userStore').useUserStore.getState();
+          playerId = us.playerId ?? '';
+          if (roomId && playerId) {
+            useGameStore.setState({ roomId, mySeat: session.mySeat, playerId });
+          }
+        }
+      }
+      if (roomId && playerId && socket.connected) {
+        socket.emit('rejoin_room', { roomId, playerId });
+      }
+    }
 
     // ── 연결 상태 ──────────────────────────────────────────
     socket.on('connect', () => {
@@ -34,20 +59,37 @@ export function useSocket() {
       if (us.playerId && us.nickname) {
         socket.emit('guest_login', { guestId: us.playerId, nickname: us.nickname });
       }
-      const { roomId, playerId } = useGameStore.getState();
-      if (roomId && playerId) {
-        socket.emit('rejoin_room', { roomId, playerId });
-      }
+      rejoinRetryCount = 0;
+      attemptRejoin();
     });
 
     socket.on('disconnect', () => {
       store.setConnection(false);
     });
 
-    // rejoin 실패 → 게임 방이 사라짐 (서버 재시작 등)
+    // 서버 재시작 알림 → 재접속 대기 모드
+    socket.on('server_restarting', () => {
+      console.log('[server_restarting] server is restarting, will retry rejoin');
+      serverRestarting = true;
+      rejoinRetryCount = 0;
+    });
+
+    // rejoin 실패 → 재시도 (서버가 아직 방을 로드하지 않았을 수 있음)
     socket.on('rejoin_failed', () => {
-      console.warn('[rejoin_failed] room lost, resetting');
-      store.reset();
+      rejoinRetryCount++;
+      const { roomId } = useGameStore.getState();
+
+      if (roomId && rejoinRetryCount <= MAX_REJOIN_RETRIES) {
+        const delay = Math.min(1000 * Math.pow(2, rejoinRetryCount - 1), 8000);
+        console.log(`[rejoin_failed] retry ${rejoinRetryCount}/${MAX_REJOIN_RETRIES} in ${delay}ms`);
+        if (rejoinRetryTimer) clearTimeout(rejoinRetryTimer);
+        rejoinRetryTimer = setTimeout(() => attemptRejoin(), delay);
+      } else {
+        console.warn('[rejoin_failed] max retries reached, resetting');
+        serverRestarting = false;
+        rejoinRetryCount = 0;
+        store.reset();
+      }
     });
 
     // ── 방 참가 ────────────────────────────────────────────
@@ -215,8 +257,30 @@ export function useSocket() {
       }
     });
 
+    // ── 봇 대체 / 복원 ──────────────────────────────────────
+    socket.on('bot_replaced', (data: { seat: number; nickname: string }) => {
+      const players = useGameStore.getState().players;
+      const player = players[data.seat];
+      if (player) {
+        useGameStore.setState({
+          players: { ...players, [data.seat]: { ...player, nickname: data.nickname, isBot: true, connected: true } },
+        });
+      }
+    });
+
+    socket.on('player_restored', (data: { seat: number; nickname: string }) => {
+      const players = useGameStore.getState().players;
+      const player = players[data.seat];
+      if (player) {
+        useGameStore.setState({
+          players: { ...players, [data.seat]: { ...player, nickname: data.nickname, isBot: false, connected: true } },
+        });
+      }
+    });
+
     // ── 용 양도 ────────────────────────────────────────────
     socket.on('dragon_give_required', (data: { seat: number }) => {
+      console.log('[dragon_give_required] seat=', data.seat, 'mySeat=', useGameStore.getState().mySeat);
       store.onDragonGiveRequired(data.seat);
     });
 
@@ -355,6 +419,7 @@ export function useSocket() {
     });
 
     return () => {
+      if (rejoinRetryTimer) clearTimeout(rejoinRetryTimer);
       socket.disconnect();
       socketRef.current = null;
     };

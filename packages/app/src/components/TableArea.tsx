@@ -169,7 +169,7 @@ export function TableArea() {
 }
 
 function valueLabel(v: number | null | undefined): string {
-  if (v === null || v === undefined || v === Infinity || !isFinite(v)) return '용';
+  if (v === null || v === undefined || v === 999 || v === Infinity || !isFinite(v)) return '용';
   if (v === 0) return '개';
   if (v === 1) return '참새';
   if (v % 1 !== 0) return '봉황'; // 봉황 싱글 (직전+0.5)
