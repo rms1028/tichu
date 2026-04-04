@@ -3,38 +3,60 @@
  * - 로비 / 게임 중 두 가지 트랙
  * - 루프 재생, 페이드 인/아웃 전환
  * - musicOn 설정 연동
+ * - public/audio/ 폴더의 파일을 직접 참조 (Metro 번들러 호환)
  */
 
-// @ts-ignore — metro/webpack이 mp3 파일을 URL로 resolve
-import lobbyMp3 from '../../assets/hitslab-exciting-upbeat-background-music-300654.mp3';
-// @ts-ignore
-import gameMp3 from '../../assets/hitslab-game-gaming-video-game-music-459876.mp3';
-
 export type BgmTrack = 'lobby' | 'game' | 'none';
+
+const TRACK_URLS: Record<Exclude<BgmTrack, 'none'>, string> = {
+  lobby: '/audio/lobby.mp3',
+  game: '/audio/game.mp3',
+};
 
 let currentTrack: BgmTrack = 'none';
 let lobbyAudio: HTMLAudioElement | null = null;
 let gameAudio: HTMLAudioElement | null = null;
 let bgmVolume = 0.3;
 let enabled = true;
-let fadeTimer: ReturnType<typeof setInterval> | null = null;
+let userInteracted = false;
+let pendingTrack: BgmTrack = 'none';
+
+// 브라우저 자동 재생 차단 대응: 첫 클릭 시 보류된 BGM 재생
+function setupInteractionListener() {
+  if (typeof window === 'undefined') return;
+  const handler = () => {
+    userInteracted = true;
+    if (pendingTrack !== 'none' && enabled) {
+      playBgm(pendingTrack);
+    }
+    window.removeEventListener('click', handler);
+    window.removeEventListener('touchstart', handler);
+    window.removeEventListener('keydown', handler);
+  };
+  window.addEventListener('click', handler, { once: true });
+  window.addEventListener('touchstart', handler, { once: true });
+  window.addEventListener('keydown', handler, { once: true });
+}
+setupInteractionListener();
 
 function getAudio(track: BgmTrack): HTMLAudioElement | null {
   if (typeof window === 'undefined' || typeof Audio === 'undefined') return null;
 
   if (track === 'lobby') {
     if (!lobbyAudio) {
-      lobbyAudio = new Audio(lobbyMp3);
+      lobbyAudio = new Audio(TRACK_URLS.lobby);
       lobbyAudio.loop = true;
       lobbyAudio.volume = 0;
+      lobbyAudio.preload = 'auto';
     }
     return lobbyAudio;
   }
   if (track === 'game') {
     if (!gameAudio) {
-      gameAudio = new Audio(gameMp3);
+      gameAudio = new Audio(TRACK_URLS.game);
       gameAudio.loop = true;
       gameAudio.volume = 0;
+      gameAudio.preload = 'auto';
     }
     return gameAudio;
   }
@@ -50,21 +72,23 @@ function fadeIn(audio: HTMLAudioElement, targetVol: number, durationMs = 800) {
 
   const timer = setInterval(() => {
     vol = Math.min(vol + stepVol, targetVol);
-    audio.volume = vol;
+    try { audio.volume = vol; } catch {}
     if (vol >= targetVol) clearInterval(timer);
   }, stepMs);
 }
 
 function fadeOut(audio: HTMLAudioElement, durationMs = 600): Promise<void> {
   return new Promise((resolve) => {
+    if (audio.paused) { resolve(); return; }
     const steps = 15;
     const stepMs = durationMs / steps;
     let vol = audio.volume;
+    if (vol <= 0) { audio.pause(); resolve(); return; }
     const stepVol = vol / steps;
 
     const timer = setInterval(() => {
       vol = Math.max(vol - stepVol, 0);
-      audio.volume = vol;
+      try { audio.volume = vol; } catch {}
       if (vol <= 0) {
         clearInterval(timer);
         audio.pause();
@@ -94,6 +118,7 @@ export async function playBgm(track: BgmTrack) {
   if (track === 'none') {
     stopAll();
     currentTrack = 'none';
+    pendingTrack = 'none';
     return;
   }
 
@@ -110,6 +135,7 @@ export async function playBgm(track: BgmTrack) {
   }
 
   currentTrack = track;
+  pendingTrack = track;
 
   if (!enabled) return;
 
@@ -117,13 +143,15 @@ export async function playBgm(track: BgmTrack) {
   try {
     await targetAudio.play();
     fadeIn(targetAudio, bgmVolume);
-  } catch {
-    // 브라우저가 자동 재생 차단 시 — 첫 사용자 인터랙션 후 재시도
+    console.log(`[BGM] playing: ${track}`);
+  } catch (err) {
+    // 브라우저 자동 재생 차단 — 첫 인터랙션 후 재시도됨
+    console.log(`[BGM] autoplay blocked for ${track}, waiting for user interaction`);
+    pendingTrack = track;
   }
 }
 
 export function stopAll() {
-  if (fadeTimer) { clearInterval(fadeTimer); fadeTimer = null; }
   if (lobbyAudio && !lobbyAudio.paused) {
     lobbyAudio.pause();
     lobbyAudio.currentTime = 0;
