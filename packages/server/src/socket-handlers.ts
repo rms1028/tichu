@@ -1141,7 +1141,7 @@ export function registerSocketHandlers(io: Server): void {
         if (allLargeTichuResponded(room)) {
           finishLargeTichuPhase(io, room);
         }
-      }, 500);
+      }, 1500 + Math.random() * 1000);
     }
 
     // 교환 페이즈: 아직 교환 안 했으면 봇으로 처리
@@ -1160,7 +1160,7 @@ export function registerSocketHandlers(io: Server): void {
           broadcastEvents(io, room, events);
           startTurnTimer(io, room);
         }
-      }, 500);
+      }, 1000 + Math.random() * 1500);
     }
 
     // 트릭 플레이: 현재 이 봇의 턴이면 봇 액션 스케줄
@@ -1181,7 +1181,7 @@ export function registerSocketHandlers(io: Server): void {
           broadcastEvents(io, room, result.events);
           handlePostPlay(io, room);
         }
-      }, 500);
+      }, 1500 + Math.random() * 1000);
     }
   }
 
@@ -1322,7 +1322,7 @@ function scheduleBotLargeTichu(io: Server, room: GameRoom): void {
     if (allLargeTichuResponded(room)) {
       finishLargeTichuPhase(io, room);
     }
-  }, 400);
+  }, 1500 + Math.random() * 1500);
 }
 
 function scheduleBotExchange(io: Server, room: GameRoom): void {
@@ -1345,7 +1345,7 @@ function scheduleBotExchange(io: Server, room: GameRoom): void {
       broadcastEvents(io, room, events);
       startTurnTimer(io, room);
     }
-  }, 300);
+  }, 1000 + Math.random() * 1500);
 }
 
 function startLargeTichuTimer(io: Server, room: GameRoom): void {
@@ -1428,7 +1428,7 @@ function startTurnTimer(io: Server, room: GameRoom): void {
 }
 
 function scheduleBotAction(io: Server, room: GameRoom, seat: number, turnId: number): void {
-  const delay = 400 + Math.random() * 400; // 0.4~0.8초 (빠른 플레이)
+  const delay = 1500 + Math.random() * 2000; // 1.5~3.5초 (자연스러운 속도)
   setTimeout(() => {
     try {
     if (room.turnTimer.turnId !== turnId) return;
@@ -1568,7 +1568,7 @@ function scheduleBotBombWindow(io: Server, room: GameRoom): void {
         }
       }
     }
-  }, 400);
+  }, 800 + Math.random() * 700);
 }
 
 function handlePostPlay(io: Server, room: GameRoom): void {
@@ -1663,7 +1663,7 @@ function startDragonGiveTimer(io: Server, room: GameRoom): void {
         broadcastEvents(io, room, result.events);
         handlePostPlay(io, room);
       }
-    }, 500);
+    }, 1500 + Math.random() * 1000);
   }
 }
 
