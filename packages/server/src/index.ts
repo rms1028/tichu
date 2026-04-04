@@ -45,6 +45,10 @@ httpServer.listen(PORT, () => {
 function gracefulShutdown(signal: string) {
   console.log(`[${signal}] Graceful shutdown started...`);
 
+  // 글로벌 타이머 정리
+  if ((globalThis as any).__matchmakingTimer) clearInterval((globalThis as any).__matchmakingTimer);
+  if ((globalThis as any).__roomCleanupTimer) clearInterval((globalThis as any).__roomCleanupTimer);
+
   // 모든 클라이언트에게 서버 재시작 알림
   io.emit('server_restarting');
 

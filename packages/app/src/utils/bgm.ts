@@ -63,34 +63,46 @@ function getAudio(track: BgmTrack): HTMLAudioElement | null {
   return null;
 }
 
+let fadeInTimer: ReturnType<typeof setInterval> | null = null;
+let fadeOutTimer: ReturnType<typeof setInterval> | null = null;
+
+function cancelFades() {
+  if (fadeInTimer) { clearInterval(fadeInTimer); fadeInTimer = null; }
+  if (fadeOutTimer) { clearInterval(fadeOutTimer); fadeOutTimer = null; }
+}
+
 function fadeIn(audio: HTMLAudioElement, targetVol: number, durationMs = 800) {
+  cancelFades();
   const steps = 20;
   const stepMs = durationMs / steps;
   const stepVol = targetVol / steps;
   let vol = 0;
   audio.volume = 0;
 
-  const timer = setInterval(() => {
+  fadeInTimer = setInterval(() => {
     vol = Math.min(vol + stepVol, targetVol);
     try { audio.volume = vol; } catch {}
-    if (vol >= targetVol) clearInterval(timer);
+    if (vol >= targetVol) {
+      if (fadeInTimer) { clearInterval(fadeInTimer); fadeInTimer = null; }
+    }
   }, stepMs);
 }
 
 function fadeOut(audio: HTMLAudioElement, durationMs = 600): Promise<void> {
   return new Promise((resolve) => {
     if (audio.paused) { resolve(); return; }
+    cancelFades();
     const steps = 15;
     const stepMs = durationMs / steps;
     let vol = audio.volume;
     if (vol <= 0) { audio.pause(); resolve(); return; }
     const stepVol = vol / steps;
 
-    const timer = setInterval(() => {
+    fadeOutTimer = setInterval(() => {
       vol = Math.max(vol - stepVol, 0);
       try { audio.volume = vol; } catch {}
       if (vol <= 0) {
-        clearInterval(timer);
+        if (fadeOutTimer) { clearInterval(fadeOutTimer); fadeOutTimer = null; }
         audio.pause();
         audio.currentTime = 0;
         resolve();

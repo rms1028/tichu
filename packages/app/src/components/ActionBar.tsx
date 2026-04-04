@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -51,14 +51,14 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
   const hasMahjong = selectedCards.some(isMahjong);
   const hasPhoenix = selectedCards.some(isPhoenix);
 
-  // 선택한 카드가 유효한 족보인지 + 바닥을 이길 수 있는지 검증
-  const isValidPlay = (() => {
+  // 선택한 카드가 유효한 족보인지 + 바닥을 이길 수 있는지 검증 (메모이제이션)
+  const isValidPlay = useMemo(() => {
     if (!hasSelection) return false;
     const phoenixAs = hasPhoenix && selectedCards.length > 1 ? inferPhoenixAs(selectedCards) : undefined;
     const hand = validateHand(selectedCards, phoenixAs);
     if (!hand) return false;
     return canBeat(tableCards, hand);
-  })();
+  }, [selectedCards, tableCards, hasSelection, hasPhoenix]);
 
   const canPlay = hasSelection && isMyTurn && isValidPlay;
 

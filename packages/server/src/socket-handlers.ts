@@ -6,7 +6,7 @@ import {
 } from '@tichu/shared';
 import type { GameRoom, PlayerInfo } from './game-room.js';
 import {
-  createGameRoom, getActivePlayers, getTeamForSeat, getPartnerSeat,
+  createGameRoom, getActivePlayers, getTeamForSeat, getPartnerSeat, clearTimers,
 } from './game-room.js';
 import {
   startRound, finishLargeTichuWindow, finishExchange,
@@ -1114,12 +1114,25 @@ export function registerSocketHandlers(io: Server): void {
     }, 1000);
   }
 
+  // ── 방 삭제 전 모든 타이머 정리 ─────────────────────────────
+  function cleanupRoom(room: GameRoom): void {
+    clearTimers(room);
+    for (let s = 0; s < 4; s++) {
+      const p = room.players[s];
+      if (p?.botReplaceTimer) {
+        clearTimeout(p.botReplaceTimer);
+        p.botReplaceTimer = undefined;
+      }
+    }
+  }
+
   // ── 방 정리 타이머 (60초마다, 끝난 방 삭제) ─────────────────
   if (!(globalThis as any).__roomCleanupTimer) {
     (globalThis as any).__roomCleanupTimer = setInterval(() => {
       const now = Date.now();
       for (const [id, room] of rooms) {
         if (room.phase === 'GAME_OVER') {
+          cleanupRoom(room);
           rooms.delete(id);
           continue;
         }
@@ -1133,6 +1146,7 @@ export function registerSocketHandlers(io: Server): void {
             .map(s => room.players[s]?.disconnectedAt ?? 0)
             .reduce((a, b) => Math.max(a, b), 0);
           if (lastDisconnect > 0 && now - lastDisconnect > 300_000) {
+            cleanupRoom(room);
             rooms.delete(id);
           }
         }
