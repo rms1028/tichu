@@ -114,12 +114,16 @@ export function PlayerHand() {
   // 모바일 2줄 모드: 9장 이상이면 2줄
   const useTwoRows = isMobile && normalCount >= 9;
 
+  // 폭탄 카드는 TRICK_PLAY 중 언제든 선택 가능
+  const canPressBomb = phase === 'TRICK_PLAY' && hasBombs;
+
   // 1줄 렌더링
   const renderSingleRow = (cards: Card[], overlapPx: number) => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rowContainer}>
       {cards.map((card, i) => {
         const isSelected = selectedCards.some(c => cardEquals(c, card));
         const isBombMember = bombCardKeys.has(cardKey(card));
+        const cardDisabled = !canSelectNormal && !(canPressBomb && isBombMember);
         return (
           <View
             key={`${cardKey(card)}-${i}`}
@@ -130,7 +134,7 @@ export function PlayerHand() {
               selected={isSelected}
               isBombCard={isBombMember}
               onPress={() => handleCardPress(card)}
-              disabled={!canSelectNormal}
+              disabled={cardDisabled}
             />
           </View>
         );
@@ -165,6 +169,7 @@ export function PlayerHand() {
       {normalCards.map((card, i) => {
         const isSelected = selectedCards.some(c => cardEquals(c, card));
         const isBombMember = bombCardKeys.has(cardKey(card));
+        const cardDisabled = !canSelectNormal && !(canPressBomb && isBombMember);
         const centerIdx = (normalCount - 1) / 2;
         const signedOffset = i - centerIdx;
         const absOffset = Math.abs(signedOffset);
@@ -185,7 +190,7 @@ export function PlayerHand() {
               selected={isSelected}
               isBombCard={isBombMember}
               onPress={() => handleCardPress(card)}
-              disabled={!canSelectNormal}
+              disabled={cardDisabled}
             />
           </View>
         );
