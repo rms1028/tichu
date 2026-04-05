@@ -428,7 +428,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   reset: () => {
     saveSession(null, -1);
-    set(INITIAL_STATE);
+    const { connected } = get();
+    set({ ...INITIAL_STATE, connected });
   },
 }));
 

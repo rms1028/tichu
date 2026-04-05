@@ -1122,42 +1122,46 @@ export function registerSocketHandlers(io: Server): void {
 
       const player = room.players[playerSeat];
       if (player) {
-        // 대기 중 방장 끊김 → 방 파괴
-        if (room.phase === 'WAITING_FOR_PLAYERS' && room.settings.isCustom) {
-          const isHost = room.hostPlayerId
-            ? player.playerId === room.hostPlayerId
-            : playerSeat === 0;
-          if (isHost) {
-            io.to(playerRoomId).emit('room_closed', { reason: 'host_left' });
-            for (let s = 0; s < 4; s++) {
-              const p = room.players[s];
-              if (p?.socketId && s !== playerSeat) {
-                const sock = io.sockets.sockets.get(p.socketId);
-                if (sock) {
-                  sock.leave(playerRoomId);
-                  (sock as any)._playerRoomId = null;
-                  (sock as any)._playerSeat = -1;
-                }
-              }
-            }
-            cleanupRoom(room);
-            rooms.delete(playerRoomId);
-            console.log(`[disconnect] host disconnected → room ${playerRoomId} destroyed`);
-            io.emit('rooms_updated');
-            return;
-          }
-        }
-
         player.connected = false;
         player.disconnectedAt = Date.now();
         io.to(playerRoomId).emit('player_disconnected', { seat: playerSeat });
 
-        // 대기 중 일반 플레이어 끊김 → 슬롯 비움
         if (room.phase === 'WAITING_FOR_PLAYERS') {
-          room.players[playerSeat] = null;
-          io.to(playerRoomId).emit('player_left', { seat: playerSeat });
-          broadcastSeats(io, room);
-          io.emit('rooms_updated');
+          // 대기 중 끊김: 30초 후에도 재접속 안 하면 슬롯 비움 (방장이면 방 파괴)
+          const savedRoomId2 = playerRoomId;
+          const savedSeat2 = playerSeat;
+          player.botReplaceTimer = setTimeout(() => {
+            const r = rooms.get(savedRoomId2);
+            if (!r) return;
+            const p = r.players[savedSeat2];
+            if (!p || p.connected) return; // 이미 재접속함
+
+            const isHost = r.hostPlayerId
+              ? p.playerId === r.hostPlayerId
+              : savedSeat2 === 0;
+            if (isHost) {
+              io.to(savedRoomId2).emit('room_closed', { reason: 'host_left' });
+              for (let s = 0; s < 4; s++) {
+                const sp = r.players[s];
+                if (sp?.socketId && s !== savedSeat2) {
+                  const sock = io.sockets.sockets.get(sp.socketId);
+                  if (sock) {
+                    sock.leave(savedRoomId2);
+                    (sock as any)._playerRoomId = null;
+                    (sock as any)._playerSeat = -1;
+                  }
+                }
+              }
+              cleanupRoom(r);
+              rooms.delete(savedRoomId2);
+              console.log(`[disconnect] host timeout → room ${savedRoomId2} destroyed`);
+            } else {
+              r.players[savedSeat2] = null;
+              io.to(savedRoomId2).emit('player_left', { seat: savedSeat2 });
+              broadcastSeats(io, r);
+            }
+            io.emit('rooms_updated');
+          }, 30_000);
         } else if (room.phase !== 'GAME_OVER' && !player.isBot) {
           // 게임 진행 중이면 10초 후 봇 대체 예약
           const savedRoomId = playerRoomId;
