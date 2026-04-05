@@ -1,9 +1,8 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import React, { useMemo } from 'react';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { isMobile, mob } from '../utils/responsive';
 import type { Card, PlayedHand } from '@tichu/shared';
-import { isNormalCard, getAvailableBombs, validateHand, isBomb } from '@tichu/shared';
+import { isNormalCard, validateHand } from '@tichu/shared';
 import { useGameStore } from '../stores/gameStore';
 import { sortHand } from '../hooks/useGame';
 import { CardView } from './CardView';
@@ -77,11 +76,7 @@ function findBombGroups(hand: Card[]): BombGroupInfo[] {
   return groups;
 }
 
-interface PlayerHandProps {
-  onSubmitBombCards?: (cards: Card[]) => void;
-}
-
-export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
+export function PlayerHand() {
   const myHand = useGameStore((s) => s.myHand);
   const selectedCards = useGameStore((s) => s.selectedCards);
   const toggleCard = useGameStore((s) => s.toggleCardSelection);
@@ -100,20 +95,10 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
     return keys;
   }, [bombGroups]);
 
-  const [bombSplit, setBombSplit] = useState(true);
-  const isLead = tableCards === null;
-  const effectiveSplit = !isLead && bombSplit && bombGroups.length > 0;
-  const canBomb = phase === 'TRICK_PLAY' && !isLead && bombGroups.length > 0;
   const canSelectNormal = isMyTurn || (bombWindow !== null && bombWindow.canSubmitBomb);
 
-  const normalCards = effectiveSplit ? sorted.filter(c => !bombCardKeys.has(cardKey(c))) : sorted;
-  const showBombGroups = effectiveSplit;
+  const normalCards = sorted;
   const normalCount = normalCards.length;
-
-  const handleBombGroupPress = (group: BombGroupInfo) => {
-    if (!canBomb || !onSubmitBombCards) return;
-    onSubmitBombCards(group.cards);
-  };
 
   const handleCardPress = (card: Card) => {
     if (!canSelectNormal) return;
@@ -159,19 +144,6 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
       <View style={styles.twoRowWrap}>
         {renderSingleRow(topRow, calcOverlap(topRow.length))}
         {renderSingleRow(botRow, calcOverlap(botRow.length))}
-        {/* 폭탄 그룹 */}
-        {canBomb && (
-          <View style={styles.bombRow}>
-            <TouchableOpacity style={styles.splitToggle} onPress={() => setBombSplit(!bombSplit)} activeOpacity={0.7}>
-              <Text style={styles.splitToggleIcon}>{bombSplit ? '🔓' : '🔗'}</Text>
-            </TouchableOpacity>
-            {showBombGroups && bombGroups.map((group, gi) => (
-              <TouchableOpacity key={`bomb-${gi}`} onPress={() => handleBombGroupPress(group)} activeOpacity={0.7} disabled={!canBomb} style={styles.bombChip}>
-                <Text style={styles.bombChipText}>💣 {group.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
       </View>
     );
   }
@@ -181,7 +153,6 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
   const screenWidth = isMobile ? 380 : 900;
   const autoOverlap = normalCount > 1 ? -Math.max(20, cardWidth - (screenWidth - cardWidth) / (normalCount - 1)) : 0;
   const cardOverlap = isMobile ? autoOverlap : -28;
-  const bombCardOverlap = isMobile ? Math.min(-20, autoOverlap + 4) : -22;
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.container} style={styles.scroll}>
@@ -213,35 +184,6 @@ export function PlayerHand({ onSubmitBombCards }: PlayerHandProps) {
           </View>
         );
       })}
-      {canBomb && (
-        <TouchableOpacity style={styles.splitToggle} onPress={() => setBombSplit(!bombSplit)} activeOpacity={0.7}>
-          <Text style={styles.splitToggleIcon}>{bombSplit ? '🔓' : '🔗'}</Text>
-          <Text style={styles.splitToggleText}>{bombSplit ? '합침' : '분리'}</Text>
-        </TouchableOpacity>
-      )}
-      {showBombGroups && (
-        <>{bombGroups.map((group, gi) => (
-          <TouchableOpacity
-            key={`bomb-${gi}`}
-            onPress={() => handleBombGroupPress(group)}
-            activeOpacity={0.7}
-            disabled={!canBomb}
-            style={[styles.bombGroup, gi > 0 && { marginLeft: 8 }]}
-          >
-            <View style={[styles.bombLabel, canBomb && styles.bombLabelActive]}>
-              <Text style={styles.bombLabelIcon}>{'💣'}</Text>
-              <Text style={[styles.bombLabelText, canBomb && styles.bombLabelTextActive]}>{group.label}</Text>
-            </View>
-            <View style={styles.bombCards}>
-              {group.cards.map((card, ci) => (
-                <View key={cardKey(card)} style={[styles.cardSlot, { marginLeft: ci === 0 ? 0 : bombCardOverlap, zIndex: ci }]}>
-                  <CardView card={card} isBombCard={true} disabled={!canBomb} onPress={() => handleBombGroupPress(group)} />
-                </View>
-              ))}
-            </View>
-          </TouchableOpacity>
-        ))}</>
-      )}
     </ScrollView>
   );
 }
@@ -273,83 +215,11 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     minWidth: '100%',
   },
-  bombRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingTop: 2,
-  },
-  bombChip: {
-    backgroundColor: 'rgba(155,89,182,0.3)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: '#9b59b6',
-  },
-  bombChipText: {
-    color: '#D4A5E5',
-    fontSize: 11,
-    fontWeight: '800',
-  },
   cardSlot: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 6,
     elevation: 6,
-  },
-  splitToggle: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 4,
-    paddingBottom: 6,
-    paddingHorizontal: 6,
-    minWidth: 36,
-    minHeight: 44,
-    gap: 2,
-  },
-  splitToggleIcon: {
-    fontSize: 16,
-  },
-  splitToggleText: {
-    color: 'rgba(155,89,182,0.6)',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  bombGroup: {
-    alignItems: 'center',
-  },
-  bombLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(155,89,182,0.15)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginBottom: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(155,89,182,0.2)',
-  },
-  bombLabelActive: {
-    backgroundColor: 'rgba(155,89,182,0.35)',
-    borderColor: '#9b59b6',
-  },
-  bombLabelIcon: {
-    fontSize: 10,
-  },
-  bombLabelText: {
-    color: 'rgba(155,89,182,0.5)',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  bombLabelTextActive: {
-    color: '#D4A5E5',
-  },
-  bombCards: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
   },
 });

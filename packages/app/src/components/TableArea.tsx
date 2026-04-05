@@ -140,7 +140,7 @@ export function TableArea() {
                   { zIndex: i },
                 ]}
               >
-                <CardView card={card} size="large" disabled />
+                <CardView card={card} size={isMobile ? 'normal' : 'large'} disabled />
               </Animated.View>
             ))}
           </View>

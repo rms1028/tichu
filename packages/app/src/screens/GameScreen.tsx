@@ -517,7 +517,7 @@ export function GameScreen({
             </View>
           </View>
         </View>
-        <PlayerHand onSubmitBombCards={onSubmitBombCards} />
+        <PlayerHand />
       </Animated.View>
       {/* 모달 */}
       <LargeTichuModal

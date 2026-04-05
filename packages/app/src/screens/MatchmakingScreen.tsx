@@ -319,7 +319,7 @@ const S = StyleSheet.create({
 
   // 하단
   bottom: { alignItems: 'center', gap: 10 },
-  hostActions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  hostActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', alignItems: 'center' },
   shuffleBtn: { backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)' },
   shuffleBtnText: { color: '#818CF8', fontSize: 14, fontWeight: '800' },
   startGameBtn: { backgroundColor: '#2ecc71', borderRadius: 12, paddingHorizontal: 32, paddingVertical: 12, shadowColor: '#2ecc71', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6 },
