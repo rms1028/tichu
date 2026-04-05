@@ -252,6 +252,18 @@ export function useSocket() {
     });
 
     // ── 연결 상태 변경 ────────────────────────────────────────
+    socket.on('room_closed', () => {
+      console.log('[room_closed] host left, room destroyed');
+      store.reset();
+    });
+
+    socket.on('player_left', (data: { seat: number }) => {
+      const players = useGameStore.getState().players;
+      useGameStore.setState({
+        players: { ...players, [data.seat]: null },
+      });
+    });
+
     socket.on('player_disconnected', (data: { seat: number }) => {
       const players = useGameStore.getState().players;
       const player = players[data.seat];

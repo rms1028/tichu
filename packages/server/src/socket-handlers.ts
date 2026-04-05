@@ -389,6 +389,13 @@ export function registerSocketHandlers(io: Server): void {
         return;
       }
 
+      // 중복 입장 방지: 이미 같은 playerId가 방에 있으면 거부
+      const existingSeat = [0, 1, 2, 3].find(s => room.players[s]?.playerId === data.playerId);
+      if (existingSeat !== undefined) {
+        socket.emit('error', { message: 'already_in_room' });
+        return;
+      }
+
       // 빈 좌석 찾기
       let seat = -1;
       for (let s = 0; s < 4; s++) {
@@ -666,10 +673,68 @@ export function registerSocketHandlers(io: Server): void {
     // ── leave_room ─────────────────────────────────────────
     socket.on('leave_room', () => {
       if (!playerRoomId) return;
-      socket.leave(playerRoomId);
-      console.log(`[leave_room] seat=${playerSeat} left room ${playerRoomId}`);
+      const room = rooms.get(playerRoomId);
+      const savedRoomId = playerRoomId;
+      const savedSeat = playerSeat;
+
+      socket.leave(savedRoomId);
+      console.log(`[leave_room] seat=${savedSeat} left room ${savedRoomId}`);
+
+      if (room && savedSeat >= 0) {
+        const player = room.players[savedSeat];
+        // 봇 대체 타이머 취소
+        if (player?.botReplaceTimer) {
+          clearTimeout(player.botReplaceTimer);
+        }
+
+        if (room.phase === 'WAITING_FOR_PLAYERS') {
+          // 대기 중: 방장이 나가면 방 삭제, 일반 플레이어는 슬롯 비움
+          const isHost = room.hostPlayerId
+            ? player?.playerId === room.hostPlayerId
+            : savedSeat === 0;
+
+          if (isHost) {
+            // 방장 퇴장 → 방 파괴: 남은 플레이어에게 알리고 방 삭제
+            io.to(savedRoomId).emit('room_closed', { reason: 'host_left' });
+            // 남은 소켓들을 방에서 제거
+            for (let s = 0; s < 4; s++) {
+              const p = room.players[s];
+              if (p?.socketId && s !== savedSeat) {
+                const sock = io.sockets.sockets.get(p.socketId);
+                if (sock) {
+                  sock.leave(savedRoomId);
+                  (sock as any)._playerRoomId = null;
+                  (sock as any)._playerSeat = -1;
+                }
+              }
+            }
+            cleanupRoom(room);
+            rooms.delete(savedRoomId);
+            console.log(`[leave_room] host left → room ${savedRoomId} destroyed`);
+          } else {
+            // 일반 플레이어 퇴장 → 슬롯 비움
+            room.players[savedSeat] = null;
+            io.to(savedRoomId).emit('player_left', { seat: savedSeat });
+            broadcastSeats(io, room);
+          }
+        } else {
+          // 게임 진행 중: 연결 끊김과 동일하게 처리
+          if (player && !player.isBot) {
+            player.connected = false;
+            player.disconnectedAt = Date.now();
+            io.to(savedRoomId).emit('player_disconnected', { seat: savedSeat });
+            const capturedRoomId = savedRoomId;
+            const capturedSeat = savedSeat;
+            player.botReplaceTimer = setTimeout(() => {
+              replaceWithBot(io, capturedRoomId, capturedSeat);
+            }, 10_000);
+          }
+        }
+      }
+
       playerRoomId = null;
       playerSeat = -1;
+      io.emit('rooms_updated');
     });
 
     // ── rejoin_room ────────────────────────────────────────
@@ -1057,12 +1122,44 @@ export function registerSocketHandlers(io: Server): void {
 
       const player = room.players[playerSeat];
       if (player) {
+        // 대기 중 방장 끊김 → 방 파괴
+        if (room.phase === 'WAITING_FOR_PLAYERS' && room.settings.isCustom) {
+          const isHost = room.hostPlayerId
+            ? player.playerId === room.hostPlayerId
+            : playerSeat === 0;
+          if (isHost) {
+            io.to(playerRoomId).emit('room_closed', { reason: 'host_left' });
+            for (let s = 0; s < 4; s++) {
+              const p = room.players[s];
+              if (p?.socketId && s !== playerSeat) {
+                const sock = io.sockets.sockets.get(p.socketId);
+                if (sock) {
+                  sock.leave(playerRoomId);
+                  (sock as any)._playerRoomId = null;
+                  (sock as any)._playerSeat = -1;
+                }
+              }
+            }
+            cleanupRoom(room);
+            rooms.delete(playerRoomId);
+            console.log(`[disconnect] host disconnected → room ${playerRoomId} destroyed`);
+            io.emit('rooms_updated');
+            return;
+          }
+        }
+
         player.connected = false;
         player.disconnectedAt = Date.now();
         io.to(playerRoomId).emit('player_disconnected', { seat: playerSeat });
 
-        // 게임 진행 중이면 10초 후 봇 대체 예약
-        if (room.phase !== 'WAITING_FOR_PLAYERS' && room.phase !== 'GAME_OVER' && !player.isBot) {
+        // 대기 중 일반 플레이어 끊김 → 슬롯 비움
+        if (room.phase === 'WAITING_FOR_PLAYERS') {
+          room.players[playerSeat] = null;
+          io.to(playerRoomId).emit('player_left', { seat: playerSeat });
+          broadcastSeats(io, room);
+          io.emit('rooms_updated');
+        } else if (room.phase !== 'GAME_OVER' && !player.isBot) {
+          // 게임 진행 중이면 10초 후 봇 대체 예약
           const savedRoomId = playerRoomId;
           const savedSeat = playerSeat;
           player.botReplaceTimer = setTimeout(() => {
