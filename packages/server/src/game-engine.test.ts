@@ -158,7 +158,7 @@ describe('exchange', () => {
 // ── play_cards 파이프라인 ────────────────────────────────────
 
 describe('playCards', () => {
-  it('첫 리드: 참새 포함 필수 (Edge #15)', () => {
+  it('첫 리드: 참새 없이도 아무 카드나 리드 가능', () => {
     const room = setupRoom();
     setupTrickPlay(room, {
       0: [MAHJONG, S('3'), S('4'), S('5')],
@@ -167,16 +167,12 @@ describe('playCards', () => {
       3: [T('7'), T('8'), T('9'), T('10')],
     }, 0);
 
-    // 참새 없이 리드 → 실패
+    // 참새 없이 리드 → 성공
     const r1 = playCards(room, 0, [S('3')]);
-    expect(r1.ok).toBe(false);
-
-    // 참새 포함 리드 → 성공
-    const r2 = playCards(room, 0, [MAHJONG]);
-    expect(r2.ok).toBe(true);
+    expect(r1.ok).toBe(true);
   });
 
-  it('첫 리드에서 개 불가 (Edge #15)', () => {
+  it('첫 리드에서 개 허용', () => {
     const room = setupRoom();
     setupTrickPlay(room, {
       0: [MAHJONG, DOG, S('3')],
@@ -184,7 +180,7 @@ describe('playCards', () => {
     }, 0);
 
     const r = playCards(room, 0, [DOG]);
-    expect(r.ok).toBe(false);
+    expect(r.ok).toBe(true);
   });
 
   it('팔로우: 더 높은 값만 가능', () => {

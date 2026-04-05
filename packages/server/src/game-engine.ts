@@ -272,15 +272,7 @@ export function playCards(
 
   const isLead = room.tableCards === null;
 
-  // 2. 첫 리드 검증: 참새 포함 필수, 개 불가 (Edge #15)
-  if (isLead && room.isFirstLead) {
-    if (cards.length === 1 && isDog(cards[0]!)) {
-      return { ok: false, error: 'dog_not_allowed_on_first_lead', events: [] };
-    }
-    if (!cards.some(isMahjong)) {
-      return { ok: false, error: 'first_lead_must_include_mahjong', events: [] };
-    }
-  }
+  // 2. 첫 리드 검증: 참새 없이 리드 가능, 개도 허용
 
   // 3. 소원+개 리드 검증: Edge #17, #27
   if (isLead && cards.length === 1 && isDog(cards[0]!)) {
@@ -805,18 +797,6 @@ export function handleTurnTimeout(room: GameRoom): EngineResult {
 
 function autoPlayLead(room: GameRoom, seat: number): EngineResult {
   const hand = room.hands[seat]!;
-
-  // 첫 리드 → 참새 싱글 (소원 없음)
-  if (room.isFirstLead) {
-    const mahjong = hand.find(isMahjong);
-    if (mahjong) {
-      const result = playCards(room, seat, [mahjong]);
-      if (result.ok) {
-        result.events.unshift({ type: 'auto_action', seat, action: 'play', cards: [mahjong] });
-      }
-      return result;
-    }
-  }
 
   // 소원 활성 + 소원 숫자 보유 → 소원 숫자 싱글
   if (room.wish !== null) {
