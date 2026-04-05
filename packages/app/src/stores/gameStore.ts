@@ -392,8 +392,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     isMyTurn: seat === state.mySeat,
     turnStartedAt: Date.now(),
     trickWonEvent: null,
-    // 용 양도 중에는 dragonGiveRequired를 유지 (턴 변경이 양도 완료 후에만 와야 하지만 안전장치)
-    dragonGiveRequired: state.dragonGiveRequired ? state.dragonGiveRequired : false,
+    dragonGiveRequired: false,
+    dragonGiveSeat: -1,
     ...(turnDuration ? { turnDuration } : {}),
   })),
 

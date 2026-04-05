@@ -11,7 +11,7 @@ import Animated, {
   ZoomIn,
 } from 'react-native-reanimated';
 import type { Card, Rank } from '@tichu/shared';
-import { isMahjong, isPhoenix, isNormalCard, mustFulfillWish, validateHand, canBeat, inferPhoenixAs } from '@tichu/shared';
+import { isMahjong, isPhoenix, isNormalCard, mustFulfillWish, validateHand, canBeat, inferPhoenixAs, isBomb as checkIsBomb } from '@tichu/shared';
 import { useGameStore } from '../stores/gameStore';
 import { COLORS, FONT } from '../utils/theme';
 import { mob, isMobile } from '../utils/responsive';
@@ -20,11 +20,12 @@ interface ActionBarProps {
   onPlay: (cards: Card[], phoenixAs?: Rank, wish?: Rank) => void;
   onPass: () => void;
   onDeclareTichu: (type: 'small') => void;
+  onSubmitBomb: (cards: Card[]) => void;
 }
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
-export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
+export function ActionBar({ onPlay, onPass, onDeclareTichu, onSubmitBomb }: ActionBarProps) {
   const selectedCards = useGameStore((s) => s.selectedCards);
   const isMyTurn = useGameStore((s) => s.isMyTurn);
   const tableCards = useGameStore((s) => s.tableCards);
@@ -60,13 +61,24 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
     return canBeat(tableCards, hand);
   }, [selectedCards, tableCards, hasSelection, hasPhoenix, wish]);
 
+  // 선택한 카드가 폭탄인지 체크 (내 턴이 아닐 때 폭탄 제출용)
+  const selectedIsBomb = useMemo(() => {
+    if (!hasSelection) return false;
+    const hand = validateHand(selectedCards);
+    if (!hand) return false;
+    return checkIsBomb(hand) && canBeat(tableCards, hand);
+  }, [selectedCards, tableCards, hasSelection]);
+
   const canPlay = hasSelection && isMyTurn && isValidPlay;
+  const canBombOutOfTurn = !isMyTurn && hasSelection && selectedIsBomb && !isLead;
 
   // Play 버튼 글로우 펄스
   const playGlow = useSharedValue(0);
   const playScale = useSharedValue(1);
+  const canAct = canPlay || canBombOutOfTurn;
+
   useEffect(() => {
-    if (canPlay) {
+    if (canAct) {
       playGlow.value = withRepeat(
         withSequence(
           withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) }),
@@ -78,11 +90,11 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
       playGlow.value = withTiming(0, { duration: 200 });
       playScale.value = withSpring(1, { damping: 10, stiffness: 100 });
     }
-  }, [canPlay]);
+  }, [canAct]);
 
   const playAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: playScale.value }],
-    shadowOpacity: canPlay ? 0.3 + playGlow.value * 0.5 : 0,
+    shadowOpacity: canAct ? 0.3 + playGlow.value * 0.5 : 0,
   }));
 
   const getPhoenixAs = (): Rank | undefined => {
@@ -91,6 +103,12 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
   };
 
   const handlePlay = () => {
+    // 턴 외 폭탄 → submit_bomb
+    if (canBombOutOfTurn) {
+      onSubmitBomb(selectedCards);
+      clearSelection();
+      return;
+    }
     if (!canPlay) return;
     if (hasMahjong) {
       setShowWishPicker(true);
@@ -133,12 +151,17 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu }: ActionBarProps) {
         </TouchableOpacity>
       )}
       <AnimatedTouchable
-        style={[styles.playButton, !canPlay && styles.disabledPlay, playAnimStyle]}
+        style={[
+          styles.playButton,
+          canBombOutOfTurn && styles.bombPlay,
+          !canAct && styles.disabledPlay,
+          playAnimStyle,
+        ]}
         onPress={handlePlay}
-        disabled={!canPlay}
+        disabled={!canAct}
         activeOpacity={0.8}
       >
-        <Text style={styles.playText}>내기</Text>
+        <Text style={styles.playText}>{canBombOutOfTurn ? '폭탄!' : '내기'}</Text>
       </AnimatedTouchable>
       {/* 소원 선택 그리드 */}
       {showWishPicker && (
@@ -247,6 +270,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(245,158,11,0.3)',
     shadowOpacity: 0,
     opacity: 0.4,
+  },
+  bombPlay: {
+    backgroundColor: '#9b59b6',
+    borderColor: '#D4A5E5',
+    shadowColor: '#9b59b6',
   },
 
   // 소원 선택 그리드

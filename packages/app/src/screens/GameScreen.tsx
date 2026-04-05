@@ -513,6 +513,7 @@ export function GameScreen({
                 onPlay={onPlay}
                 onPass={onPass}
                 onDeclareTichu={(type) => onDeclareTichu(type)}
+                onSubmitBomb={onSubmitBombCards ?? (() => {})}
               />
             </View>
           </View>

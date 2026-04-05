@@ -11,11 +11,16 @@ interface DragonGiveModalProps {
 export function DragonGiveModal({ onGive }: DragonGiveModalProps) {
   const dragonGiveRequired = useGameStore((s) => s.dragonGiveRequired);
   const players = useGameStore((s) => s.players);
+  const finishOrder = useGameStore((s) => s.finishOrder);
   const { leftOpponent, rightOpponent } = useTeamInfo();
 
   if (!dragonGiveRequired) return null;
 
-  const opponents = [leftOpponent, rightOpponent];
+  // 이미 나간 플레이어는 양도 대상에서 제외
+  const opponents = [leftOpponent, rightOpponent].filter(s => !finishOrder.includes(s));
+
+  // 상대 모두 나�� → 서버에서 자동 처리
+  if (opponents.length === 0) return null;
 
   return (
     <Modal transparent animationType="fade" visible>

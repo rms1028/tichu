@@ -26,7 +26,8 @@ import { SplashScreen } from '../src/screens/SplashScreen';
 import { DisconnectOverlay } from '../src/components/DisconnectOverlay';
 import { LoginScreen } from '../src/screens/LoginScreen';
 import { signInWithGoogle, signInAsGuest, signOutUser } from '../src/utils/firebase';
-import { playBgm, setBgmEnabled } from '../src/utils/bgm';
+import { playBgm, setBgmEnabled, stopAll as stopBgm } from '../src/utils/bgm';
+import { cancelAllSounds } from '../src/utils/sound';
 
 type AppScreen = 'splash' | 'login' | 'lobby' | 'matchmaking' | 'game' | 'result';
 

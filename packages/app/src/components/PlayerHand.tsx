@@ -96,13 +96,19 @@ export function PlayerHand() {
   }, [bombGroups]);
 
   const canSelectNormal = isMyTurn || (bombWindow !== null && bombWindow.canSubmitBomb);
+  const hasBombs = bombGroups.length > 0;
 
   const normalCards = sorted;
   const normalCount = normalCards.length;
 
   const handleCardPress = (card: Card) => {
-    if (!canSelectNormal) return;
-    toggleCard(card);
+    // 내 턴이면 모든 카드 선택 가능
+    if (canSelectNormal) { toggleCard(card); return; }
+    // 내 턴이 아니어도 폭탄 카드는 선택 가능 (TRICK_PLAY 중)
+    if (phase === 'TRICK_PLAY' && hasBombs && bombCardKeys.has(cardKey(card))) {
+      toggleCard(card);
+      return;
+    }
   };
 
   // 모바일 2줄 모드: 9장 이상이면 2줄

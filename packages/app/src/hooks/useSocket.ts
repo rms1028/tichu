@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { Card, Rank, PlayedHand, GamePhase } from '@tichu/shared';
 import { useGameStore, loadSession } from '../stores/gameStore';
-import { SFX, TTS } from '../utils/sound';
+import { SFX, TTS, cancelAllSounds } from '../utils/sound';
 import { haptics } from '../utils/haptics';
 
 const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL ?? 'http://localhost:3001';
@@ -254,6 +254,7 @@ export function useSocket() {
     // ── 연결 상태 변경 ────────────────────────────────────────
     socket.on('room_closed', () => {
       console.log('[room_closed] host left, room destroyed');
+      cancelAllSounds();
       store.reset();
     });
 
@@ -515,6 +516,7 @@ export function useSocket() {
 
   const dragonGive = useCallback((targetSeat: number) => {
     socketRef.current?.emit('dragon_give', { targetSeat });
+    useGameStore.setState({ dragonGiveRequired: false, dragonGiveSeat: -1 });
   }, []);
 
   const submitBomb = useCallback((cards: Card[]) => {
@@ -602,6 +604,7 @@ export function useSocket() {
 
   const leaveRoom = useCallback(() => {
     socketRef.current?.emit('leave_room');
+    cancelAllSounds();
     store.reset();
   }, []);
 
