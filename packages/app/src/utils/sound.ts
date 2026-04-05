@@ -152,43 +152,45 @@ let bestVoice: SpeechSynthesisVoice | null = null;
 export function setTtsEnabled(on: boolean) { ttsEnabled = on; }
 export function isTtsEnabled() { return ttsEnabled; }
 
-// 플랫폼 감지
-const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+// 플랫폼 감지 (iOS: Safari, Chrome, WebView 모두 포함)
+const isIOS = typeof navigator !== 'undefined' &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
-// 가장 자연스러운 한국어 음성 찾기 (플랫폼별 우선순위)
+// 가장 자연스러운 한국어 음성 찾기
 function findBestVoice(): SpeechSynthesisVoice | null {
   if (typeof window === 'undefined' || !window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices();
   if (voices.length === 0) return null;
 
+  // ko-KR 또는 ko_ 로 시작하는 음성
   const koVoices = voices.filter(v => v.lang.startsWith('ko'));
   if (koVoices.length === 0) return null;
 
-  // iOS: Yuna(향상됨) > Yuna > 기타 한국어
   if (isIOS) {
-    const yunaEnhanced = koVoices.find(v => v.name.includes('Yuna') && v.name.includes('Enhanced'));
-    if (yunaEnhanced) return yunaEnhanced;
-    const yuna = koVoices.find(v => v.name.includes('Yuna'));
+    // iOS: Yuna(Enhanced) > Yuna > 기타
+    const yunaEnh = koVoices.find(v => /yuna/i.test(v.name) && /enhanced|premium/i.test(v.name));
+    if (yunaEnh) return yunaEnh;
+    const yuna = koVoices.find(v => /yuna/i.test(v.name));
     if (yuna) return yuna;
     return koVoices[0]!;
   }
 
-  // Android/PC: Google 한국어 > Microsoft Heami > 기타
-  const google = koVoices.find(v => v.name.toLowerCase().includes('google'));
+  // Android/PC: Google > Microsoft > 기타
+  const google = koVoices.find(v => /google/i.test(v.name));
   if (google) return google;
-  const ms = koVoices.find(v => v.name.toLowerCase().includes('heami'));
+  const ms = koVoices.find(v => /heami|sunhi/i.test(v.name));
   if (ms) return ms;
   return koVoices[0]!;
 }
 
-// 음성 로드 (비동기 — 모바일에서 지연 로드될 수 있음)
+// 음성 로드
 let ttsUnlocked = false;
 
 function initVoices() {
   if (typeof window === 'undefined' || !window.speechSynthesis) return;
   bestVoice = findBestVoice();
   window.speechSynthesis.onvoiceschanged = () => { bestVoice = findBestVoice(); };
-  // 일부 모바일 브라우저에서 onvoiceschanged가 안 올 수 있으므로 폴링
   if (!bestVoice) {
     let retries = 0;
     const poll = setInterval(() => {
@@ -200,52 +202,66 @@ function initVoices() {
 }
 initVoices();
 
-// iOS Safari: 사용자 터치 이벤트 안에서 한 번 speak()을 호출해야 이후 자동 재생 가능
-function unlockTts() {
+// iOS/모바일: 첫 터치에서 TTS + AudioContext 잠금 해제
+// iOS Safari는 사용자 제스처 내에서 speak()을 한 번 해야 이후 자동 재생 허용
+function unlockAudio() {
   if (ttsUnlocked) return;
-  if (typeof window === 'undefined' || !window.speechSynthesis) return;
+  ttsUnlocked = true;
+  try { getCtx().resume(); } catch {}
   try {
-    const u = new SpeechSynthesisUtterance('');
-    u.volume = 0;
-    u.lang = 'ko-KR';
-    window.speechSynthesis.speak(u);
-    ttsUnlocked = true;
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      // iOS: 빈 문자열은 무시되므로 공백 1자를 사용
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0.01;
+      u.lang = 'ko-KR';
+      if (bestVoice) u.voice = bestVoice;
+      window.speechSynthesis.speak(u);
+    }
   } catch {}
 }
 
 if (typeof window !== 'undefined') {
-  const onInteract = () => {
-    unlockTts();
-    // AudioContext도 함께 해제
-    try { getCtx().resume(); } catch {}
-    window.removeEventListener('touchstart', onInteract);
-    window.removeEventListener('click', onInteract);
-  };
-  window.addEventListener('touchstart', onInteract, { once: true });
-  window.addEventListener('click', onInteract, { once: true });
+  window.addEventListener('touchstart', unlockAudio, { once: true });
+  window.addEventListener('click', unlockAudio, { once: true });
 }
 
 type TtsStyle = 'normal' | 'excited' | 'calm' | 'urgent';
 
-// 플랫폼별 rate/pitch 보정값 (Google 한국어 기준에 맞춤)
-// iOS Yuna는 기본 속도가 빠르고 톤이 높아서 낮춰서 보정
+// 플랫폼별 rate/pitch 보정 (iOS Yuna는 빠르고 높아서 낮춤)
 const VOICE_STYLES: Record<TtsStyle, { rate: number; pitch: number }> = isIOS
-  ? { normal: { rate: 0.95, pitch: 1.0 }, excited: { rate: 1.15, pitch: 1.15 }, calm: { rate: 0.85, pitch: 0.85 }, urgent: { rate: 1.3, pitch: 1.2 } }
+  ? { normal: { rate: 0.9, pitch: 1.0 }, excited: { rate: 1.1, pitch: 1.15 }, calm: { rate: 0.8, pitch: 0.85 }, urgent: { rate: 1.2, pitch: 1.2 } }
   : { normal: { rate: 1.1, pitch: 1.1 }, excited: { rate: 1.3, pitch: 1.3 }, calm: { rate: 1.0, pitch: 0.9 }, urgent: { rate: 1.5, pitch: 1.4 } };
 
 function speak(text: string, style: TtsStyle = 'normal') {
   if (!ttsEnabled || muted) return;
   try {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'ko-KR';
-    if (bestVoice) u.voice = bestVoice;
-    u.volume = 0.8;
-    const vs = VOICE_STYLES[style];
-    u.rate = vs.rate;
-    u.pitch = vs.pitch;
-    window.speechSynthesis.speak(u);
+    // iOS에서 cancel() 직후 speak()하면 무시되는 버그 → 딜레이
+    if (isIOS) {
+      window.speechSynthesis.cancel();
+      setTimeout(() => {
+        try {
+          const u = new SpeechSynthesisUtterance(text);
+          u.lang = 'ko-KR';
+          if (bestVoice) u.voice = bestVoice;
+          u.volume = 0.8;
+          const vs = VOICE_STYLES[style];
+          u.rate = vs.rate;
+          u.pitch = vs.pitch;
+          window.speechSynthesis.speak(u);
+        } catch {}
+      }, 50);
+    } else {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR';
+      if (bestVoice) u.voice = bestVoice;
+      u.volume = 0.8;
+      const vs = VOICE_STYLES[style];
+      u.rate = vs.rate;
+      u.pitch = vs.pitch;
+      window.speechSynthesis.speak(u);
+    }
   } catch {}
 }
 

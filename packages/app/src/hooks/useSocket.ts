@@ -119,8 +119,9 @@ export function useSocket() {
 
     // ── 게임 스냅샷 (재접속) ───────────────────────────────
     socket.on('game_state_sync', (state: any) => {
-      unmuteSounds();
       store.syncGameState(state);
+      // 재접속 직후 소리 억제 (your_turn 등이 바로 오므로) → 1초 후 해제
+      setTimeout(() => unmuteSounds(), 1000);
     });
 
     // ── 페이즈 변경 ────────────────────────────────────────
