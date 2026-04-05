@@ -152,22 +152,33 @@ let bestVoice: SpeechSynthesisVoice | null = null;
 export function setTtsEnabled(on: boolean) { ttsEnabled = on; }
 export function isTtsEnabled() { return ttsEnabled; }
 
-// 가장 자연스러운 한국어 음성 찾기 (PC Google 음성 기준 통일)
+// 플랫폼 감지
+const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+// 가장 자연스러운 한국어 음성 찾기 (플랫폼별 우선순위)
 function findBestVoice(): SpeechSynthesisVoice | null {
   if (typeof window === 'undefined' || !window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices();
   if (voices.length === 0) return null;
 
-  // 1순위: Google 한국어 (PC Chrome과 동일)
-  const google = voices.find(v => v.lang.startsWith('ko') && v.name.toLowerCase().includes('google'));
+  const koVoices = voices.filter(v => v.lang.startsWith('ko'));
+  if (koVoices.length === 0) return null;
+
+  // iOS: Yuna(향상됨) > Yuna > 기타 한국어
+  if (isIOS) {
+    const yunaEnhanced = koVoices.find(v => v.name.includes('Yuna') && v.name.includes('Enhanced'));
+    if (yunaEnhanced) return yunaEnhanced;
+    const yuna = koVoices.find(v => v.name.includes('Yuna'));
+    if (yuna) return yuna;
+    return koVoices[0]!;
+  }
+
+  // Android/PC: Google 한국어 > Microsoft Heami > 기타
+  const google = koVoices.find(v => v.name.toLowerCase().includes('google'));
   if (google) return google;
-  // 2순위: Microsoft 한국어 (Edge/Windows)
-  const ms = voices.find(v => v.lang.startsWith('ko') && v.name.toLowerCase().includes('heami'));
+  const ms = koVoices.find(v => v.name.toLowerCase().includes('heami'));
   if (ms) return ms;
-  // 3순위: 기타 한국어 여성 음성
-  const korean = voices.find(v => v.lang.startsWith('ko'));
-  if (korean) return korean;
-  return null;
+  return koVoices[0]!;
 }
 
 // 음성 로드 (비동기 — 모바일에서 지연 로드될 수 있음)
@@ -189,7 +200,12 @@ initVoices();
 
 type TtsStyle = 'normal' | 'excited' | 'calm' | 'urgent';
 
-// PC 기준 고정 파라미터 — 플랫폼별 음성 차이를 rate/pitch로 보정
+// 플랫폼별 rate/pitch 보정값 (Google 한국어 기준에 맞춤)
+// iOS Yuna는 기본 속도가 빠르고 톤이 높아서 낮춰서 보정
+const VOICE_STYLES: Record<TtsStyle, { rate: number; pitch: number }> = isIOS
+  ? { normal: { rate: 0.95, pitch: 1.0 }, excited: { rate: 1.15, pitch: 1.15 }, calm: { rate: 0.85, pitch: 0.85 }, urgent: { rate: 1.3, pitch: 1.2 } }
+  : { normal: { rate: 1.1, pitch: 1.1 }, excited: { rate: 1.3, pitch: 1.3 }, calm: { rate: 1.0, pitch: 0.9 }, urgent: { rate: 1.5, pitch: 1.4 } };
+
 function speak(text: string, style: TtsStyle = 'normal') {
   if (!ttsEnabled || muted) return;
   try {
@@ -199,24 +215,9 @@ function speak(text: string, style: TtsStyle = 'normal') {
     u.lang = 'ko-KR';
     if (bestVoice) u.voice = bestVoice;
     u.volume = 0.8;
-    // PC Chrome Google 한국어 기준 고정값
-    switch (style) {
-      case 'excited':
-        u.rate = 1.3;
-        u.pitch = 1.3;
-        break;
-      case 'calm':
-        u.rate = 1.0;
-        u.pitch = 0.9;
-        break;
-      case 'urgent':
-        u.rate = 1.5;
-        u.pitch = 1.4;
-        break;
-      default:
-        u.rate = 1.1;
-        u.pitch = 1.1;
-    }
+    const vs = VOICE_STYLES[style];
+    u.rate = vs.rate;
+    u.pitch = vs.pitch;
     window.speechSynthesis.speak(u);
   } catch {}
 }
