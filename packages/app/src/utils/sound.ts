@@ -152,27 +152,44 @@ let bestVoice: SpeechSynthesisVoice | null = null;
 export function setTtsEnabled(on: boolean) { ttsEnabled = on; }
 export function isTtsEnabled() { return ttsEnabled; }
 
-// 가장 자연스러운 한국어 음성 찾기
+// 가장 자연스러운 한국어 음성 찾기 (PC Google 음성 기준 통일)
 function findBestVoice(): SpeechSynthesisVoice | null {
   if (typeof window === 'undefined' || !window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices();
-  // Google 한국어 우선 (가장 자연스러움)
+  if (voices.length === 0) return null;
+
+  // 1순위: Google 한국어 (PC Chrome과 동일)
   const google = voices.find(v => v.lang.startsWith('ko') && v.name.toLowerCase().includes('google'));
   if (google) return google;
-  // 그 외 한국어 음성
+  // 2순위: Microsoft 한국어 (Edge/Windows)
+  const ms = voices.find(v => v.lang.startsWith('ko') && v.name.toLowerCase().includes('heami'));
+  if (ms) return ms;
+  // 3순위: 기타 한국어 여성 음성
   const korean = voices.find(v => v.lang.startsWith('ko'));
   if (korean) return korean;
   return null;
 }
 
-// 음성 로드 (비동기)
-if (typeof window !== 'undefined' && window.speechSynthesis) {
+// 음성 로드 (비동기 — 모바일에서 지연 로드될 수 있음)
+function initVoices() {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return;
   bestVoice = findBestVoice();
   window.speechSynthesis.onvoiceschanged = () => { bestVoice = findBestVoice(); };
+  // 일부 모바일 브라우저에서 onvoiceschanged가 안 올 수 있으므로 폴링
+  if (!bestVoice) {
+    let retries = 0;
+    const poll = setInterval(() => {
+      bestVoice = findBestVoice();
+      retries++;
+      if (bestVoice || retries >= 10) clearInterval(poll);
+    }, 200);
+  }
 }
+initVoices();
 
 type TtsStyle = 'normal' | 'excited' | 'calm' | 'urgent';
 
+// PC 기준 고정 파라미터 — 플랫폼별 음성 차이를 rate/pitch로 보정
 function speak(text: string, style: TtsStyle = 'normal') {
   if (!ttsEnabled || muted) return;
   try {
@@ -182,6 +199,7 @@ function speak(text: string, style: TtsStyle = 'normal') {
     u.lang = 'ko-KR';
     if (bestVoice) u.voice = bestVoice;
     u.volume = 0.8;
+    // PC Chrome Google 한국어 기준 고정값
     switch (style) {
       case 'excited':
         u.rate = 1.3;
