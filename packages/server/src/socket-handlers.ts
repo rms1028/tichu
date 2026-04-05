@@ -1299,6 +1299,11 @@ export function registerSocketHandlers(io: Server): void {
   // ── 방 삭제 전 모든 타이머 정리 ─────────────────────────────
   function cleanupRoom(room: GameRoom): void {
     clearTimers(room);
+    if ((room as any)._bombWindowTimer) {
+      clearTimeout((room as any)._bombWindowTimer);
+      delete (room as any)._bombWindowTimer;
+    }
+    room.bombWindow = null;
     for (let s = 0; s < 4; s++) {
       const p = room.players[s];
       if (p?.botReplaceTimer) {
@@ -1586,6 +1591,11 @@ function startBombWindowPhase(io: Server, room: GameRoom): void {
 
   const windowId = room.bombWindow!.windowId;
 
+  // 이전 폭탄 타이머 정리
+  if ((room as any)._bombWindowTimer) {
+    clearTimeout((room as any)._bombWindowTimer);
+  }
+
   // 2 second timer to resolve
   const timerId = setTimeout(() => {
     if (!room.bombWindow || room.bombWindow.windowId !== windowId) return;
@@ -1623,6 +1633,10 @@ function startBombWindowPhase(io: Server, room: GameRoom): void {
 function startBombWindowResolveTimer(io: Server, room: GameRoom): void {
   if (!room.bombWindow) return;
   const windowId = room.bombWindow.windowId;
+
+  if ((room as any)._bombWindowTimer) {
+    clearTimeout((room as any)._bombWindowTimer);
+  }
 
   const timerId = setTimeout(() => {
     if (!room.bombWindow || room.bombWindow.windowId !== windowId) return;
@@ -1678,6 +1692,11 @@ function handlePostPlay(io: Server, room: GameRoom): void {
   // 라운드/게임 종료 체크
   if (room.phase === 'ROUND_END' || room.phase === 'SCORING') {
     clearTurnTimer(room);
+    if ((room as any)._bombWindowTimer) {
+      clearTimeout((room as any)._bombWindowTimer);
+      delete (room as any)._bombWindowTimer;
+    }
+    room.bombWindow = null;
 
     if (room.phase === 'SCORING') {
       // 5초 후 다음 라운드 또는 게임 종료
@@ -1694,6 +1713,11 @@ function handlePostPlay(io: Server, room: GameRoom): void {
 
   if (room.phase === 'GAME_OVER') {
     clearTurnTimer(room);
+    if ((room as any)._bombWindowTimer) {
+      clearTimeout((room as any)._bombWindowTimer);
+      delete (room as any)._bombWindowTimer;
+    }
+    room.bombWindow = null;
     // DB에 게임 결과 기록 + 보상 전송
     recordGameResults(io, room);
     return;

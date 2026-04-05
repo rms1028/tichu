@@ -6,14 +6,11 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
-  SlideInRight,
-  FadeIn,
-  FadeOut,
 } from 'react-native-reanimated';
 import type { PlayedHand, Card } from '@tichu/shared';
 import { getAvailableBombs, isNormalCard } from '@tichu/shared';
 import { useGameStore } from '../stores/gameStore';
-import { COLORS, FONT } from '../utils/theme';
+import { COLORS } from '../utils/theme';
 import { haptics } from '../utils/haptics';
 
 interface BombOverlayProps {

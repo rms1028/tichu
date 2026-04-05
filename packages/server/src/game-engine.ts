@@ -205,6 +205,9 @@ export function passLargeTichu(room: GameRoom, seat: number): EngineResult {
   if (room.phase !== 'LARGE_TICHU_WINDOW') {
     return { ok: false, error: 'wrong_phase', events: [] };
   }
+  if (room.largeTichuResponses[seat]) {
+    return { ok: false, error: 'already_responded', events: [] };
+  }
   room.largeTichuResponses[seat] = true;
   return { ok: true, events: [] };
 }
@@ -269,7 +272,15 @@ export function playCards(
 
   const isLead = room.tableCards === null;
 
-  // 2. 첫 리드 검증: 개 허용 (커스텀 룰 — 첫 리드에서도 개 사용 가능)
+  // 2. 첫 리드 검증: 참새 포함 필수, 개 불가 (Edge #15)
+  if (isLead && room.isFirstLead) {
+    if (cards.length === 1 && isDog(cards[0]!)) {
+      return { ok: false, error: 'dog_not_allowed_on_first_lead', events: [] };
+    }
+    if (!cards.some(isMahjong)) {
+      return { ok: false, error: 'first_lead_must_include_mahjong', events: [] };
+    }
+  }
 
   // 3. 소원+개 리드 검증: Edge #17, #27
   if (isLead && cards.length === 1 && isDog(cards[0]!)) {
@@ -381,11 +392,12 @@ export function playCards(
 
     // 3인 나감 → 라운드 종료
     if (room.finishOrder.length >= 3) {
-      // 미해결 트릭 카드를 마지막 제출자의 wonTricks에 추가
       flushCurrentTrick(room);
-      const lastSeat = getActivePlayers(room)[0]!;
-      room.finishOrder.push(lastSeat);
-      events.push({ type: 'player_finished', seat: lastSeat, rank: 4 });
+      const active = getActivePlayers(room);
+      if (active.length > 0) {
+        room.finishOrder.push(active[0]!);
+        events.push({ type: 'player_finished', seat: active[0]!, rank: 4 });
+      }
       const endEvents = endRound(room);
       events.push(...endEvents);
       return { ok: true, events };
@@ -463,9 +475,11 @@ function handleDogLead(
   }
   if (room.finishOrder.length >= 3) {
     flushCurrentTrick(room);
-    const last = getActivePlayers(room)[0]!;
-    room.finishOrder.push(last);
-    events.push({ type: 'player_finished', seat: last, rank: 4 });
+    const active = getActivePlayers(room);
+    if (active.length > 0) {
+      room.finishOrder.push(active[0]!);
+      events.push({ type: 'player_finished', seat: active[0]!, rank: 4 });
+    }
     events.push(...endRound(room));
   }
 
@@ -791,6 +805,18 @@ export function handleTurnTimeout(room: GameRoom): EngineResult {
 
 function autoPlayLead(room: GameRoom, seat: number): EngineResult {
   const hand = room.hands[seat]!;
+
+  // 첫 리드 → 참새 싱글 (소원 없음)
+  if (room.isFirstLead) {
+    const mahjong = hand.find(isMahjong);
+    if (mahjong) {
+      const result = playCards(room, seat, [mahjong]);
+      if (result.ok) {
+        result.events.unshift({ type: 'auto_action', seat, action: 'play', cards: [mahjong] });
+      }
+      return result;
+    }
+  }
 
   // 소원 활성 + 소원 숫자 보유 → 소원 숫자 싱글
   if (room.wish !== null) {

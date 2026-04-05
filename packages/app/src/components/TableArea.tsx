@@ -3,15 +3,12 @@ import { View, Text, StyleSheet } from 'react-native';
 import Animated, {
   FadeIn,
   ZoomIn,
-  FadeOut,
   SlideInDown,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
   withSequence,
   withTiming,
-  withDelay,
-  withSpring,
   Easing,
 } from 'react-native-reanimated';
 import { useGameStore } from '../stores/gameStore';

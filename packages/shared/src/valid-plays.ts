@@ -278,9 +278,10 @@ function generateStraights(
       }
       if (!valid) continue;
 
-      // 봉황 사용 여부
+      // 봉황 사용 여부 (봉황은 2~A만 대체, 참새(1) 대체 불가)
       const usePhoenix = missingCount === 1;
       if (usePhoenix && !phoenix) continue;
+      if (usePhoenix && missingPos === MAHJONG_VALUE) continue;
 
       // 카드 조합 생성 — 각 위치에서 1장 선택
       generateStraightCombos(
