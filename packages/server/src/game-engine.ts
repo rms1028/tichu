@@ -293,12 +293,11 @@ export function playCards(
     return handleDogLead(room, seat, cards, events);
   }
 
-  // 4. 족보 검증 (봉황 포함 시 phoenixAs 자동 추론)
+  // 4. 족보 검증 (봉황 포함 시 서버에서 항상 재추론)
   const hasPhoenixCard = cards.some(isPhoenix);
-  let effectivePhoenixAs = phoenixAs;
-  if (hasPhoenixCard && cards.length > 1 && !effectivePhoenixAs) {
-    effectivePhoenixAs = inferPhoenixAs(cards);
-  }
+  const effectivePhoenixAs = (hasPhoenixCard && cards.length > 1)
+    ? (inferPhoenixAs(cards) ?? phoenixAs)
+    : phoenixAs;
   const lastValue = (!isLead && room.tableCards?.type === 'single')
     ? room.tableCards.value : undefined;
   const playedHand = validateHand(cards, effectivePhoenixAs, lastValue);
