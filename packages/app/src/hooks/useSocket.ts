@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { Card, Rank, PlayedHand, GamePhase } from '@tichu/shared';
 import { useGameStore, loadSession } from '../stores/gameStore';
-import { SFX, TTS, cancelAllSounds } from '../utils/sound';
+import { SFX, TTS, cancelAllSounds, unmuteSounds } from '../utils/sound';
 import { haptics } from '../utils/haptics';
 
 const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL ?? 'http://localhost:3001';
@@ -100,6 +100,7 @@ export function useSocket() {
 
     // ── 방 참가 ────────────────────────────────────────────
     socket.on('room_joined', (data: { seat: number; roomId: string; players: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null>; hostPlayerId?: string }) => {
+      unmuteSounds();
       store.setRoomInfo(data.roomId, data.seat, data.players);
       if (data.hostPlayerId) useGameStore.setState({ hostPlayerId: data.hostPlayerId });
     });
@@ -118,6 +119,7 @@ export function useSocket() {
 
     // ── 게임 스냅샷 (재접속) ───────────────────────────────
     socket.on('game_state_sync', (state: any) => {
+      unmuteSounds();
       store.syncGameState(state);
     });
 
@@ -335,6 +337,7 @@ export function useSocket() {
 
     socket.on('game_over', (data: { winner: string; scores: { team1: number; team2: number } }) => {
       store.onGameOver(data.winner, data.scores);
+      if (!isInGame()) return;
       try {
         const { mySeat } = useGameStore.getState();
         const myTeam = (mySeat === 0 || mySeat === 2) ? 'team1' : 'team2';

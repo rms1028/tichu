@@ -2,6 +2,7 @@
 
 let audioCtx: AudioContext | null = null;
 const pendingTimers: ReturnType<typeof setTimeout>[] = [];
+let muted = false;
 
 function getCtx(): AudioContext {
   if (!audioCtx) audioCtx = new AudioContext();
@@ -12,13 +13,14 @@ function sfxTimeout(fn: () => void, ms: number) {
   const id = setTimeout(() => {
     const idx = pendingTimers.indexOf(id);
     if (idx >= 0) pendingTimers.splice(idx, 1);
-    fn();
+    if (!muted) fn();
   }, ms);
   pendingTimers.push(id);
 }
 
-/** 보류 중인 모든 효과음 타이머 취소 + TTS 중단 */
+/** 보류 중인 모든 효과음 타이머 취소 + TTS 중단 + 음소거 */
 export function cancelAllSounds() {
+  muted = true;
   for (const id of pendingTimers) clearTimeout(id);
   pendingTimers.length = 0;
   try {
@@ -28,7 +30,13 @@ export function cancelAllSounds() {
   } catch {}
 }
 
+/** 음소거 해제 (게임 입장 시 호출) */
+export function unmuteSounds() {
+  muted = false;
+}
+
 function playTone(frequency: number, duration: number, type: OscillatorType = 'sine', volume = 0.15) {
+  if (muted) return;
   try {
     const ctx = getCtx();
     const osc = ctx.createOscillator();
@@ -166,7 +174,7 @@ if (typeof window !== 'undefined' && window.speechSynthesis) {
 type TtsStyle = 'normal' | 'excited' | 'calm' | 'urgent';
 
 function speak(text: string, style: TtsStyle = 'normal') {
-  if (!ttsEnabled) return;
+  if (!ttsEnabled || muted) return;
   try {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
@@ -210,7 +218,7 @@ function handTypeToKorean(type: string): string {
 }
 
 function valueToKorean(v: number | null | undefined): string {
-  if (v === null || v === undefined || !isFinite(v)) return '용';
+  if (v === null || v === undefined || !isFinite(v) || v === 999) return '용';
   if (v === 0) return '개';
   if (v === 1) return '참새';
   if (v % 1 !== 0) return '봉황';
