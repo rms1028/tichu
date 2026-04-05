@@ -182,6 +182,8 @@ function findBestVoice(): SpeechSynthesisVoice | null {
 }
 
 // 음성 로드 (비동기 — 모바일에서 지연 로드될 수 있음)
+let ttsUnlocked = false;
+
 function initVoices() {
   if (typeof window === 'undefined' || !window.speechSynthesis) return;
   bestVoice = findBestVoice();
@@ -197,6 +199,31 @@ function initVoices() {
   }
 }
 initVoices();
+
+// iOS Safari: 사용자 터치 이벤트 안에서 한 번 speak()을 호출해야 이후 자동 재생 가능
+function unlockTts() {
+  if (ttsUnlocked) return;
+  if (typeof window === 'undefined' || !window.speechSynthesis) return;
+  try {
+    const u = new SpeechSynthesisUtterance('');
+    u.volume = 0;
+    u.lang = 'ko-KR';
+    window.speechSynthesis.speak(u);
+    ttsUnlocked = true;
+  } catch {}
+}
+
+if (typeof window !== 'undefined') {
+  const onInteract = () => {
+    unlockTts();
+    // AudioContext도 함께 해제
+    try { getCtx().resume(); } catch {}
+    window.removeEventListener('touchstart', onInteract);
+    window.removeEventListener('click', onInteract);
+  };
+  window.addEventListener('touchstart', onInteract, { once: true });
+  window.addEventListener('click', onInteract, { once: true });
+}
 
 type TtsStyle = 'normal' | 'excited' | 'calm' | 'urgent';
 

@@ -507,6 +507,15 @@ export function useSocket() {
 
   const exchangeCards = useCallback((left: Card, partner: Card, right: Card) => {
     socketRef.current?.emit('exchange_cards', { left, partner, right });
+    // 보낸 카드를 핸드에서 즉시 제거 (서버 cards_dealt 오기 전 UI 반영)
+    const { myHand } = useGameStore.getState();
+    const given = [left, partner, right];
+    const updated = myHand.filter(c => !given.some(g => {
+      if (c.type === 'special' && g.type === 'special') return c.specialType === g.specialType;
+      if (c.type === 'normal' && g.type === 'normal') return c.suit === g.suit && c.rank === g.rank;
+      return false;
+    }));
+    useGameStore.setState({ myHand: updated });
   }, []);
 
   const playCardsAction = useCallback((cards: Card[], phoenixAs?: Rank, wish?: Rank) => {
