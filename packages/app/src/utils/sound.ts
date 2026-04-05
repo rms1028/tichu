@@ -163,17 +163,27 @@ function findBestVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis.getVoices();
   if (voices.length === 0) return null;
 
-  // ko-KR 또는 ko_ 로 시작하는 음성
-  const koVoices = voices.filter(v => v.lang.startsWith('ko'));
-  if (koVoices.length === 0) return null;
+  // ko-KR, ko_KR, ko 모두 매칭
+  const koVoices = voices.filter(v => /^ko[-_]?/i.test(v.lang));
+
+  // 디버깅: 한국어 음성 목록 로그
+  if (koVoices.length > 0) {
+    console.log('[TTS] Korean voices:', koVoices.map(v => `${v.name} (${v.lang})`).join(', '));
+  } else {
+    console.log('[TTS] No Korean voices found. All voices:', voices.map(v => `${v.name} (${v.lang})`).slice(0, 10).join(', '));
+  }
 
   if (isIOS) {
-    // iOS: Yuna(Enhanced) > Yuna > 기타
+    // iOS: Yuna(여성) 우선. 남성 음성(Jian 등) 제외
     const yunaEnh = koVoices.find(v => /yuna/i.test(v.name) && /enhanced|premium/i.test(v.name));
     if (yunaEnh) return yunaEnh;
     const yuna = koVoices.find(v => /yuna/i.test(v.name));
     if (yuna) return yuna;
-    return koVoices[0]!;
+    // Yuna가 없으면 여성 음성 찾기 (남성 Jian 제외)
+    const female = koVoices.find(v => !/jian/i.test(v.name));
+    if (female) return female;
+    if (koVoices.length > 0) return koVoices[0]!;
+    return null;
   }
 
   // Android/PC: Google > Microsoft > 기타
@@ -181,7 +191,8 @@ function findBestVoice(): SpeechSynthesisVoice | null {
   if (google) return google;
   const ms = koVoices.find(v => /heami|sunhi/i.test(v.name));
   if (ms) return ms;
-  return koVoices[0]!;
+  if (koVoices.length > 0) return koVoices[0]!;
+  return null;
 }
 
 // 음성 로드
@@ -236,31 +247,28 @@ function speak(text: string, style: TtsStyle = 'normal') {
   if (!ttsEnabled || muted) return;
   try {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    // 음성이 아직 로드되지 않았으면 다시 찾기
+    if (!bestVoice) bestVoice = findBestVoice();
+
+    const doSpeak = () => {
+      try {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'ko-KR';
+        if (bestVoice) u.voice = bestVoice;
+        u.volume = 0.8;
+        const vs = VOICE_STYLES[style];
+        u.rate = vs.rate;
+        u.pitch = vs.pitch;
+        window.speechSynthesis.speak(u);
+      } catch {}
+    };
+
+    window.speechSynthesis.cancel();
     // iOS에서 cancel() 직후 speak()하면 무시되는 버그 → 딜레이
     if (isIOS) {
-      window.speechSynthesis.cancel();
-      setTimeout(() => {
-        try {
-          const u = new SpeechSynthesisUtterance(text);
-          u.lang = 'ko-KR';
-          if (bestVoice) u.voice = bestVoice;
-          u.volume = 0.8;
-          const vs = VOICE_STYLES[style];
-          u.rate = vs.rate;
-          u.pitch = vs.pitch;
-          window.speechSynthesis.speak(u);
-        } catch {}
-      }, 50);
+      setTimeout(doSpeak, 50);
     } else {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'ko-KR';
-      if (bestVoice) u.voice = bestVoice;
-      u.volume = 0.8;
-      const vs = VOICE_STYLES[style];
-      u.rate = vs.rate;
-      u.pitch = vs.pitch;
-      window.speechSynthesis.speak(u);
+      doSpeak();
     }
   } catch {}
 }

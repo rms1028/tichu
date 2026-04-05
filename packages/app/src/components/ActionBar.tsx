@@ -56,10 +56,12 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu, onSubmitBomb }: Acti
   const isValidPlay = useMemo(() => {
     if (!hasSelection) return false;
     const phoenixAs = hasPhoenix && selectedCards.length > 1 ? inferPhoenixAs(selectedCards) : undefined;
-    const hand = validateHand(selectedCards, phoenixAs);
+    // 봉황 싱글 팔로우: 직전 싱글의 value를 전달해야 +0.5로 계산됨
+    const lastValue = (!isLead && tableCards?.type === 'single') ? tableCards.value : undefined;
+    const hand = validateHand(selectedCards, phoenixAs, lastValue);
     if (!hand) return false;
     return canBeat(tableCards, hand);
-  }, [selectedCards, tableCards, hasSelection, hasPhoenix, wish]);
+  }, [selectedCards, tableCards, hasSelection, hasPhoenix, wish, isLead]);
 
   // 선택한 카드가 폭탄인지 체크 (내 턴이 아닐 때 폭탄 제출용)
   const selectedIsBomb = useMemo(() => {
