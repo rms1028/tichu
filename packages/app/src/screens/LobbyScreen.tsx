@@ -721,15 +721,15 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           {customTab === 'list' ? (
             <View style={{ flex: 1, minHeight: 360 }}>
               {/* 검색 + 새로고침 */}
-              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8, alignItems: 'stretch' }}>
                 <TextInput
-                  style={[S.mInput, { flex: 1, paddingVertical: 7, fontSize: 13 }]}
+                  style={[S.mInput, { flex: 1, paddingVertical: 7, fontSize: 13, marginBottom: 0 }]}
                   value={roomSearch}
                   onChangeText={setRoomSearch}
                   placeholder={'방 이름 검색...'}
                   placeholderTextColor="rgba(255,255,255,0.3)"
                 />
-                <TouchableOpacity style={{ paddingHorizontal: 10, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 8, justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }} onPress={() => onListRooms?.()}>
+                <TouchableOpacity style={{ paddingHorizontal: 10, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }} onPress={() => onListRooms?.()}>
                   <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>{'🔄'}</Text>
                 </TouchableOpacity>
               </View>
