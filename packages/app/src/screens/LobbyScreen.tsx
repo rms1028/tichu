@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Modal, Pressable } from 'react-native';
+import { isMobile } from '../utils/responsive';
 import Animated, {
   FadeIn, ZoomIn, SlideInRight, SlideOutRight,
   useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing,
@@ -225,7 +226,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
     return (
       <SafeAreaView style={S.root}>
         <BackgroundWatermark />
-        <ScrollView style={{ flex: 1, zIndex: 5 }} contentContainerStyle={P.scroll}>
+        <ScrollView style={{ flex: 1, zIndex: 5 }} contentContainerStyle={isMobile ? P.scroll : P.scrollPC}>
           {/* 상단 네비게이션 */}
           <View style={P.nav}>
             <TouchableOpacity onPress={() => setPage('main')} style={P.navBtn} activeOpacity={0.7}>
@@ -237,6 +238,8 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
             </TouchableOpacity>
           </View>
 
+          {isMobile ? (
+          <>
           {/* ── 1. 프로필 헤더 카드 ── */}
           <View style={P.card}>
             <View style={P.headerCenter}>
@@ -459,6 +462,142 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           </View>
 
           <View style={{ height: 30 }} />
+          </>
+          ) : (
+          /* ══ PC 3컬럼 레이아웃 ══ */
+          <View style={P.pcGrid}>
+            {/* 좌측 컬럼: 헤더 + 티어 + 최근 전적 + 파트너 */}
+            <View style={P.pcCol}>
+              {/* 프로필 헤더 */}
+              <View style={P.card}>
+                <View style={P.headerCenter}>
+                  <View style={[P.avatarRing, { borderColor: frame.border, shadowColor: frame.shadow }]}>
+                    <View style={P.avatarInner}><Text style={P.avatarEmoji}>{avatarEmoji}</Text></View>
+                    <View style={[P.levelBadge, { backgroundColor: myTier.color }]}><Text style={P.levelText}>{level}</Text></View>
+                  </View>
+                  <Text style={P.nickname}>{name}</Text>
+                  {activeTitle && (
+                    <TouchableOpacity onPress={() => setShowTitlePicker(true)} activeOpacity={0.7}>
+                      <Text style={P.titleText}>{activeTitle.icon} {activeTitle.name}</Text>
+                    </TouchableOpacity>
+                  )}
+                  {!activeTitle && unlockedTitles.length === 0 && (
+                    <TouchableOpacity onPress={() => setShowTitlePicker(true)} activeOpacity={0.7}>
+                      <Text style={P.titleTextEmpty}>{'어떤 칭호를 얻을 수 있는지 확인해보세요 ›'}</Text>
+                    </TouchableOpacity>
+                  )}
+                  <View style={[P.tierChip, { borderColor: myTier.color, backgroundColor: `${myTier.color}18` }]}>
+                    <Text style={[P.tierChipText, { color: myTier.color }]}>{myTier.icon} {myTier.name}</Text>
+                  </View>
+                </View>
+              </View>
+              {/* 티어 & XP */}
+              <View style={P.card}>
+                <View style={P.cardTitleRow}><Text style={P.cardTitle}>{'티어 & XP'}</Text>{!isMaxTier && <Text style={P.cardTitleRight}>{'다음: '}{nextTierDef.icon}{' '}{nextTierDef.name}</Text>}</View>
+                <View style={P.xpBar}><View style={[P.xpFill, { width: `${xpPctLocal}%`, backgroundColor: myTier.color }]} /></View>
+                <View style={P.xpLabels}>
+                  <Text style={P.xpLabelLeft}>{myTier.icon} {myTier.name}</Text>
+                  <Text style={P.xpLabelCenter}>{us.xp} / {isMaxTier ? '∞' : myTier.max} RP</Text>
+                  <Text style={P.xpLabelRight}>{isMaxTier ? '' : `${nextTierDef.icon} ${nextTierDef.name}`}</Text>
+                </View>
+                {!isMaxTier && <Text style={P.xpRemaining}>{'다음 티어까지 '}{myTier.max - us.xp}{' RP'}</Text>}
+              </View>
+              {/* 최근 전적 */}
+              <View style={P.card}>
+                <Text style={P.cardTitle}>{'최근 전적'}</Text>
+                {recentGames.length === 0 ? (
+                  <View style={P.emptyState}><Text style={P.emptyIcon}>{'🃏'}</Text><Text style={P.emptyText}>{'아직 전적이 없습니다'}</Text>
+                    <TouchableOpacity style={P.ctaBtn} onPress={() => setPage('main')} activeOpacity={0.8}><Text style={P.ctaBtnText}>{'첫 게임 시작하기'}</Text></TouchableOpacity></View>
+                ) : (
+                  <View style={P.recentList}>{recentGames.slice(0, 10).map((g, i) => (
+                    <View key={i} style={P.recentRow}>
+                      <View style={[P.recentBadge, { backgroundColor: g.won ? 'rgba(93,202,165,0.15)' : 'rgba(239,68,68,0.15)' }]}><Text style={[P.recentBadgeText, { color: g.won ? '#5dcaa5' : '#ef4444' }]}>{g.won ? '승' : '패'}</Text></View>
+                      {g.rp > 0 && <Text style={P.recentRp}>{g.rp} RP</Text>}<View style={{ flex: 1 }} /><Text style={P.recentDate}>{g.date}</Text>
+                    </View>
+                  ))}</View>
+                )}
+              </View>
+              {/* 파트너 케미 */}
+              <View style={P.card}><Text style={P.cardTitle}>{'파트너 케미'}</Text><View style={P.emptyState}><Text style={P.emptyIcon}>{'🤝'}</Text><Text style={P.emptyText}>{'데이터 수집 중'}</Text></View></View>
+            </View>
+
+            {/* 중앙 컬럼: 전적 + RP 그래프 + 업적 */}
+            <View style={P.pcCol}>
+              {/* 전적 통계 */}
+              <View style={P.card}>
+                <View style={P.cardTitleRow}><Text style={P.cardTitle}>{'전적 통계'}</Text>{seasonInfo && <Text style={P.cardTitleRight}>{seasonInfo.seasonName}</Text>}</View>
+                <View style={P.statsGrid}>
+                  <View style={P.statBox}><Text style={P.statIcon}>{'🎮'}</Text><Text style={P.statNum}>{hasData ? us.totalGames : '—'}</Text><Text style={P.statLabel}>{'총 게임'}</Text></View>
+                  <View style={P.statBox}><Text style={P.statIcon}>{'📊'}</Text><Text style={[P.statNum, { color: winRateColor }]}>{winRate >= 0 ? `${winRate}%` : '—'}</Text><Text style={P.statLabel}>{'승률'}</Text></View>
+                  <View style={P.statBox}><Text style={P.statIcon}>{'🎯'}</Text><Text style={P.statNum}>{tichuRate >= 0 ? `${tichuRate}%` : '—'}</Text><Text style={P.statLabel}>{'티츄 성공률'}</Text></View>
+                  <View style={P.statBox}><Text style={P.statIcon}>{'🔥'}</Text><Text style={P.statNum}>{hasData ? us.winStreak : '—'}</Text><Text style={P.statLabel}>{'최고 연승'}</Text></View>
+                  <View style={P.statBox}><Text style={P.statIcon}>{'👑'}</Text><Text style={P.statNum}>{'—'}</Text><Text style={P.statLabel}>{'라지 티츄'}</Text></View>
+                  <View style={P.statBox}><Text style={P.statIcon}>{'🤝'}</Text><Text style={P.statNum}>{'—'}</Text><Text style={P.statLabel}>{'원투 성공'}</Text></View>
+                </View>
+              </View>
+              {/* RP 그래프 */}
+              <View style={P.card}>
+                <Text style={P.cardTitle}>{'RP 변화'}</Text>
+                {graphData.length < 2 ? (
+                  <View style={P.emptyState}><Text style={P.emptyIcon}>{'📈'}</Text><Text style={P.emptyText}>{'게임을 더 플레이하면 그래프가 표시됩니다'}</Text></View>
+                ) : (<>
+                  <View style={P.graphWrap}>{graphData.map((g, i) => {
+                    const pct = ((g.rp - graphMin) / graphRange) * 100;
+                    return (<View key={i} style={P.graphCol}><View style={[P.graphDot, { bottom: `${pct}%`, backgroundColor: g.won ? '#4CAF50' : '#F44336' }]} /><View style={[P.graphBar, { height: `${pct}%`, backgroundColor: g.won ? 'rgba(76,175,80,0.2)' : 'rgba(244,67,54,0.15)' }]} /></View>);
+                  })}</View>
+                  <Text style={P.graphSummary}>{'최근 '}{graphData.length}{'게임: '}{graphWins}{'승 '}{graphLosses}{'패 (승률 '}{graphWinRate}{'%)'}</Text>
+                </>)}
+              </View>
+              {/* 업적 */}
+              <View style={P.card}>
+                <View style={P.cardTitleRow}><Text style={P.cardTitle}>{'업적'}</Text><Text style={P.cardTitleRight}>{unlockedAchs.length}{' / '}{achievements.length}</Text></View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={P.achScroll} contentContainerStyle={P.achRow}>
+                  {achievements.map((a, i) => (<View key={i} style={[P.achSlot, !a.unlocked && P.achLocked]}><Text style={[P.achIcon, !a.unlocked && P.achIconLocked]}>{a.icon}</Text><Text style={[P.achName, !a.unlocked && P.achNameLocked]} numberOfLines={1}>{a.name}</Text></View>))}
+                </ScrollView>
+                <View style={P.achFooter}><Text style={P.achHint}>{'게임을 플레이하여 잠금 해제'}</Text><TouchableOpacity onPress={() => setPage('achievements')}><Text style={P.achMore}>{'더보기 ›'}</Text></TouchableOpacity></View>
+              </View>
+            </View>
+
+            {/* 우측 컬럼: 리더보드 + 시즌 보상 */}
+            <View style={P.pcCol}>
+              {/* 리더보드 */}
+              <View style={P.card}>
+                <Text style={P.cardTitle}>{'리더보드'}</Text>
+                <View style={P.lbTabs}>{(['all', 'friends', 'weekly'] as const).map(t => (
+                  <TouchableOpacity key={t} style={[P.lbTab, lbTab === t && P.lbTabActive]} onPress={() => setLbTab(t)}>
+                    <Text style={[P.lbTabText, lbTab === t && P.lbTabTextActive]}>{t === 'all' ? '전체' : t === 'friends' ? '친구' : '주간'}</Text>
+                  </TouchableOpacity>
+                ))}</View>
+                {lbTab === 'all' && leaderboard.length > 0 ? (
+                  <View style={P.lbList}>{leaderboard.slice(0, 10).map((entry, i) => {
+                    const isMe = entry.id === useGameStore.getState().dbUserId;
+                    const entryTier = getTier(entry.xp);
+                    return (<View key={i} style={[P.lbRow, isMe && P.lbRowMe]}><Text style={P.lbRank}>{i + 1}</Text><Text style={P.lbTierIcon}>{entryTier.icon}</Text><Text style={[P.lbName, isMe && P.lbNameMe]} numberOfLines={1}>{entry.nickname}</Text><Text style={P.lbXp}>{entry.xp} RP</Text></View>);
+                  })}</View>
+                ) : lbTab !== 'all' ? (
+                  <View>
+                    <View style={{ opacity: 0.15 }}>{[1,2,3].map(i => (<View key={i} style={P.lbRow}><Text style={P.lbRank}>{i}</Text><Text style={P.lbTierIcon}>{'🔩'}</Text><View style={{ flex: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 6, marginRight: 8 }} /><Text style={P.lbXp}>{'— RP'}</Text></View>))}</View>
+                    <Text style={P.emptyTextOverlay}>{lbTab === 'friends' ? '친구와 함께 플레이하면 랭킹이 표시됩니다' : '주간 랭킹은 곧 제공될 예정입니다'}</Text>
+                  </View>
+                ) : (
+                  <View style={P.emptyState}><Text style={P.emptyText}>{'첫 게임을 완료하면 랭킹에 등록됩니다'}</Text></View>
+                )}
+              </View>
+              {/* 시즌 보상 */}
+              <View style={P.card}>
+                <Text style={P.cardTitle}>{'시즌 보상'}</Text>
+                {seasonInfo ? (<View>
+                  <View style={P.seasonRow}><Text style={P.seasonLabel}>{seasonInfo.seasonName}</Text><Text style={P.seasonDays}>{'남은: '}{seasonInfo.remainingDays}{'일'}</Text></View>
+                  <View style={P.seasonRow}><Text style={P.seasonLabel}>{'레이팅'}</Text><Text style={P.seasonValue}>{seasonInfo.myRating} RP</Text></View>
+                  <View style={P.seasonRow}><Text style={P.seasonLabel}>{'순위'}</Text><Text style={P.seasonValue}>{'#'}{seasonInfo.myRank}</Text></View>
+                  <View style={P.seasonRewards}>{USER_TIERS.slice(0, 5).map((t, i) => (<View key={i} style={[P.seasonRewardSlot, myTierIdx >= i && P.seasonRewardUnlocked]}><Text style={{ fontSize: 18 }}>{t.icon}</Text><Text style={P.seasonRewardName}>{t.name}</Text></View>))}</View>
+                </View>) : (
+                  <View style={P.emptyState}><Text style={P.emptyIcon}>{'🏅'}</Text><Text style={P.emptyText}>{'시즌 종료 시 티어에 따라 보상 지급'}</Text></View>
+                )}
+              </View>
+            </View>
+          </View>
+          )}
         </ScrollView>
 
         {/* 닉네임 편집 모달 */}
@@ -947,6 +1086,9 @@ const S = StyleSheet.create({
 // ── 프로필 스타일 ──────────────────────────────────────────
 const P = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingBottom: 30, maxWidth: 500, alignSelf: 'center', width: '100%' },
+  scrollPC: { paddingHorizontal: 24, paddingBottom: 30, maxWidth: 1200, alignSelf: 'center', width: '100%' },
+  pcGrid: { flexDirection: 'row', gap: 16 },
+  pcCol: { flex: 1, gap: 16 },
 
   // 네비게이션
   nav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
