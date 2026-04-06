@@ -114,6 +114,7 @@ export interface GameState {
   friendRequests: { fromId: string; fromNickname: string }[];
   friendSearchResult: { found: boolean; playerId?: string; nickname?: string } | null;
   friendInvite: { fromNickname: string; roomId: string } | null;
+  emoteEvent: { seat: number; emoji: string; label: string; ts: number } | null;
   dbUserId: string | null;
   leaderboard: { id: string; nickname: string; xp: number; wins: number; totalGames: number }[];
   customRoomList: { roomId: string; roomName: string; playerCount: number; hasPassword: boolean }[];
@@ -210,6 +211,7 @@ const INITIAL_STATE = {
   friendRequests: [] as { fromId: string; fromNickname: string }[],
   friendSearchResult: null as { found: boolean; playerId?: string; nickname?: string } | null,
   friendInvite: null as { fromNickname: string; roomId: string } | null,
+  emoteEvent: null as { seat: number; emoji: string; label: string; ts: number } | null,
   dbUserId: null as string | null,
   leaderboard: [] as { id: string; nickname: string; xp: number; wins: number; totalGames: number }[],
   customRoomList: [] as { roomId: string; roomName: string; playerCount: number; hasPassword: boolean }[],

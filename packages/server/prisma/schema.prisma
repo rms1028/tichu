@@ -44,6 +44,12 @@ model User {
   matchCooldownUntil DateTime?                // 매칭 제한 해제 시간
   lastActiveAt     DateTime @default(now())   // 마지막 활동 시간
 
+  // 상점
+  ownedAvatars     String   @default("dragon")         // 쉼표 구분 ID 목록
+  ownedCardBacks   String   @default("classic")        // 쉼표 구분 ID 목록
+  equippedAvatar   String   @default("dragon")
+  equippedCardBack String   @default("classic")
+
   // 관계
   sentRequests     FriendRequest[]  @relation("SentRequests")
   receivedRequests FriendRequest[]  @relation("ReceivedRequests")

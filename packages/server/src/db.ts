@@ -56,7 +56,7 @@ export async function recordGameResult(params: {
   // 게임 결과 저장
   await prisma.gameResult.create({ data: params });
 
-  // 유저 전적 업데이트
+  // 유저 전적 업데이트 (xp/coins는 recordGameResults에서 정교하게 계산하여 별도 업데이트)
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return;
 
@@ -71,8 +71,6 @@ export async function recordGameResult(params: {
       tichuFail: tichuDeclared && !tichuSuccess ? { increment: 1 } : undefined,
       winStreak: newStreak,
       maxWinStreak: Math.max(newStreak, user.maxWinStreak),
-      xp: { increment: won ? 30 : 10 },
-      coins: { increment: won ? 50 : 20 },
     },
   });
 }
@@ -146,11 +144,37 @@ export async function dbGetFriendIds(userId: string): Promise<string[]> {
   return friendships.map(f => f.userAId === userId ? f.userBId : f.userAId);
 }
 
+/** 친구 ID + 닉네임 목록 반환 (온라인 상태 enrichment용) */
+export async function dbGetFriendsWithNickname(userId: string): Promise<{ id: string; nickname: string }[]> {
+  const friendships = await prisma.friendship.findMany({
+    where: { OR: [{ userAId: userId }, { userBId: userId }] },
+    include: {
+      userA: { select: { id: true, nickname: true } },
+      userB: { select: { id: true, nickname: true } },
+    },
+  });
+  return friendships.map(f =>
+    f.userAId === userId
+      ? { id: f.userB.id, nickname: f.userB.nickname }
+      : { id: f.userA.id, nickname: f.userA.nickname }
+  );
+}
+
 export async function dbGetPendingRequests(userId: string) {
   return prisma.friendRequest.findMany({
     where: { toId: userId },
     include: { from: { select: { id: true, nickname: true } } },
   });
+}
+
+/** 친구 코드(ID 뒷 6자리)로 유저 검색 */
+export async function dbFindUserByCode(code: string): Promise<{ id: string; nickname: string } | null> {
+  // Prisma는 endsWith 지원
+  const user = await prisma.user.findFirst({
+    where: { id: { endsWith: code } },
+    select: { id: true, nickname: true },
+  });
+  return user;
 }
 
 // ── 랭킹 ────────────────────────────────────────────────────

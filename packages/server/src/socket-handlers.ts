@@ -24,14 +24,14 @@ import {
 } from './matchmaking.js';
 import {
   playerOnline, playerOffline, setPlayerStatus, getOnlinePlayer,
-  sendFriendRequest, acceptFriendRequest, rejectFriendRequest, removeFriend,
-  getFriendList, getPendingRequests, findPlayerByCode, getPlayerFriendCode,
+  enrichFriendList, getPlayerFriendCode,
 } from './friends.js';
 import {
   findOrCreateGuestUser, createOrUpdateFirebaseUser, getUserProfile,
   recordGameResult as dbRecordGameResult, getLeaderboard,
   dbSendFriendRequest, dbAcceptFriendRequest, dbRejectFriendRequest,
-  dbRemoveFriend, dbGetFriendIds, dbGetPendingRequests,
+  dbRemoveFriend, dbGetFriendsWithNickname, dbGetPendingRequests,
+  dbFindUserByCode,
 } from './db.js';
 import {
   getSeasonInfo, getSeasonLeaderboard, updateSeasonRating,
@@ -43,6 +43,7 @@ import {
   type GameResultInput as RankGameResultInput,
 } from './ranking.js';
 import { prisma } from './db.js';
+import { verifyIdToken } from './firebase-admin.js';
 
 // ── 입력 검증 헬퍼 ──────────────────────────────────────────
 
@@ -232,6 +233,10 @@ export function registerSocketHandlers(io: Server): void {
           losses: user.losses,
           tichuSuccess: user.tichuSuccess,
           winStreak: user.winStreak,
+          ownedAvatars: user.ownedAvatars,
+          ownedCardBacks: user.ownedCardBacks,
+          equippedAvatar: user.equippedAvatar,
+          equippedCardBack: user.equippedCardBack,
         });
       } catch (err) {
         console.error('[guest_login] error:', err);
@@ -239,10 +244,28 @@ export function registerSocketHandlers(io: Server): void {
       }
     });
 
-    // ── Firebase 소셜 로그인 ────────────────────────────────
-    socket.on('firebase_login', async (data: { firebaseUid: string; nickname: string }) => {
+    // ── Firebase 소셜 로그인 (토큰 검증) ─────────────────────
+    socket.on('firebase_login', async (data: { idToken?: string; firebaseUid?: string; nickname: string }) => {
       try {
-        const user = await createOrUpdateFirebaseUser(data.firebaseUid, data.nickname);
+        let uid: string | null = null;
+
+        if (data.idToken) {
+          // ID 토큰 검증 (권장)
+          uid = await verifyIdToken(data.idToken);
+          if (!uid) {
+            socket.emit('login_error', { error: 'invalid_token' });
+            return;
+          }
+        } else if (data.firebaseUid) {
+          // 레거시 호환: 토큰 없이 uid 직접 전송 (개발 환경용)
+          console.warn('[firebase_login] No idToken provided, using raw firebaseUid (insecure)');
+          uid = data.firebaseUid;
+        } else {
+          socket.emit('login_error', { error: 'missing_credentials' });
+          return;
+        }
+
+        const user = await createOrUpdateFirebaseUser(uid, data.nickname);
         dbUserId = user.id;
         socket.emit('login_success', {
           userId: user.id,
@@ -254,6 +277,10 @@ export function registerSocketHandlers(io: Server): void {
           losses: user.losses,
           tichuSuccess: user.tichuSuccess,
           winStreak: user.winStreak,
+          ownedAvatars: user.ownedAvatars,
+          ownedCardBacks: user.ownedCardBacks,
+          equippedAvatar: user.equippedAvatar,
+          equippedCardBack: user.equippedCardBack,
         });
       } catch (err) {
         console.error('[firebase_login] error:', err);
@@ -1010,92 +1037,127 @@ export function registerSocketHandlers(io: Server): void {
       broadcastQueueUpdate(io);
     });
 
-    // ── 친구 시스템 ──────────────────────────────────────────
+    // ── 친구 시스템 (DB 영구 저장) ─────────────────────────────
+
+    /** DB에서 친구 목록 가져와 온라인 상태 합쳐 전송 */
+    async function emitFriendList(targetSocket: { emit: (ev: string, data: unknown) => void }, userId: string) {
+      const friends = await dbGetFriendsWithNickname(userId);
+      targetSocket.emit('friend_list', { friends: enrichFriendList(friends) });
+    }
+
+    /** DB에서 대기 요청 가져와 전송 */
+    async function emitPendingRequests(targetSocket: { emit: (ev: string, data: unknown) => void }, userId: string) {
+      const reqs = await dbGetPendingRequests(userId);
+      targetSocket.emit('friend_requests', {
+        requests: reqs.map(r => ({ fromId: r.fromId, fromNickname: r.from.nickname })),
+      });
+    }
 
     // 로비 진입 시 온라인 등록 + 친구 목록/요청 전송
-    socket.on('friend_init', (data: { playerId: string; nickname: string }) => {
+    socket.on('friend_init', async (data: { playerId: string; nickname: string }) => {
       playerOnline({ playerId: data.playerId, nickname: data.nickname, socketId: socket.id, status: 'lobby' });
       const code = getPlayerFriendCode(data.playerId);
       socket.emit('friend_code', { code });
-      socket.emit('friend_list', { friends: getFriendList(data.playerId) });
-      socket.emit('friend_requests', { requests: getPendingRequests(data.playerId) });
+      try {
+        await emitFriendList(socket, data.playerId);
+        await emitPendingRequests(socket, data.playerId);
+      } catch (err) { console.error('[friend_init] DB error:', err); }
     });
 
-    // 친구 코드로 검색
-    socket.on('friend_search', (data: { code: string; myPlayerId: string }) => {
-      const found = findPlayerByCode(data.code);
-      if (!found || found.playerId === data.myPlayerId) {
+    // 친구 코드로 검색 (DB 검색 — 오프라인 유저도 찾기 가능)
+    socket.on('friend_search', async (data: { code: string; myPlayerId: string }) => {
+      try {
+        const found = await dbFindUserByCode(data.code);
+        if (!found || found.id === data.myPlayerId) {
+          socket.emit('friend_search_result', { found: false });
+        } else {
+          socket.emit('friend_search_result', { found: true, playerId: found.id, nickname: found.nickname });
+        }
+      } catch (err) {
+        console.error('[friend_search] DB error:', err);
         socket.emit('friend_search_result', { found: false });
-      } else {
-        socket.emit('friend_search_result', { found: true, playerId: found.playerId, nickname: found.nickname });
       }
     });
 
     // 친구 요청 보내기
-    socket.on('friend_request', (data: { fromId: string; fromNickname: string; toId: string }) => {
+    socket.on('friend_request', async (data: { fromId: string; fromNickname: string; toId: string }) => {
       if (!rateLimitCheck(socket.id, 10)) { socket.emit('friend_error', { error: 'rate_limited' }); return; }
       if (!isValidPlayerId(data.fromId) || !isValidNickname(data.fromNickname) || !isValidPlayerId(data.toId)) {
         socket.emit('friend_error', { error: 'invalid_input' }); return;
       }
-      const result = sendFriendRequest(data.fromId, data.fromNickname, data.toId);
-      if (!result.ok) {
-        socket.emit('friend_error', { error: result.error });
-        return;
-      }
-      // 상대에게 실시간 알림
-      const target = getOnlinePlayer(data.toId);
-      if (target) {
-        io.to(target.socketId).emit('friend_request_received', { fromId: data.fromId, fromNickname: data.fromNickname });
-        // 자동 수락된 경우 (상대가 이미 요청 보낸 상태) 양쪽에 친구 목록 갱신
-        const myFriends = getFriendList(data.fromId);
-        const theirFriends = getFriendList(data.toId);
-        if (myFriends.some(f => f.playerId === data.toId)) {
-          socket.emit('friend_list', { friends: myFriends });
-          io.to(target.socketId).emit('friend_list', { friends: theirFriends });
+      try {
+        const result = await dbSendFriendRequest(data.fromId, data.toId);
+        if (!result.ok) {
+          socket.emit('friend_error', { error: result.error });
+          return;
         }
+        // 상대에게 실시간 알림
+        const target = getOnlinePlayer(data.toId);
+        if (target) {
+          io.to(target.socketId).emit('friend_request_received', { fromId: data.fromId, fromNickname: data.fromNickname });
+        }
+        // 자동 수락된 경우 양쪽에 친구 목록 갱신
+        if (result.autoAccepted) {
+          await emitFriendList(socket, data.fromId);
+          if (target) {
+            const targetSock = io.sockets.sockets.get(target.socketId);
+            if (targetSock) await emitFriendList(targetSock, data.toId);
+          }
+        }
+        socket.emit('friend_request_sent', { toId: data.toId });
+      } catch (err) {
+        console.error('[friend_request] DB error:', err);
+        socket.emit('friend_error', { error: 'db_error' });
       }
-      socket.emit('friend_request_sent', { toId: data.toId });
     });
 
     // 친구 요청 수락
-    socket.on('friend_accept', (data: { fromId: string; myId: string }) => {
+    socket.on('friend_accept', async (data: { fromId: string; myId: string }) => {
       if (!rateLimitCheck(socket.id, 10)) { socket.emit('friend_error', { error: 'rate_limited' }); return; }
       if (!isValidPlayerId(data.fromId) || !isValidPlayerId(data.myId)) {
         socket.emit('friend_error', { error: 'invalid_input' }); return;
       }
-      if (acceptFriendRequest(data.fromId, data.myId)) {
-        socket.emit('friend_list', { friends: getFriendList(data.myId) });
-        socket.emit('friend_requests', { requests: getPendingRequests(data.myId) });
-        // 상대에게도 친구 목록 갱신
-        const from = getOnlinePlayer(data.fromId);
-        if (from) {
-          io.to(from.socketId).emit('friend_list', { friends: getFriendList(data.fromId) });
+      try {
+        if (await dbAcceptFriendRequest(data.fromId, data.myId)) {
+          await emitFriendList(socket, data.myId);
+          await emitPendingRequests(socket, data.myId);
+          // 상대에게도 친구 목록 갱신
+          const from = getOnlinePlayer(data.fromId);
+          if (from) {
+            const fromSock = io.sockets.sockets.get(from.socketId);
+            if (fromSock) await emitFriendList(fromSock, data.fromId);
+          }
         }
-      }
+      } catch (err) { console.error('[friend_accept] DB error:', err); }
     });
 
     // 친구 요청 거절
-    socket.on('friend_reject', (data: { fromId: string; myId: string }) => {
+    socket.on('friend_reject', async (data: { fromId: string; myId: string }) => {
       if (!rateLimitCheck(socket.id, 10)) { socket.emit('friend_error', { error: 'rate_limited' }); return; }
       if (!isValidPlayerId(data.fromId) || !isValidPlayerId(data.myId)) {
         socket.emit('friend_error', { error: 'invalid_input' }); return;
       }
-      rejectFriendRequest(data.fromId, data.myId);
-      socket.emit('friend_requests', { requests: getPendingRequests(data.myId) });
+      try {
+        await dbRejectFriendRequest(data.fromId, data.myId);
+        await emitPendingRequests(socket, data.myId);
+      } catch (err) { console.error('[friend_reject] DB error:', err); }
     });
 
     // 친구 삭제
-    socket.on('friend_remove', (data: { myId: string; friendId: string }) => {
+    socket.on('friend_remove', async (data: { myId: string; friendId: string }) => {
       if (!rateLimitCheck(socket.id, 10)) { socket.emit('friend_error', { error: 'rate_limited' }); return; }
       if (!isValidPlayerId(data.myId) || !isValidPlayerId(data.friendId)) {
         socket.emit('friend_error', { error: 'invalid_input' }); return;
       }
-      removeFriend(data.myId, data.friendId);
-      socket.emit('friend_list', { friends: getFriendList(data.myId) });
-      const friend = getOnlinePlayer(data.friendId);
-      if (friend) {
-        io.to(friend.socketId).emit('friend_list', { friends: getFriendList(data.friendId) });
-      }
+      try {
+        await dbRemoveFriend(data.myId, data.friendId);
+        await emitFriendList(socket, data.myId);
+        const friend = getOnlinePlayer(data.friendId);
+        if (friend) {
+          const friendSock = io.sockets.sockets.get(friend.socketId);
+            if (friendSock) await emitFriendList(friendSock, data.friendId);
+        }
+      } catch (err) { console.error('[friend_remove] DB error:', err); }
     });
 
     // 친구 방 초대
@@ -1104,6 +1166,59 @@ export function registerSocketHandlers(io: Server): void {
       if (target) {
         io.to(target.socketId).emit('friend_invite_received', { fromNickname: data.fromNickname, roomId: data.roomId });
       }
+    });
+
+    // ── 이모트 ──────────────────────────────────────────────
+    socket.on('send_emote', (data: { emoji: string; label: string }) => {
+      if (!rateLimitCheck(socket.id, 5)) return;
+      if (!playerRoomId || playerSeat < 0) return;
+      // 같은 방의 다른 플레이어에게 브로드캐스트
+      socket.to(playerRoomId).emit('emote_received', {
+        seat: playerSeat,
+        emoji: data.emoji,
+        label: data.label,
+      });
+    });
+
+    // ── 상점: 아이템 구매 ─────────────────────────────────────
+    socket.on('buy_item', async (data: { itemId: string; category: 'avatar' | 'cardback'; price: number }) => {
+      if (!dbUserId) { socket.emit('shop_error', { error: 'not_logged_in' }); return; }
+      if (!rateLimitCheck(socket.id, 10)) return;
+      try {
+        const user = await prisma.user.findUnique({ where: { id: dbUserId }, select: { coins: true, ownedAvatars: true, ownedCardBacks: true } });
+        if (!user) { socket.emit('shop_error', { error: 'user_not_found' }); return; }
+        const field = data.category === 'avatar' ? 'ownedAvatars' : 'ownedCardBacks';
+        const owned = user[field].split(',').filter(Boolean);
+        if (owned.includes(data.itemId)) { socket.emit('shop_error', { error: 'already_owned' }); return; }
+        if (user.coins < data.price) { socket.emit('shop_error', { error: 'not_enough_coins' }); return; }
+        owned.push(data.itemId);
+        await prisma.user.update({
+          where: { id: dbUserId },
+          data: { coins: { decrement: data.price }, [field]: owned.join(',') },
+        });
+        socket.emit('shop_bought', { itemId: data.itemId, category: data.category, coins: user.coins - data.price });
+      } catch (err) { console.error('[buy_item] error:', err); socket.emit('shop_error', { error: 'db_error' }); }
+    });
+
+    // ── 상점: 아이템 장착 ─────────────────────────────────────
+    socket.on('equip_item', async (data: { itemId: string; category: 'avatar' | 'cardback' }) => {
+      if (!dbUserId) return;
+      if (!rateLimitCheck(socket.id, 10)) return;
+      try {
+        const field = data.category === 'avatar' ? 'equippedAvatar' : 'equippedCardBack';
+        await prisma.user.update({ where: { id: dbUserId }, data: { [field]: data.itemId } });
+        socket.emit('shop_equipped', { itemId: data.itemId, category: data.category });
+      } catch (err) { console.error('[equip_item] error:', err); }
+    });
+
+    // ── 닉네임 변경 ──────────────────────────────────────────
+    socket.on('change_nickname', async (data: { nickname: string }) => {
+      if (!dbUserId) return;
+      if (!isValidNickname(data.nickname)) { socket.emit('nickname_error', { error: 'invalid_nickname' }); return; }
+      try {
+        await prisma.user.update({ where: { id: dbUserId }, data: { nickname: data.nickname } });
+        socket.emit('nickname_changed', { nickname: data.nickname });
+      } catch (err) { console.error('[change_nickname] error:', err); }
     });
 
     // ── disconnect ─────────────────────────────────────────
@@ -1207,6 +1322,12 @@ export function registerSocketHandlers(io: Server): void {
     if (room.phase === 'WAITING_FOR_PLAYERS' || room.phase === 'GAME_OVER') return;
 
     console.log(`[botReplace] seat=${seat} replacing ${player.nickname} with bot`);
+
+    // 탈주 기록 DB 업데이트
+    prisma.user.updateMany({
+      where: { OR: [{ guestId: player.playerId }, { id: player.playerId }] },
+      data: { leaveCount24h: { increment: 1 }, lastLeaveAt: new Date() },
+    }).catch(err => console.error('[botReplace] leave count update error:', err));
 
     // 원래 플레이어 정보 저장 (재접속 복원용)
     player.originalPlayer = {
@@ -1819,14 +1940,16 @@ async function recordGameResults(io: Server, room: GameRoom): Promise<void> {
     const isOneTwo = room.finishOrder.length >= 2
       && getTeamForSeat(room, room.finishOrder[0]!) === getTeamForSeat(room, room.finishOrder[1]!);
 
-    // 현재 유저 XP 조회
+    // 현재 유저 XP + 탈주 횟수 조회
     let currentXp = 0;
+    let disconnectCount24h = 0;
     try {
       const user = await prisma.user.findFirst({
         where: { OR: [{ guestId: player.playerId }, { id: player.playerId }] },
-        select: { rankXp: true },
+        select: { rankXp: true, leaveCount24h: true },
       });
       currentXp = user?.rankXp ?? 0;
+      disconnectCount24h = user?.leaveCount24h ?? 0;
     } catch {}
 
     const myTierIndex = rankGetTierInfo(currentXp).tierIndex;
@@ -1846,7 +1969,7 @@ async function recordGameResults(io: Server, room: GameRoom): Promise<void> {
       totalTurns: Math.max(1, room.roundHistory.length * 4),
       passCount: 0,
       isDisconnected: !player.connected,
-      disconnectCount24h: 0,
+      disconnectCount24h,
     };
 
     const breakdown = rankCalculateXp(xpInput, currentXp);
@@ -1870,13 +1993,15 @@ async function recordGameResults(io: Server, room: GameRoom): Promise<void> {
         finishRank,
         roundCount: room.roundNumber,
       });
-      // rankXp 업데이트
+      // rankXp + xp + coins 통합 업데이트
       await prisma.user.updateMany({
         where: { OR: [{ guestId: player.playerId }, { id: player.playerId }] },
         data: {
           rankXp: newXp,
+          xp: newXp,
           highestXp: Math.max(newXp, currentXp),
           currentTier: tierAfter.tier,
+          coins: { increment: coinGain },
           lastActiveAt: new Date(),
         },
       });

@@ -54,7 +54,8 @@ function AppInner() {
     queueMatch, cancelMatch,
     createCustomRoom, listRooms, startGame, addBotToSeat, removeBot,
     friendInit, friendSearch, friendRequest, friendAccept, friendReject, friendRemove, friendInvite,
-    guestLogin, firebaseLogin, getLeaderboard, leaveRoom, moveSeat, shuffleTeams,
+    guestLogin, firebaseLogin, getLeaderboard, sendEmote, buyShopItem, equipShopItem, changeNickname,
+    leaveRoom, moveSeat, shuffleTeams,
   } = useSocket();
 
   const connected = useGameStore((s) => s.connected);
@@ -131,11 +132,12 @@ function AppInner() {
     setLoginError(null);
     try {
       const user = await signInWithGoogle();
+      const idToken = await user.getIdToken();
       const nick = user.displayName || user.email?.split('@')[0] || 'Player';
       const us = useUserStore.getState();
       us.setNickname(nick);
       setNickname(nick);
-      firebaseLogin(user.uid, nick);
+      firebaseLogin(idToken, nick);
       setScreen('lobby');
     } catch (err: any) {
       console.error('Google login error:', err);
@@ -200,6 +202,9 @@ function AppInner() {
         onFriendReject={friendReject}
         onFriendRemove={friendRemove}
         onFriendInvite={friendInvite}
+        onBuyShopItem={buyShopItem}
+        onEquipShopItem={equipShopItem}
+        onChangeNickname={changeNickname}
       />
       <TutorialModal visible={showTutorial} onClose={() => setShowTutorial(false)} />
       </>
@@ -326,6 +331,7 @@ function AppInner() {
       onSubmitBombCards={(cards) => {
         submitBomb(cards);
       }}
+      onSendEmote={sendEmote}
       onBackToLobby={() => {
         leaveRoom();
         setScreen('lobby');

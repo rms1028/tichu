@@ -29,7 +29,7 @@ import { ExchangeView } from '../components/ExchangeView';
 import { BombTimer } from '../components/BombTimer';
 import { GameEventOverlay } from '../components/GameEventOverlay';
 import { ScreenShake } from '../components/ParticleEffect';
-import { EmoteButton } from '../components/EmotePanel';
+import { EmoteButton, EmoteBubble } from '../components/EmotePanel';
 import { BackgroundWatermark } from '../components/BackgroundWatermark';
 import { CircleTimer } from '../components/CircleTimer';
 import { COLORS, FONT } from '../utils/theme';
@@ -46,6 +46,7 @@ interface GameScreenProps {
   onSubmitBombCards?: (cards: Card[]) => void;
   onAddBots: () => void;
   onBackToLobby?: () => void;
+  onSendEmote?: (emoji: string, label: string) => void;
 }
 
 function TichuPulseButton({ onPress }: { onPress: () => void }) {
@@ -74,7 +75,7 @@ const tichuPulseS = StyleSheet.create({
 
 export function GameScreen({
   onPlay, onPass, onDeclareTichu, onPassTichu,
-  onExchange, onDragonGive, onSubmitBomb, onSubmitBombCards, onAddBots, onBackToLobby,
+  onExchange, onDragonGive, onSubmitBomb, onSubmitBombCards, onAddBots, onBackToLobby, onSendEmote,
 }: GameScreenProps) {
   const phase = useGameStore((s) => s.phase);
   const players = useGameStore((s) => s.players);
@@ -103,6 +104,19 @@ export function GameScreen({
       setTimeout(() => setBombShake(false), 500);
     }
   }, [lastPlayEvent]);
+
+  // 이모트 말풍선
+  const emoteEvent = useGameStore((s) => s.emoteEvent);
+  const [activeEmotes, setActiveEmotes] = useState<Record<number, { emoji: string; label: string } | null>>({});
+  useEffect(() => {
+    if (!emoteEvent) return;
+    const { seat, emoji, label } = emoteEvent;
+    setActiveEmotes(prev => ({ ...prev, [seat]: { emoji, label } }));
+    const timer = setTimeout(() => {
+      setActiveEmotes(prev => ({ ...prev, [seat]: null }));
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [emoteEvent]);
   const scores = useGameStore((s) => s.scores);
   const reset = useGameStore((s) => s.reset);
   const { leftOpponent, rightOpponent, partnerSeat } = useTeamInfo();
@@ -415,18 +429,21 @@ export function GameScreen({
       <View style={styles.topBar}>
         <ScoreBoard />
         <View style={styles.partnerCenter}>
-          <OpponentHand
-            position="top"
-            cardCount={otherHandCounts[partnerSeat] ?? 0}
-            nickname={players[partnerSeat]?.nickname ?? '파트너'}
-            tichu={tichuDeclarations[partnerSeat]}
-            isCurrentTurn={currentTurn === partnerSeat}
-            finished={finishOrder.includes(partnerSeat)}
-            passed={passedSeats.includes(partnerSeat)}
-            connected={players[partnerSeat]?.connected ?? true}
-            isPartner={true}
-            trickWon={trickWonEvent?.winningSeat === partnerSeat ? { points: trickWonEvent.points } : null}
-          />
+          <View>
+            {activeEmotes[partnerSeat] && <EmoteBubble emoji={activeEmotes[partnerSeat]!.emoji} label={activeEmotes[partnerSeat]!.label} />}
+            <OpponentHand
+              position="top"
+              cardCount={otherHandCounts[partnerSeat] ?? 0}
+              nickname={players[partnerSeat]?.nickname ?? '파트너'}
+              tichu={tichuDeclarations[partnerSeat]}
+              isCurrentTurn={currentTurn === partnerSeat}
+              finished={finishOrder.includes(partnerSeat)}
+              passed={passedSeats.includes(partnerSeat)}
+              connected={players[partnerSeat]?.connected ?? true}
+              isPartner={true}
+              trickWon={trickWonEvent?.winningSeat === partnerSeat ? { points: trickWonEvent.points } : null}
+            />
+          </View>
         </View>
         <View style={styles.topBarRight} />
       </View>
@@ -434,19 +451,22 @@ export function GameScreen({
       <View style={styles.middleArea}>
         {/* Left opponent */}
         <View style={styles.sideOpponent}>
-          <OpponentHand
-            position="left"
-            cardCount={otherHandCounts[leftOpponent] ?? 0}
-            nickname={players[leftOpponent]?.nickname ?? ''}
-            tichu={tichuDeclarations[leftOpponent]}
-            isCurrentTurn={currentTurn === leftOpponent}
-            finished={finishOrder.includes(leftOpponent)}
-            passed={passedSeats.includes(leftOpponent)}
-            connected={players[leftOpponent]?.connected ?? true}
-            isPartner={false}
-            nickColor="#A3E635"
-            trickWon={trickWonEvent?.winningSeat === leftOpponent ? { points: trickWonEvent.points } : null}
-          />
+          <View>
+            {activeEmotes[leftOpponent] && <EmoteBubble emoji={activeEmotes[leftOpponent]!.emoji} label={activeEmotes[leftOpponent]!.label} />}
+            <OpponentHand
+              position="left"
+              cardCount={otherHandCounts[leftOpponent] ?? 0}
+              nickname={players[leftOpponent]?.nickname ?? ''}
+              tichu={tichuDeclarations[leftOpponent]}
+              isCurrentTurn={currentTurn === leftOpponent}
+              finished={finishOrder.includes(leftOpponent)}
+              passed={passedSeats.includes(leftOpponent)}
+              connected={players[leftOpponent]?.connected ?? true}
+              isPartner={false}
+              nickColor="#A3E635"
+              trickWon={trickWonEvent?.winningSeat === leftOpponent ? { points: trickWonEvent.points } : null}
+            />
+          </View>
         </View>
         {/* Table center */}
         <Animated.View style={[styles.tableCenter, styles.tableCenterGlow, tableGlowStyle]}>
@@ -454,19 +474,22 @@ export function GameScreen({
         </Animated.View>
         {/* Right opponent */}
         <View style={styles.sideOpponent}>
-          <OpponentHand
-            position="right"
-            cardCount={otherHandCounts[rightOpponent] ?? 0}
-            nickname={players[rightOpponent]?.nickname ?? ''}
-            tichu={tichuDeclarations[rightOpponent]}
-            isCurrentTurn={currentTurn === rightOpponent}
-            finished={finishOrder.includes(rightOpponent)}
-            passed={passedSeats.includes(rightOpponent)}
-            connected={players[rightOpponent]?.connected ?? true}
-            isPartner={false}
-            nickColor="#C084FC"
-            trickWon={trickWonEvent?.winningSeat === rightOpponent ? { points: trickWonEvent.points } : null}
-          />
+          <View>
+            {activeEmotes[rightOpponent] && <EmoteBubble emoji={activeEmotes[rightOpponent]!.emoji} label={activeEmotes[rightOpponent]!.label} />}
+            <OpponentHand
+              position="right"
+              cardCount={otherHandCounts[rightOpponent] ?? 0}
+              nickname={players[rightOpponent]?.nickname ?? ''}
+              tichu={tichuDeclarations[rightOpponent]}
+              isCurrentTurn={currentTurn === rightOpponent}
+              finished={finishOrder.includes(rightOpponent)}
+              passed={passedSeats.includes(rightOpponent)}
+              connected={players[rightOpponent]?.connected ?? true}
+              isPartner={false}
+              nickColor="#C084FC"
+              trickWon={trickWonEvent?.winningSeat === rightOpponent ? { points: trickWonEvent.points } : null}
+            />
+          </View>
         </View>
       </View>
       {/* 티츄 선언 + 이모티콘 (박스 위) */}
@@ -483,7 +506,7 @@ export function GameScreen({
               <TichuPulseButton onPress={() => onDeclareTichu('small')} />
             </View>
           )}
-          <EmoteButton onSend={() => {}} />
+          <EmoteButton onSend={(emoji, label) => onSendEmote?.(emoji, label)} />
         </View>
       )}
       {/* Bottom area: error, turn indicator, timer, actions, hand */}

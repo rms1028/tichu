@@ -22,6 +22,9 @@ interface LobbyScreenProps {
   onFriendReject?: (fromId: string, myId: string) => void;
   onFriendRemove?: (myId: string, friendId: string) => void;
   onFriendInvite?: (fromNickname: string, toId: string, roomId: string) => void;
+  onBuyShopItem?: (itemId: string, category: 'avatar' | 'cardback', price: number) => void;
+  onEquipShopItem?: (itemId: string, category: 'avatar' | 'cardback') => void;
+  onChangeNickname?: (nickname: string) => void;
 }
 
 // 티어
@@ -64,7 +67,7 @@ function FloatingSymbol({ symbol, x, delay }: { symbol: string; x: number; delay
   return <Animated.Text style={[{ position: 'absolute', left: `${x}%` as any, top: `${20 + delay * 7}%` as any, fontSize: 22, color: '#fff', opacity: 0.04 }, s]}>{symbol}</Animated.Text>;
 }
 
-export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRooms, onGetLeaderboard, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite }: LobbyScreenProps) {
+export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRooms, onGetLeaderboard, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite, onBuyShopItem, onEquipShopItem, onChangeNickname }: LobbyScreenProps) {
   const savedNickname = useUserStore((s) => s.nickname);
   const savedPlayerId = useUserStore((s) => s.playerId);
   const userSetNickname = useUserStore((s) => s.setNickname);
@@ -112,6 +115,8 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const connected = useGameStore((s) => s.connected);
   const userCoins = useUserStore((s) => s.coins);
+  const equippedAvatar = useUserStore((s) => s.equippedAvatar);
+  const avatarEmoji = SHOP_AVATARS.find(a => a.id === equippedAvatar)?.emoji ?? '🐲';
   const name = nick.trim() || savedNickname || 'Guest';
 
   useEffect(() => {
@@ -146,7 +151,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
   // ═══════════ 서브 페이지 ═══════════
   if (page === 'rules') return <RulesScreen onBack={() => setPage('main')} />;
   if (page === 'ranking') return <RankingScreen onBack={() => setPage('main')} onRefresh={onGetLeaderboard} />;
-  if (page === 'shop') return <ShopScreen onBack={() => setPage('main')} />;
+  if (page === 'shop') return <ShopScreen onBack={() => setPage('main')} onBuyItem={onBuyShopItem} onEquipItem={onEquipShopItem} />;
   if (page === 'achievements') return <AchievementsScreen onBack={() => setPage('profile')} />;
   if (page === 'terms') return <TermsScreen onBack={() => setPage('settings')} />;
   if (page === 'settings') {
@@ -190,7 +195,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           {/* 프로필 헤더 */}
           <View style={PS.header}>
             <View style={[PS.avatarGlow, { shadowColor: tier.color }]}>
-              <View style={[PS.avatar, { borderColor: tier.color }]}><Text style={PS.avatarEmoji}>{'🐲'}</Text></View>
+              <View style={[PS.avatar, { borderColor: tier.color }]}><Text style={PS.avatarEmoji}>{avatarEmoji}</Text></View>
             </View>
             <View style={PS.nameRow}>
               <Text style={PS.name}>{name}</Text>
@@ -261,6 +266,14 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
             </TouchableOpacity>
           </View>
         </ScrollView>
+        {/* 닉네임 편집 모달 (프로필 페이지) */}
+        <Modal visible={showNickEdit} transparent animationType="fade">
+          <View style={S.mOvl}><View style={S.mBox}>
+            <Text style={S.mTitle}>{'✏️ 닉네임 변경'}</Text>
+            <TextInput style={S.mInput} value={nick} onChangeText={setNick} placeholder={'닉네임 입력'} placeholderTextColor="rgba(255,255,255,0.3)" maxLength={12} />
+            <TouchableOpacity style={[S.mOk, !nick.trim() && { opacity: 0.4 }]} onPress={() => { if (nick.trim()) { userSetNickname(nick.trim()); onChangeNickname?.(nick.trim()); setShowNickEdit(false); } }} disabled={!nick.trim()}><Text style={S.mOkT}>{'확인'}</Text></TouchableOpacity>
+          </View></View>
+        </Modal>
       </SafeAreaView>
     );
   }
@@ -275,7 +288,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
       {/* 상단 바 */}
       <Animated.View entering={FadeIn.delay(0).duration(500)} style={S.topBar}>
         <TouchableOpacity style={S.profileBtn} activeOpacity={0.8} onPress={() => setPage('profile')}>
-          <View style={[S.av, { borderColor: tier.color }]}><Text style={{ fontSize: 18 }}>{'\uD83D\uDC32'}</Text></View>
+          <View style={[S.av, { borderColor: tier.color }]}><Text style={{ fontSize: 18 }}>{avatarEmoji}</Text></View>
           <Text style={S.nick}>{name}</Text>
           <Text style={S.tierIcon}>{tier.icon}</Text>
         </TouchableOpacity>
@@ -461,7 +474,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
         <View style={S.mOvl}><View style={S.mBox}>
           <Text style={S.mTitle}>{'✏️ 닉네임 변경'}</Text>
           <TextInput style={S.mInput} value={nick} onChangeText={setNick} placeholder={'닉네임 입력'} placeholderTextColor="rgba(255,255,255,0.3)" maxLength={12} />
-          <TouchableOpacity style={[S.mOk, !nick.trim() && { opacity: 0.4 }]} onPress={() => { if (nick.trim()) { userSetNickname(nick.trim()); setShowNickEdit(false); } }} disabled={!nick.trim()}><Text style={S.mOkT}>{'확인'}</Text></TouchableOpacity>
+          <TouchableOpacity style={[S.mOk, !nick.trim() && { opacity: 0.4 }]} onPress={() => { if (nick.trim()) { userSetNickname(nick.trim()); onChangeNickname?.(nick.trim()); setShowNickEdit(false); } }} disabled={!nick.trim()}><Text style={S.mOkT}>{'확인'}</Text></TouchableOpacity>
         </View></View>
       </Modal>
       {/* 커스텀 방 모달 */}
@@ -651,9 +664,9 @@ const S = StyleSheet.create({
   attBtnT: { color: '#fff', fontSize: 16, fontWeight: '900' },
 
   // 프로필 페이지
-  backBtn: { marginBottom: 12 },
+  backBtn: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   settingsTitle: { color: '#FFD700', fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: 16 },
-  backText: { color: 'rgba(255,255,255,0.6)', fontSize: 14, fontWeight: '700' },
+  backText: { color: 'rgba(255,255,255,0.7)', fontSize: 15, fontWeight: '700' },
   pHeader: { alignItems: 'center', marginBottom: 20 },
   pAvatar: { width: 80, height: 80, borderRadius: 40, borderWidth: 3, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   pName: { color: '#fff', fontSize: 22, fontWeight: '900' },

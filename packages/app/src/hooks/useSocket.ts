@@ -100,7 +100,7 @@ export function useSocket() {
 
     // ── 방 참가 ────────────────────────────────────────────
     socket.on('room_joined', (data: { seat: number; roomId: string; players: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null>; hostPlayerId?: string }) => {
-      unmuteSounds();
+      // unmuteSounds는 게임 시작 시에만 호출 (대기방에서는 음소거 유지)
       store.setRoomInfo(data.roomId, data.seat, data.players);
       if (data.hostPlayerId) useGameStore.setState({ hostPlayerId: data.hostPlayerId });
     });
@@ -127,6 +127,10 @@ export function useSocket() {
     // ── 페이즈 변경 ────────────────────────────────────────
     socket.on('phase_changed', (data: { phase: GamePhase }) => {
       store.onPhaseChanged(data.phase);
+      // 게임이 실제 시작되면 음소거 해제
+      if (data.phase === 'DEALING_8') {
+        unmuteSounds();
+      }
     });
 
     // ── 카드 분배 ──────────────────────────────────────────
@@ -251,7 +255,7 @@ export function useSocket() {
       if (!isInGame()) return;
       try { SFX.bomb(); } catch {}
       try { TTS.cardPlayed(data.bomb.value, data.bomb.type); } catch {}
-      haptics.heavyTap();
+      try { haptics.heavyTap(); } catch {};
     });
 
     // ── 연결 상태 변경 ────────────────────────────────────────
@@ -366,6 +370,7 @@ export function useSocket() {
     socket.on('login_success', (data: {
       userId: string; nickname: string; coins: number; xp: number;
       totalGames: number; wins: number; losses: number; tichuSuccess: number; winStreak: number;
+      ownedAvatars?: string; ownedCardBacks?: string; equippedAvatar?: string; equippedCardBack?: string;
     }) => {
       useGameStore.setState({ dbUserId: data.userId });
       // userStore를 서버 DB 데이터로 동기화
@@ -379,11 +384,26 @@ export function useSocket() {
         losses: data.losses,
         tichuSuccess: data.tichuSuccess,
         winStreak: data.winStreak,
+        ownedAvatars: data.ownedAvatars,
+        ownedCardBacks: data.ownedCardBacks,
+        equippedAvatar: data.equippedAvatar,
+        equippedCardBack: data.equippedCardBack,
       });
     });
 
     socket.on('login_error', (data: { error: string }) => {
       console.warn('Login error:', data.error);
+    });
+
+    // ── 상점 응답 ──────────────────────────────────────────
+    socket.on('shop_bought', (data: { itemId: string; category: string; coins: number }) => {
+      const us = require('../stores/userStore').useUserStore.getState();
+      // 서버에서 확인된 코인으로 동기화
+      us.addCoins(data.coins - us.coins); // 차이만큼 보정
+    });
+    socket.on('nickname_changed', (data: { nickname: string }) => {
+      const us = require('../stores/userStore').useUserStore.getState();
+      us.setNickname(data.nickname);
     });
 
     // ── 랭킹 + 시즌 ──────────────────────────────────────
@@ -425,6 +445,11 @@ export function useSocket() {
     });
     socket.on('friend_request_sent', () => {
       useGameStore.setState({ friendSearchResult: null });
+    });
+
+    // ── 이모트 ──────────────────────────────────────────────
+    socket.on('emote_received', (data: { seat: number; emoji: string; label: string }) => {
+      useGameStore.setState({ emoteEvent: { seat: data.seat, emoji: data.emoji, label: data.label, ts: Date.now() } });
     });
 
     // ── 매칭 ────────────────────────────────────────────────
@@ -556,8 +581,8 @@ export function useSocket() {
     socketRef.current?.emit('guest_login', { guestId, nickname });
   }, []);
 
-  const firebaseLogin = useCallback((firebaseUid: string, nickname: string) => {
-    socketRef.current?.emit('firebase_login', { firebaseUid, nickname });
+  const firebaseLogin = useCallback((idToken: string, nickname: string) => {
+    socketRef.current?.emit('firebase_login', { idToken, nickname });
   }, []);
 
   const getLeaderboard = useCallback(() => {
@@ -615,6 +640,22 @@ export function useSocket() {
     socketRef.current?.emit('cancel_match');
   }, []);
 
+  const sendEmote = useCallback((emoji: string, label: string) => {
+    socketRef.current?.emit('send_emote', { emoji, label });
+  }, []);
+
+  const buyShopItem = useCallback((itemId: string, category: 'avatar' | 'cardback', price: number) => {
+    socketRef.current?.emit('buy_item', { itemId, category, price });
+  }, []);
+
+  const equipShopItem = useCallback((itemId: string, category: 'avatar' | 'cardback') => {
+    socketRef.current?.emit('equip_item', { itemId, category });
+  }, []);
+
+  const changeNickname = useCallback((nickname: string) => {
+    socketRef.current?.emit('change_nickname', { nickname });
+  }, []);
+
   const leaveRoom = useCallback(() => {
     socketRef.current?.emit('leave_room');
     cancelAllSounds();
@@ -653,6 +694,10 @@ export function useSocket() {
     startGame,
     addBotToSeat,
     removeBot,
+    sendEmote,
+    buyShopItem,
+    equipShopItem,
+    changeNickname,
     leaveRoom,
     moveSeat,
     shuffleTeams,

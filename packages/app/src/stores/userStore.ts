@@ -142,7 +142,10 @@ interface UserState {
   setPlayerId: (id: string) => void;
   isGuest: () => boolean;
   applyServerRewards: (xp: number, coins: number, won: boolean, tichuSuccess: boolean) => void;
-  syncFromServer: (data: { coins: number; xp: number; totalGames: number; wins: number; losses: number; tichuSuccess: number; winStreak: number }) => void;
+  syncFromServer: (data: {
+    coins: number; xp: number; totalGames: number; wins: number; losses: number; tichuSuccess: number; winStreak: number;
+    ownedAvatars?: string; ownedCardBacks?: string; equippedAvatar?: string; equippedCardBack?: string;
+  }) => void;
 }
 
 // MMKV (모바일) 또는 localStorage (웹) 사용
@@ -353,6 +356,10 @@ export const useUserStore = create<UserState>((set, get) => ({
       losses: data.losses,
       tichuSuccess: data.tichuSuccess,
       winStreak: data.winStreak,
+      ...(data.ownedAvatars ? { ownedAvatars: data.ownedAvatars.split(',').filter(Boolean) } : {}),
+      ...(data.ownedCardBacks ? { ownedCardBacks: data.ownedCardBacks.split(',').filter(Boolean) } : {}),
+      ...(data.equippedAvatar ? { equippedAvatar: data.equippedAvatar } : {}),
+      ...(data.equippedCardBack ? { equippedCardBack: data.equippedCardBack } : {}),
     };
     saveState(ns);
     return ns;

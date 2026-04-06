@@ -4,9 +4,13 @@ import { useUserStore, SHOP_AVATARS, SHOP_CARDBACKS, ShopItem } from '../stores/
 import { COLORS } from '../utils/theme';
 import { BackgroundWatermark } from '../components/BackgroundWatermark';
 
-interface Props { onBack: () => void; }
+interface Props {
+  onBack: () => void;
+  onBuyItem?: (itemId: string, category: 'avatar' | 'cardback', price: number) => void;
+  onEquipItem?: (itemId: string, category: 'avatar' | 'cardback') => void;
+}
 
-export function ShopScreen({ onBack }: Props) {
+export function ShopScreen({ onBack, onBuyItem, onEquipItem }: Props) {
   const { coins, ownedAvatars, ownedCardBacks, equippedAvatar, equippedCardBack, buyItem, equipAvatar, equipCardBack } = useUserStore();
   const [tab, setTab] = useState<'avatar' | 'cardback'>('avatar');
   const [message, setMessage] = useState('');
@@ -19,13 +23,16 @@ export function ShopScreen({ onBack }: Props) {
     if (owned.includes(item.id)) {
       if (tab === 'avatar') equipAvatar(item.id);
       else equipCardBack(item.id);
+      onEquipItem?.(item.id, item.category);
       setMessage(`${item.name} 장착!`);
     } else {
       const ok = buyItem(item);
       if (ok) {
         setMessage(`${item.name} 구매 완료! (-${item.price} 코인)`);
+        onBuyItem?.(item.id, item.category, item.price);
         if (tab === 'avatar') equipAvatar(item.id);
         else equipCardBack(item.id);
+        onEquipItem?.(item.id, item.category);
       } else {
         setMessage('코인이 부족합니다!');
       }

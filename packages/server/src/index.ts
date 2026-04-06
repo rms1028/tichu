@@ -8,6 +8,7 @@ process.on('unhandledRejection', (err) => {
 import http from 'node:http';
 import { Server } from 'socket.io';
 import { registerSocketHandlers } from './socket-handlers.js';
+import { startScheduler, stopScheduler } from './scheduler.js';
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
 
@@ -36,6 +37,7 @@ const io = new Server(httpServer, {
 });
 
 registerSocketHandlers(io);
+startScheduler();
 
 httpServer.listen(PORT, () => {
   console.log(`Tichu server listening on port ${PORT}`);
@@ -46,6 +48,7 @@ function gracefulShutdown(signal: string) {
   console.log(`[${signal}] Graceful shutdown started...`);
 
   // 글로벌 타이머 정리
+  stopScheduler();
   if ((globalThis as any).__matchmakingTimer) clearInterval((globalThis as any).__matchmakingTimer);
   if ((globalThis as any).__roomCleanupTimer) clearInterval((globalThis as any).__roomCleanupTimer);
 
