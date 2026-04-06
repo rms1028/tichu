@@ -135,6 +135,13 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
     return () => { clearInterval(timer.current!); clearTimeout(auto); };
   }, [matching]);
 
+  // 커스텀 방 목록 자동 갱신 (모달 열려있고 list 탭일 때 5초 간격)
+  useEffect(() => {
+    if (!showRoom || customTab !== 'list') return;
+    const id = setInterval(() => onListRooms?.(), 5000);
+    return () => clearInterval(id);
+  }, [showRoom, customTab]);
+
   const joinRoom = () => { if (!roomCode.trim()) return; onJoin(roomCode.trim(), savedPlayerId, name); };
   const newRoom = () => { onJoin(`room_${Date.now().toString(36)}`, savedPlayerId, name); };
 
