@@ -405,6 +405,20 @@ export function useSocket() {
       const us = require('../stores/userStore').useUserStore.getState();
       us.setNickname(data.nickname);
     });
+    socket.on('report_success', () => {
+      useGameStore.setState({ toastMsg: '신고가 접수되었습니다' });
+    });
+    socket.on('block_success', (data: { targetId: string }) => {
+      const blocked = useGameStore.getState().blockedIds ?? [];
+      useGameStore.setState({ blockedIds: [...blocked, data.targetId], toastMsg: '차단되었습니다' });
+    });
+    socket.on('unblock_success', (data: { targetId: string }) => {
+      const blocked = useGameStore.getState().blockedIds ?? [];
+      useGameStore.setState({ blockedIds: blocked.filter(id => id !== data.targetId), toastMsg: '차단이 해제되었습니다' });
+    });
+    socket.on('blocked_list', (data: { blockedIds: string[] }) => {
+      useGameStore.setState({ blockedIds: data.blockedIds });
+    });
 
     // ── 랭킹 + 시즌 ──────────────────────────────────────
     socket.on('leaderboard', (data: { entries: any[] }) => {
@@ -657,6 +671,22 @@ export function useSocket() {
     socketRef.current?.emit('send_emote', { emoji, label });
   }, []);
 
+  const reportUser = useCallback((targetId: string, reason: string, description?: string) => {
+    socketRef.current?.emit('report_user', { targetId, reason, description });
+  }, []);
+
+  const blockUser = useCallback((targetId: string) => {
+    socketRef.current?.emit('block_user', { targetId });
+  }, []);
+
+  const unblockUser = useCallback((targetId: string) => {
+    socketRef.current?.emit('unblock_user', { targetId });
+  }, []);
+
+  const getBlockedList = useCallback(() => {
+    socketRef.current?.emit('get_blocked_list');
+  }, []);
+
   const buyShopItem = useCallback((itemId: string, category: 'avatar' | 'cardback', price: number) => {
     socketRef.current?.emit('buy_item', { itemId, category, price });
   }, []);
@@ -709,6 +739,10 @@ export function useSocket() {
     addBotToSeat,
     removeBot,
     sendEmote,
+    reportUser,
+    blockUser,
+    unblockUser,
+    getBlockedList,
     buyShopItem,
     equipShopItem,
     changeNickname,

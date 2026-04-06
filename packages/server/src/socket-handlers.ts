@@ -31,7 +31,7 @@ import {
   recordGameResult as dbRecordGameResult, getLeaderboard, getGameHistory,
   dbSendFriendRequest, dbAcceptFriendRequest, dbRejectFriendRequest,
   dbRemoveFriend, dbGetFriendsWithNickname, dbGetPendingRequests,
-  dbFindUserByCode,
+  dbFindUserByCode, dbReportUser, dbBlockUser, dbUnblockUser, dbGetBlockedIds,
 } from './db.js';
 import {
   getSeasonInfo, getSeasonLeaderboard, updateSeasonRating,
@@ -1238,6 +1238,44 @@ export function registerSocketHandlers(io: Server): void {
         await prisma.user.update({ where: { id: dbUserId }, data: { nickname: data.nickname } });
         socket.emit('nickname_changed', { nickname: data.nickname });
       } catch (err) { console.error('[change_nickname] error:', err); }
+    });
+
+    // ── 신고/차단 ──────────────────────────────────────────
+    socket.on('report_user', async (data: { targetId: string; reason: string; description?: string }) => {
+      if (!dbUserId) return;
+      if (!rateLimitCheck(socket.id, 5)) return;
+      if (dbUserId === data.targetId) return;
+      try {
+        await dbReportUser(dbUserId, data.targetId, data.reason, data.description);
+        socket.emit('report_success');
+      } catch (err) { console.error('[report_user] error:', err); }
+    });
+
+    socket.on('block_user', async (data: { targetId: string }) => {
+      if (!dbUserId) return;
+      if (!rateLimitCheck(socket.id, 10)) return;
+      if (dbUserId === data.targetId) return;
+      try {
+        await dbBlockUser(dbUserId, data.targetId);
+        socket.emit('block_success', { targetId: data.targetId });
+      } catch (err) { console.error('[block_user] error:', err); }
+    });
+
+    socket.on('unblock_user', async (data: { targetId: string }) => {
+      if (!dbUserId) return;
+      if (!rateLimitCheck(socket.id, 10)) return;
+      try {
+        await dbUnblockUser(dbUserId, data.targetId);
+        socket.emit('unblock_success', { targetId: data.targetId });
+      } catch (err) { console.error('[unblock_user] error:', err); }
+    });
+
+    socket.on('get_blocked_list', async () => {
+      if (!dbUserId) return;
+      try {
+        const ids = await dbGetBlockedIds(dbUserId);
+        socket.emit('blocked_list', { blockedIds: ids });
+      } catch (err) { console.error('[get_blocked_list] error:', err); }
     });
 
     // ── disconnect ─────────────────────────────────────────

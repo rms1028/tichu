@@ -192,6 +192,34 @@ export async function getGameHistory(userId: string, limit = 20) {
   });
 }
 
+// ── 신고/차단 ──────────────────────────────────────────────
+
+export async function dbReportUser(reporterId: string, reportedId: string, reason: string, description?: string) {
+  return prisma.report.create({ data: { reporterId, reportedId, reason, description } });
+}
+
+export async function dbBlockUser(blockerId: string, blockedId: string) {
+  return prisma.block.upsert({
+    where: { blockerId_blockedId: { blockerId, blockedId } },
+    update: {},
+    create: { blockerId, blockedId },
+  });
+}
+
+export async function dbUnblockUser(blockerId: string, blockedId: string) {
+  await prisma.block.deleteMany({ where: { blockerId, blockedId } });
+}
+
+export async function dbGetBlockedIds(userId: string): Promise<string[]> {
+  const blocks = await prisma.block.findMany({ where: { blockerId: userId }, select: { blockedId: true } });
+  return blocks.map(b => b.blockedId);
+}
+
+export async function dbGetBlockedByIds(userId: string): Promise<string[]> {
+  const blocks = await prisma.block.findMany({ where: { blockedId: userId }, select: { blockerId: true } });
+  return blocks.map(b => b.blockerId);
+}
+
 // ── 랭킹 ────────────────────────────────────────────────────
 
 export async function getLeaderboard(limit = 20) {

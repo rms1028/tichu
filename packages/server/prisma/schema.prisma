@@ -55,6 +55,10 @@ model User {
   receivedRequests FriendRequest[]  @relation("ReceivedRequests")
   friendsA         Friendship[]     @relation("FriendA")
   friendsB         Friendship[]     @relation("FriendB")
+  sentReports      Report[]         @relation("Reporter")
+  receivedReports  Report[]         @relation("Reported")
+  blockedUsers     Block[]          @relation("Blocker")
+  blockedByUsers   Block[]          @relation("Blocked")
   gameResults      GameResult[]
   seasonRankings   SeasonRanking[]
 
@@ -142,4 +146,32 @@ model SeasonRanking {
 
   @@unique([seasonId, userId])
   @@index([seasonId, ratingPoints])
+}
+
+// ── 신고 ────────────────────────────────────────────────────
+
+model Report {
+  id           String   @id @default(cuid())
+  reporterId   String
+  reportedId   String
+  reason       String                       // "afk" | "abuse" | "cheating" | "other"
+  description  String?
+  reporter     User     @relation("Reporter", fields: [reporterId], references: [id])
+  reported     User     @relation("Reported", fields: [reportedId], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([reportedId, createdAt])
+}
+
+// ── 차단 ────────────────────────────────────────────────────
+
+model Block {
+  id         String   @id @default(cuid())
+  blockerId  String
+  blockedId  String
+  blocker    User     @relation("Blocker", fields: [blockerId], references: [id])
+  blocked    User     @relation("Blocked", fields: [blockedId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
 }
