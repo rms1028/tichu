@@ -54,6 +54,7 @@ function buildAttendance(streak: number, claimedToday: boolean) {
 
 import { useUserStore, getTier, TIERS as USER_TIERS, SHOP_AVATARS, getUnlockedTitles, ALL_TITLES, PROFILE_BGS, TIER_FRAME_COLORS } from '../stores/userStore';
 import { useAchievementStore } from '../stores/achievementStore';
+import { ProfilePage } from './ProfilePage';
 import { RankingScreen } from './RankingScreen';
 import { ShopScreen } from './ShopScreen';
 import { AchievementsScreen } from './AchievementsScreen';
@@ -197,6 +198,21 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
     );
   }
   if (page === 'profile') {
+    return (
+      <ProfilePage
+        onBack={() => setPage('main')}
+        onEdit={() => setShowNickEdit(true)}
+        onStartGame={() => setPage('main')}
+        onAchievements={() => setPage('achievements')}
+        showNickEdit={showNickEdit}
+        setShowNickEdit={setShowNickEdit}
+        nick={nick}
+        setNick={setNick}
+        onSaveNick={() => { if (nick.trim()) { userSetNickname(nick.trim()); onChangeNickname?.(nick.trim()); setShowNickEdit(false); } }}
+      />
+    );
+  }
+  if (false as boolean) {
     const us = useUserStore.getState();
     const hasData = us.totalGames > 0;
     const winRate = hasData ? Math.round(us.wins / us.totalGames * 100) : -1;
