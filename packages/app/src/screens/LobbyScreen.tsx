@@ -729,7 +729,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                   placeholder={'방 이름 검색...'}
                   placeholderTextColor="rgba(255,255,255,0.3)"
                 />
-                <TouchableOpacity style={{ paddingHorizontal: 12, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 8, justifyContent: 'center' }} onPress={() => onListRooms?.()}>
+                <TouchableOpacity style={{ paddingHorizontal: 10, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 8, justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }} onPress={() => onListRooms?.()}>
                   <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>{'🔄'}</Text>
                 </TouchableOpacity>
               </View>
