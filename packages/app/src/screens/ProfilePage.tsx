@@ -1,24 +1,28 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Modal, TextInput } from 'react-native';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
-import { isMobile, isTablet, responsiveCols } from '../utils/responsive';
+import React, { useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Modal, TextInput, Dimensions } from 'react-native';
+import Animated, {
+  FadeInUp, useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, Easing,
+} from 'react-native-reanimated';
 import { useGameStore } from '../stores/gameStore';
 import { useUserStore, getTier, TIERS, SHOP_AVATARS, getUnlockedTitles, ALL_TITLES, TIER_FRAME_COLORS } from '../stores/userStore';
 import { useAchievementStore } from '../stores/achievementStore';
 import { BackgroundWatermark } from '../components/BackgroundWatermark';
 
-// ── 색상 토큰 ──────────────────────────────────────────────
+const W = Dimensions.get('window').width;
+const IS_MOBILE = W < 768;
+const IS_DESKTOP = W >= 1200;
+
+// ── 색상 ───────────────────────────────────────────────────
 const C = {
   bg: '#1a2e1a',
-  card: 'rgba(42,63,42,0.7)',
-  cardBright: 'rgba(48,72,48,0.8)',
+  card: 'rgba(42,63,42,0.6)',
+  cardImportant: 'rgba(42,63,42,0.8)',
   accent: '#f5a623',
-  accentDim: 'rgba(245,166,35,0.15)',
   mint: '#4ecdc4',
   text: '#ffffff',
-  textSub: '#a8b5a8',
-  textDim: 'rgba(255,255,255,0.35)',
-  border: 'rgba(255,255,255,0.06)',
+  sub: '#a8b5a8',
+  dim: 'rgba(255,255,255,0.35)',
+  border: 'rgba(255,255,255,0.08)',
   win: '#4CAF50',
   lose: '#F44336',
 };
@@ -37,301 +41,309 @@ interface Props {
 
 export function ProfilePage({ onBack, onEdit, onStartGame, onAchievements, showNickEdit, setShowNickEdit, nick, setNick, onSaveNick }: Props) {
   const us = useUserStore.getState();
-  const equippedAvatar = useUserStore((s) => s.equippedAvatar);
+  const equippedAvatar = useUserStore(s => s.equippedAvatar);
   const avatarEmoji = SHOP_AVATARS.find(a => a.id === equippedAvatar)?.emoji ?? '🐲';
   const hasData = us.totalGames > 0;
   const winRate = hasData ? Math.round(us.wins / us.totalGames * 100) : 0;
   const myTier = getTier(us.xp);
-  const myTierIdx = TIERS.indexOf(myTier);
-  const nextTier = myTierIdx < TIERS.length - 1 ? TIERS[myTierIdx + 1]! : myTier;
-  const isMaxTier = myTier === nextTier;
+  const idx = TIERS.indexOf(myTier);
+  const nextTier = idx < TIERS.length - 1 ? TIERS[idx + 1]! : myTier;
+  const isMax = myTier === nextTier;
   const xpPct = Math.min(100, Math.round(((us.xp - myTier.min) / (myTier.max - myTier.min + 1)) * 100));
   const level = Math.max(1, Math.floor(us.xp / 100) + 1);
   const frame = TIER_FRAME_COLORS[myTier.key] ?? TIER_FRAME_COLORS['iron']!;
   const tichuTotal = us.tichuSuccess + us.tichuFail;
   const tichuRate = tichuTotal > 0 ? Math.round(us.tichuSuccess / tichuTotal * 100) : 0;
-  const largeTichuTotal = us.largeTichuSuccess + us.largeTichuFail;
-  const largeTichuRate = largeTichuTotal > 0 ? Math.round(us.largeTichuSuccess / largeTichuTotal * 100) : 0;
+  const ltTotal = us.largeTichuSuccess + us.largeTichuFail;
+  const ltRate = ltTotal > 0 ? Math.round(us.largeTichuSuccess / ltTotal * 100) : 0;
   const name = us.nickname || 'Guest';
 
-  // 전적 데이터
   const serverHistory = useGameStore.getState().gameHistory ?? [];
   const recentGames = serverHistory.length > 0
     ? serverHistory.map(g => ({ won: g.won, myScore: g.myScore, opScore: g.opScore, date: g.date, rp: 0, rank: g.rank }))
     : (us.recentGames ?? []).map(g => ({ ...g, rank: 0 }));
-
-  // RP 그래프
   const graphData = recentGames.slice(0, 20).reverse();
   const graphMin = graphData.length > 0 ? Math.min(...graphData.map(g => g.rp)) - 20 : 0;
   const graphMax = graphData.length > 0 ? Math.max(...graphData.map(g => g.rp)) + 20 : 100;
   const graphRange = Math.max(1, graphMax - graphMin);
   const graphWins = graphData.filter(g => g.won).length;
 
-  // 업적
   const achievements = useAchievementStore.getState().achievements;
   const unlockedCount = achievements.filter(a => a.unlocked).length;
-
-  // 리더보드
   const leaderboard = useGameStore.getState().leaderboard ?? [];
   const seasonInfo = useGameStore.getState().seasonInfo;
   const [lbTab, setLbTab] = React.useState<'all' | 'friends' | 'weekly'>('all');
+  const [lbExpanded, setLbExpanded] = React.useState(false);
   const [showTitlePicker, setShowTitlePicker] = React.useState(false);
   const unlockedTitles = getUnlockedTitles(us);
   const activeTitle = unlockedTitles.find(t => t.id === us.selectedTitle) ?? unlockedTitles[0] ?? null;
 
-  // ── 렌더 헬퍼 ──────────────────────────────────────────────
+  // ── XP 바 애니메이션 ──────────────────────────────────────
+  const xpAnim = useSharedValue(0);
+  useEffect(() => { xpAnim.value = withTiming(xpPct, { duration: 800, easing: Easing.out(Easing.cubic) }); }, []);
+  const xpAnimStyle = useAnimatedStyle(() => ({ width: `${xpAnim.value}%` as any }));
 
-  const StatItem = ({ icon, value, label, color }: { icon: string; value: string; label: string; color?: string }) => (
-    <View style={S.statItem}>
-      <Text style={S.statIcon}>{icon}</Text>
-      <Text style={[S.statValue, color ? { color } : null]}>{value}</Text>
-      <Text style={S.statLabel}>{label}</Text>
+  // ── CTA 펄스 ──────────────────────────────────────────────
+  const pulseScale = useSharedValue(1);
+  useEffect(() => {
+    pulseScale.value = withRepeat(withSequence(
+      withTiming(1.04, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+      withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+    ), -1, false);
+  }, []);
+  const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulseScale.value }] }));
+
+  // ── 카드 딜레이 헬퍼 ──────────────────────────────────────
+  const D = (i: number) => FadeInUp.delay(i * 50).duration(350);
+
+  // ── 전적 요약 아이템 ──────────────────────────────────────
+  const Stat = ({ icon, val, label, color }: { icon: string; val: string; label: string; color?: string }) => (
+    <View style={IS_MOBILE ? $.statItemMob : $.statItem}>
+      <Text style={$.statIcon}>{icon}</Text>
+      <Text style={[$.statVal, color ? { color } : null]}>{val}</Text>
+      <Text style={$.statLabel}>{label}</Text>
     </View>
   );
 
-  // ── 섹션 렌더 ──────────────────────────────────────────────
+  // ── 리더보드 데이터 ──────────────────────────────────────
+  const lbData = lbTab === 'all' ? leaderboard : [];
+  const lbShow = IS_MOBILE && !lbExpanded ? lbData.slice(0, 3) : lbData.slice(0, 10);
 
-  const HeaderCard = () => (
-    <Animated.View entering={FadeInUp.duration(400)} style={S.headerCard}>
-      {/* 편집 버튼 우상단 */}
-      <TouchableOpacity style={S.editBtn} onPress={onEdit} activeOpacity={0.7}>
-        <Text style={S.editBtnText}>{'✏️'}</Text>
-      </TouchableOpacity>
-      {/* 뒤로가기 좌상단 */}
-      <TouchableOpacity style={S.backBtn} onPress={onBack} activeOpacity={0.7}>
-        <Text style={S.backBtnText}>{'←'}</Text>
-      </TouchableOpacity>
-      <View style={S.headerCenter}>
-        <View style={[S.avatarRing, { borderColor: frame.border, shadowColor: frame.shadow }]}>
-          <Text style={S.avatarEmoji}>{avatarEmoji}</Text>
-          <View style={[S.lvBadge, { backgroundColor: myTier.color }]}><Text style={S.lvText}>{level}</Text></View>
-        </View>
-        <Text style={S.nickname}>{name}</Text>
-        {activeTitle ? (
-          <TouchableOpacity onPress={() => setShowTitlePicker(true)}><Text style={S.titleText}>{activeTitle.icon} {activeTitle.name}</Text></TouchableOpacity>
-        ) : (
-          <TouchableOpacity onPress={() => setShowTitlePicker(true)}><Text style={S.titleEmpty}>{'칭호를 선택해보세요 ›'}</Text></TouchableOpacity>
-        )}
-        <View style={[S.tierChip, { borderColor: myTier.color, backgroundColor: `${myTier.color}18` }]}>
-          <Text style={[S.tierChipText, { color: myTier.color }]}>{myTier.icon} {myTier.name}</Text>
-        </View>
-      </View>
-      {/* XP 바 */}
-      <View style={S.xpSection}>
-        <View style={S.xpBar}><View style={[S.xpFill, { width: `${xpPct}%`, backgroundColor: myTier.color }]} /></View>
-        <View style={S.xpLabels}>
-          <Text style={S.xpLeft}>{myTier.icon} {us.xp} RP</Text>
-          <Text style={S.xpRight}>{isMaxTier ? 'MAX' : `${nextTier.icon} ${nextTier.name}까지 ${myTier.max - us.xp}`}</Text>
-        </View>
-      </View>
-    </Animated.View>
-  );
-
-  const StatsRow = () => (
-    <Animated.View entering={FadeInUp.delay(100).duration(400)} style={S.statsCard}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.statsScroll}>
-        <StatItem icon="🎮" value={`${us.totalGames}`} label="총 게임" />
-        <StatItem icon="📊" value={`${winRate}%`} label="승률" color={hasData ? (winRate >= 50 ? C.win : C.lose) : C.textSub} />
-        <StatItem icon="🎯" value={`${tichuRate}%`} label="티츄 성공률" />
-        <StatItem icon="🔥" value={`${us.winStreak}`} label="최고 연승" />
-        <StatItem icon="👑" value={largeTichuTotal > 0 ? `${largeTichuRate}%` : '0%'} label="라지 티츄" />
-        <StatItem icon="🤝" value={`${us.oneTwoFinish}`} label="원투 성공" />
-      </ScrollView>
-    </Animated.View>
-  );
-
-  const RecentCard = () => (
-    <Animated.View entering={FadeInUp.delay(200).duration(400)} style={S.card}>
-      <Text style={S.cardTitle}>{'최근 전적'}</Text>
-      {recentGames.length === 0 ? (
-        <View style={S.emptyCompact}>
-          <Text style={{ fontSize: 40, marginBottom: 8 }}>{'🃏'}</Text>
-          <Text style={S.emptyMsg}>{'첫 게임을 시작해보세요!'}</Text>
-          <TouchableOpacity style={S.ctaBtn} onPress={onStartGame} activeOpacity={0.8}>
-            <Text style={S.ctaBtnText}>{'▶ 첫 게임 시작하기'}</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <>
-          {/* 승패 도트 시각화 */}
-          <View style={S.dotsRow}>
-            {recentGames.slice(0, 10).map((g, i) => (
-              <View key={i} style={[S.dot, { backgroundColor: g.won ? C.win : C.lose }]} />
-            ))}
+  // ── 메인/사이드 분리 (데스크톱) ──────────────────────────
+  const MainContent = () => (
+    <>
+      {/* 전적 요약 */}
+      <Animated.View entering={D(1)} style={$.statsCard}>
+        {IS_MOBILE ? (
+          <View style={$.statsGridMob}>
+            <Stat icon="🎮" val={`${us.totalGames}`} label="총 게임" />
+            <Stat icon="📊" val={`${winRate}%`} label="승률" color={hasData ? (winRate >= 50 ? C.win : C.lose) : C.sub} />
+            <Stat icon="🎯" val={`${tichuRate}%`} label="티츄 성공률" />
+            <Stat icon="🔥" val={`${us.winStreak}`} label="최고 연승" />
+            <Stat icon="👑" val={`${ltRate}%`} label="라지 티츄" />
+            <Stat icon="🤝" val={`${us.oneTwoFinish}`} label="원투 성공" />
           </View>
-          {/* 리스트 */}
-          {recentGames.slice(0, 10).map((g, i) => (
-            <View key={i} style={S.recentRow}>
-              <View style={[S.recentBadge, { backgroundColor: g.won ? 'rgba(76,175,80,0.15)' : 'rgba(244,67,54,0.12)' }]}>
-                <Text style={[S.recentBadgeText, { color: g.won ? C.win : C.lose }]}>{g.won ? '승' : '패'}</Text>
+        ) : (
+          <View style={$.statsRow}>
+            <Stat icon="🎮" val={`${us.totalGames}`} label="총 게임" />
+            <Stat icon="📊" val={`${winRate}%`} label="승률" color={hasData ? (winRate >= 50 ? C.win : C.lose) : C.sub} />
+            <Stat icon="🎯" val={`${tichuRate}%`} label="티츄 성공률" />
+            <Stat icon="🔥" val={`${us.winStreak}`} label="최고 연승" />
+            <Stat icon="👑" val={`${ltRate}%`} label="라지 티츄" />
+            <Stat icon="🤝" val={`${us.oneTwoFinish}`} label="원투 성공" />
+          </View>
+        )}
+        {!hasData && <Text style={$.statsHint}>{'게임을 플레이하면 통계가 쌓여요'}</Text>}
+      </Animated.View>
+
+      {/* 최근 전적 */}
+      <Animated.View entering={D(2)} style={$.cardImportant}>
+        <Text style={$.cardTitle}>{'최근 전적'}</Text>
+        {recentGames.length === 0 ? (
+          <View style={$.emptyCta}>
+            <Text style={{ fontSize: 80, marginBottom: 12, opacity: 0.7 }}>{'🃏'}</Text>
+            <Text style={$.emptyCtaMsg}>{'첫 게임을 시작해보세요!'}</Text>
+            <Animated.View style={pulseStyle}>
+              <TouchableOpacity style={$.ctaBtn} onPress={onStartGame} activeOpacity={0.8}>
+                <Text style={$.ctaBtnText}>{'▶  첫 게임 시작하기'}</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        ) : (
+          <>
+            <View style={$.dotsRow}>
+              {recentGames.slice(0, 10).map((g, i) => (
+                <View key={i} style={[$.dot, { backgroundColor: g.won ? C.win : C.lose }]} />
+              ))}
+            </View>
+            {recentGames.slice(0, 10).map((g, i) => (
+              <View key={i} style={$.recentRow}>
+                <View style={[$.recentBadge, { backgroundColor: g.won ? 'rgba(76,175,80,0.15)' : 'rgba(244,67,54,0.12)' }]}>
+                  <Text style={[$.recentBadgeT, { color: g.won ? C.win : C.lose }]}>{g.won ? '승' : '패'}</Text>
+                </View>
+                {g.myScore > 0 && <Text style={$.recentScore}>{g.myScore}{':'}{g.opScore}</Text>}
+                {g.rank > 0 && <Text style={$.recentRank}>{g.rank}{'등'}</Text>}
+                <View style={{ flex: 1 }} />
+                <Text style={$.recentDate}>{g.date}</Text>
               </View>
-              {g.myScore > 0 && <Text style={S.recentScore}>{g.myScore}{':'}{g.opScore}</Text>}
-              {g.rank > 0 && <Text style={S.recentRank}>{g.rank}{'등'}</Text>}
-              <View style={{ flex: 1 }} />
-              <Text style={S.recentDate}>{g.date}</Text>
+            ))}
+          </>
+        )}
+      </Animated.View>
+
+      {/* RP 변화 */}
+      <Animated.View entering={D(3)} style={$.card}>
+        <Text style={$.cardTitle}>{'RP 변화'}</Text>
+        {graphData.length < 2 ? (
+          <View style={$.graphEmpty}>
+            {/* 더미 점선 배경 */}
+            {[30, 50, 70].map(h => (
+              <View key={h} style={[$.graphDummy, { bottom: `${h}%` }]} />
+            ))}
+            <Text style={$.graphEmptyText}>{'게임을 플레이하면 그래프가 표시됩니다'}</Text>
+          </View>
+        ) : (
+          <>
+            <View style={$.graphWrap}>
+              {graphData.map((g, i) => {
+                const pct = ((g.rp - graphMin) / graphRange) * 100;
+                return (
+                  <View key={i} style={$.graphCol}>
+                    <View style={[$.graphDot, { bottom: `${pct}%`, backgroundColor: g.won ? C.win : C.lose }]} />
+                    <View style={[$.graphBar, { height: `${pct}%`, backgroundColor: g.won ? 'rgba(76,175,80,0.2)' : 'rgba(244,67,54,0.12)' }]} />
+                  </View>
+                );
+              })}
+            </View>
+            <Text style={$.graphSum}>{'최근 '}{graphData.length}{'게임: '}{graphWins}{'승 '}{graphData.length - graphWins}{'패'}</Text>
+          </>
+        )}
+      </Animated.View>
+
+      {/* 업적 */}
+      <Animated.View entering={D(4)} style={$.card}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <Text style={$.cardTitle}>{'업적'}</Text>
+          <Text style={{ color: C.accent, fontSize: 12, fontWeight: '700' }}>{unlockedCount}{' / '}{achievements.length}</Text>
+        </View>
+        <View style={$.achBar}><View style={[$.achFill, { width: `${Math.round(unlockedCount / Math.max(1, achievements.length) * 100)}%` }]} /></View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={$.achScroll}>
+          {achievements.slice(0, 12).map((a, i) => (
+            <View key={i} style={[$.achSlot, !a.unlocked && $.achLocked]}>
+              <Text style={[$.achIcon, !a.unlocked && { opacity: 0.2 }]}>{a.icon}</Text>
             </View>
           ))}
-        </>
-      )}
-    </Animated.View>
+        </ScrollView>
+        <TouchableOpacity onPress={onAchievements}><Text style={$.achMore}>{'더보기 ›'}</Text></TouchableOpacity>
+      </Animated.View>
+
+      {/* 시즌 + 파트너 (한 줄) */}
+      <Animated.View entering={D(5)} style={$.card}>
+        <Text style={$.cardTitle}>{'시즌 보상'}</Text>
+        <Text style={$.subText}>{seasonInfo ? `${seasonInfo.seasonName} · ${seasonInfo.myRating} RP · #${seasonInfo.myRank} · 남은 ${seasonInfo.remainingDays}일` : '시즌 종료 시 티어에 따라 보상이 지급됩니다'}</Text>
+      </Animated.View>
+      <Animated.View entering={D(6)} style={$.card}>
+        <Text style={$.cardTitle}>{'파트너 케미'}</Text>
+        <Text style={$.subText}>{'데이터 수집 중 — 더 많은 게임을 플레이해주세요'}</Text>
+      </Animated.View>
+    </>
   );
 
-  const GraphCard = () => (
-    <Animated.View entering={FadeInUp.delay(250).duration(400)} style={S.card}>
-      <Text style={S.cardTitle}>{'RP 변화'}</Text>
-      {graphData.length < 2 ? (
-        <View style={S.emptyMini}><Text style={S.emptyMiniText}>{'게임을 플레이하면 그래프가 표시됩니다'}</Text></View>
-      ) : (
-        <>
-          <View style={S.graphWrap}>
-            {graphData.map((g, i) => {
-              const pct = ((g.rp - graphMin) / graphRange) * 100;
-              return (
-                <View key={i} style={S.graphCol}>
-                  <View style={[S.graphDot, { bottom: `${pct}%`, backgroundColor: g.won ? C.win : C.lose }]} />
-                  <View style={[S.graphBar, { height: `${pct}%`, backgroundColor: g.won ? 'rgba(76,175,80,0.2)' : 'rgba(244,67,54,0.12)' }]} />
-                </View>
-              );
-            })}
-          </View>
-          <Text style={S.graphSum}>{'최근 '}{graphData.length}{'게임: '}{graphWins}{'승 '}{graphData.length - graphWins}{'패'}</Text>
-        </>
-      )}
-    </Animated.View>
-  );
-
-  const LeaderboardCard = () => (
-    <Animated.View entering={FadeInUp.delay(300).duration(400)} style={S.card}>
-      <Text style={S.cardTitle}>{'리더보드'}</Text>
-      <View style={S.lbTabs}>
+  const Sidebar = () => (
+    <Animated.View entering={D(2)} style={$.sideCard}>
+      <Text style={$.cardTitle}>{'리더보드'}</Text>
+      <View style={$.lbTabs}>
         {(['all', 'friends', 'weekly'] as const).map(t => (
-          <TouchableOpacity key={t} style={[S.lbTab, lbTab === t && S.lbTabActive]} onPress={() => setLbTab(t)}>
-            <Text style={[S.lbTabText, lbTab === t && S.lbTabTextActive]}>{t === 'all' ? '전체' : t === 'friends' ? '친구' : '주간'}</Text>
+          <TouchableOpacity key={t} style={[$.lbTab, lbTab === t && $.lbTabActive]} onPress={() => setLbTab(t)} accessibilityRole="button">
+            <Text style={[$.lbTabText, lbTab === t && $.lbTabTextAct]}>{t === 'all' ? '전체' : t === 'friends' ? '친구' : '주간'}</Text>
+            {lbTab === t && <View style={$.lbTabLine} />}
           </TouchableOpacity>
         ))}
       </View>
-      {lbTab === 'all' && leaderboard.length > 0 ? (
-        leaderboard.slice(0, 10).map((entry, i) => {
-          const isMe = entry.id === useGameStore.getState().dbUserId;
-          const et = getTier(entry.xp);
-          return (
-            <View key={i} style={[S.lbRow, isMe && S.lbRowMe]}>
-              <Text style={S.lbRank}>{i + 1}</Text>
-              <Text style={{ fontSize: 14 }}>{et.icon}</Text>
-              <Text style={[S.lbName, isMe && S.lbNameMe]} numberOfLines={1}>{entry.nickname}</Text>
-              <Text style={S.lbXp}>{entry.xp} RP</Text>
-            </View>
-          );
-        })
+      {lbShow.length > 0 ? (
+        <>
+          {lbShow.map((e, i) => {
+            const me = e.id === useGameStore.getState().dbUserId;
+            const t = getTier(e.xp);
+            return (
+              <View key={i} style={[$.lbRow, me && $.lbRowMe]}>
+                <Text style={$.lbRank}>{i + 1}</Text>
+                <Text style={{ fontSize: 14 }}>{t.icon}</Text>
+                <Text style={[$.lbName, me && $.lbNameMe]} numberOfLines={1}>{e.nickname}</Text>
+                <Text style={$.lbXp}>{e.xp}</Text>
+              </View>
+            );
+          })}
+          {IS_MOBILE && lbData.length > 3 && (
+            <TouchableOpacity style={$.lbToggle} onPress={() => setLbExpanded(!lbExpanded)}>
+              <Text style={$.lbToggleText}>{lbExpanded ? '접기 ▲' : `더보기 ▼ (${lbData.length}명)`}</Text>
+            </TouchableOpacity>
+          )}
+        </>
       ) : (
-        <View style={S.emptyMini}><Text style={S.emptyMiniText}>{'시즌 데이터를 수집 중입니다'}</Text></View>
+        <View style={$.emptyMini}><Text style={$.emptyMiniT}>{'시즌 데이터를 수집 중입니다'}</Text></View>
       )}
     </Animated.View>
   );
-
-  const AchievementsCard = () => (
-    <Animated.View entering={FadeInUp.delay(350).duration(400)} style={S.card}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <Text style={S.cardTitle}>{'업적'}</Text>
-        <Text style={{ color: C.accent, fontSize: 12, fontWeight: '700' }}>{unlockedCount}{' / '}{achievements.length}</Text>
-      </View>
-      {/* 달성률 바 */}
-      <View style={S.achBar}><View style={[S.achBarFill, { width: `${Math.round(unlockedCount / achievements.length * 100)}%` }]} /></View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.achScroll}>
-        {achievements.slice(0, 12).map((a, i) => (
-          <View key={i} style={[S.achSlot, !a.unlocked && S.achLocked]}>
-            <Text style={[S.achIcon, !a.unlocked && { opacity: 0.2 }]}>{a.icon}</Text>
-          </View>
-        ))}
-      </ScrollView>
-      <TouchableOpacity onPress={onAchievements}><Text style={S.achMore}>{'더보기 ›'}</Text></TouchableOpacity>
-    </Animated.View>
-  );
-
-  const SeasonCard = () => (
-    <Animated.View entering={FadeInUp.delay(400).duration(400)} style={S.cardCompact}>
-      <Text style={S.cardTitle}>{'시즌 보상'}</Text>
-      {seasonInfo ? (
-        <Text style={S.seasonLine}>{seasonInfo.seasonName}{' · 레이팅 '}{seasonInfo.myRating}{' RP · #'}{seasonInfo.myRank}{' · 남은 '}{seasonInfo.remainingDays}{'일'}</Text>
-      ) : (
-        <Text style={S.seasonLine}>{'시즌 종료 시 티어에 따라 보상이 지급됩니다'}</Text>
-      )}
-    </Animated.View>
-  );
-
-  const PartnerCard = () => (
-    <Animated.View entering={FadeInUp.delay(450).duration(400)} style={S.cardCompact}>
-      <Text style={S.cardTitle}>{'파트너 케미'}</Text>
-      <Text style={{ color: C.textSub, fontSize: 12 }}>{'데이터 수집 중 — 더 많은 게임을 플레이해주세요'}</Text>
-    </Animated.View>
-  );
-
-  // ── 레이아웃 ──────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={S.root}>
+    <SafeAreaView style={$.root}>
       <BackgroundWatermark />
-      <ScrollView style={{ flex: 1, zIndex: 5 }} contentContainerStyle={S.scrollContent}>
-        {/* 1. 풀 와이드 헤더 */}
-        <HeaderCard />
+      <ScrollView style={{ flex: 1, zIndex: 5 }} contentContainerStyle={IS_MOBILE ? $.scrollMob : $.scrollPC}>
+        {/* 1. 프로필 헤더 (풀 와이드) */}
+        <Animated.View entering={D(0)} style={$.headerCard}>
+          <TouchableOpacity style={$.backBtn} onPress={onBack} accessibilityLabel="뒤로가기"><Text style={$.backT}>{'←'}</Text></TouchableOpacity>
+          <TouchableOpacity style={$.editBtn} onPress={onEdit} accessibilityLabel="프로필 편집"><Text style={$.editT}>{'✏️'}</Text></TouchableOpacity>
+          <View style={$.headerCenter}>
+            <View style={[$.avatar, { borderColor: frame.border, shadowColor: frame.shadow }]}>
+              <Text style={$.avatarEmoji}>{avatarEmoji}</Text>
+              <View style={[$.lvBadge, { backgroundColor: myTier.color }]}><Text style={$.lvT}>{level}</Text></View>
+            </View>
+            <Text style={$.nick}>{name}</Text>
+            {activeTitle ? (
+              <TouchableOpacity onPress={() => setShowTitlePicker(true)}><Text style={$.titleT}>{activeTitle.icon} {activeTitle.name}</Text></TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={() => setShowTitlePicker(true)}><Text style={$.titleE}>{'칭호를 선택해보세요 ›'}</Text></TouchableOpacity>
+            )}
+            <View style={[$.tierChip, { borderColor: myTier.color, backgroundColor: `${myTier.color}18` }]}>
+              <Text style={[$.tierChipT, { color: myTier.color }]}>{myTier.icon} {myTier.name}</Text>
+            </View>
+          </View>
+          {/* XP 바 (강화) */}
+          <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: xpPct }}>
+            <Text style={$.xpCenter}>{us.xp}{' / '}{isMax ? '∞' : myTier.max}{' RP'}</Text>
+            <View style={$.xpTrack}>
+              <Animated.View style={[$.xpFill, xpAnimStyle]} />
+              {!isMax && <Text style={$.xpNextIcon}>{nextTier.icon}</Text>}
+            </View>
+          </View>
+        </Animated.View>
 
-        {/* 2. 핵심 전적 가로 배치 */}
-        <StatsRow />
-
-        {/* 3~8. 반응형 그리드 */}
-        {responsiveCols === 1 ? (
-          <>
-            <RecentCard />
-            <GraphCard />
-            <LeaderboardCard />
-            <AchievementsCard />
-            <SeasonCard />
-            <PartnerCard />
-          </>
-        ) : responsiveCols === 2 ? (
-          <View style={S.grid2}>
-            <View style={S.gridCol}><RecentCard /><GraphCard /><SeasonCard /></View>
-            <View style={S.gridCol}><LeaderboardCard /><AchievementsCard /><PartnerCard /></View>
+        {/* 2~8. 반응형 */}
+        {IS_DESKTOP ? (
+          <View style={$.desktopLayout}>
+            <View style={$.mainCol}><MainContent /></View>
+            <View style={$.sideCol}><Sidebar /></View>
           </View>
         ) : (
-          <View style={S.grid3}>
-            <View style={S.gridCol}><RecentCard /><PartnerCard /></View>
-            <View style={S.gridCol}><GraphCard /><AchievementsCard /></View>
-            <View style={S.gridCol}><LeaderboardCard /><SeasonCard /></View>
-          </View>
+          <>
+            <MainContent />
+            {/* 모바일/태블릿: 리더보드 아코디언 */}
+            <Sidebar />
+          </>
         )}
         <View style={{ height: 24 }} />
       </ScrollView>
 
-      {/* 닉네임 편집 모달 */}
+      {/* 닉네임 모달 */}
       <Modal visible={showNickEdit} transparent animationType="fade">
-        <View style={S.modalOvl}><View style={S.modalBox}>
-          <Text style={S.modalTitle}>{'✏️ 닉네임 변경'}</Text>
-          <TextInput style={S.modalInput} value={nick} onChangeText={setNick} placeholder="닉네임 입력" placeholderTextColor="rgba(255,255,255,0.3)" maxLength={12} />
-          <TouchableOpacity style={[S.ctaBtn, !nick.trim() && { opacity: 0.4 }]} onPress={onSaveNick} disabled={!nick.trim()}><Text style={S.ctaBtnText}>{'확인'}</Text></TouchableOpacity>
+        <View style={$.modalOvl}><View style={$.modalBox}>
+          <Text style={$.modalTitle}>{'✏️ 닉네임 변경'}</Text>
+          <TextInput style={$.modalInput} value={nick} onChangeText={setNick} placeholder="닉네임 입력" placeholderTextColor="rgba(255,255,255,0.3)" maxLength={12} />
+          <TouchableOpacity style={[$.ctaBtn, !nick.trim() && { opacity: 0.4 }]} onPress={onSaveNick} disabled={!nick.trim()}><Text style={$.ctaBtnText}>{'확인'}</Text></TouchableOpacity>
         </View></View>
       </Modal>
 
-      {/* 칭호 선택 모달 */}
+      {/* 칭호 모달 */}
       <Modal visible={showTitlePicker} transparent animationType="fade">
-        <View style={S.modalOvl}><View style={[S.modalBox, { maxWidth: 380 }]}>
-          <Text style={S.modalTitle}>{'🏅 칭호 선택'}</Text>
+        <View style={$.modalOvl}><View style={[$.modalBox, { maxWidth: 380 }]}>
+          <Text style={$.modalTitle}>{'🏅 칭호 선택'}</Text>
           <View style={{ gap: 6 }}>
             {ALL_TITLES.map(t => {
               const ok = unlockedTitles.some(u => u.id === t.id);
               const sel = us.selectedTitle === t.id;
               return (
-                <TouchableOpacity key={t.id} style={[S.titleRow, sel && S.titleRowSel, !ok && { opacity: 0.5 }]}
+                <TouchableOpacity key={t.id} style={[$.titleRow, sel && $.titleRowSel, !ok && { opacity: 0.5 }]}
                   onPress={() => { if (ok) { useUserStore.getState().setTitle(t.id); setShowTitlePicker(false); } }} disabled={!ok}>
                   <Text style={{ fontSize: 18, opacity: ok ? 1 : 0.3 }}>{t.icon}</Text>
-                  <View style={{ flex: 1 }}><Text style={{ color: ok ? '#fff' : C.textSub, fontSize: 13, fontWeight: '700' }}>{t.name}</Text><Text style={{ color: C.textSub, fontSize: 11 }}>{t.desc}</Text></View>
+                  <View style={{ flex: 1 }}><Text style={{ color: ok ? '#fff' : C.sub, fontSize: 13, fontWeight: '700' }}>{t.name}</Text><Text style={{ color: C.sub, fontSize: 11 }}>{t.desc}</Text></View>
                   {sel && <Text style={{ color: C.mint }}>{'✓'}</Text>}
                   {!ok && <Text>{'🔒'}</Text>}
                 </TouchableOpacity>
               );
             })}
           </View>
-          <TouchableOpacity style={[S.ctaBtn, { marginTop: 12 }]} onPress={() => setShowTitlePicker(false)}><Text style={S.ctaBtnText}>{'닫기'}</Text></TouchableOpacity>
+          <TouchableOpacity style={[$.ctaBtn, { marginTop: 12 }]} onPress={() => setShowTitlePicker(false)}><Text style={$.ctaBtnText}>{'닫기'}</Text></TouchableOpacity>
         </View></View>
       </Modal>
     </SafeAreaView>
@@ -339,107 +351,111 @@ export function ProfilePage({ onBack, onEdit, onStartGame, onAchievements, showN
 }
 
 // ── 스타일 ──────────────────────────────────────────────────
-
-const S = StyleSheet.create({
+const $ = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-  scrollContent: { paddingHorizontal: isMobile ? 12 : 24, paddingBottom: 30, maxWidth: 1200, alignSelf: 'center', width: '100%' },
+  scrollMob: { paddingHorizontal: 12, paddingBottom: 20, maxWidth: 600, alignSelf: 'center', width: '100%' },
+  scrollPC: { paddingHorizontal: 24, paddingBottom: 20, maxWidth: 1200, alignSelf: 'center', width: '100%' },
 
-  // 헤더 카드 (풀 와이드)
-  headerCard: { backgroundColor: C.cardBright, borderRadius: 16, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: C.border, position: 'relative' },
+  // 헤더
+  headerCard: { backgroundColor: C.cardImportant, borderRadius: 16, padding: 20, marginBottom: 20, borderWidth: 1, borderColor: C.border, position: 'relative' },
   headerCenter: { alignItems: 'center', marginBottom: 12 },
-  backBtn: { position: 'absolute', top: 14, left: 14, zIndex: 10, width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
-  backBtnText: { color: C.text, fontSize: 18, fontWeight: '700' },
-  editBtn: { position: 'absolute', top: 14, right: 14, zIndex: 10, width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
-  editBtnText: { fontSize: 16 },
-  avatarRing: { width: 80, height: 80, borderRadius: 40, borderWidth: 3, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center', marginBottom: 10, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 16, elevation: 8 },
+  backBtn: { position: 'absolute', top: 14, left: 14, zIndex: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
+  backT: { color: C.text, fontSize: 20, fontWeight: '700' },
+  editBtn: { position: 'absolute', top: 14, right: 14, zIndex: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
+  editT: { fontSize: 18 },
+  avatar: { width: 80, height: 80, borderRadius: 40, borderWidth: 3, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center', marginBottom: 10, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 16, elevation: 8 },
   avatarEmoji: { fontSize: 38 },
   lvBadge: { position: 'absolute', bottom: -2, right: -2, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(0,0,0,0.5)' },
-  lvText: { color: '#fff', fontSize: 10, fontWeight: '900' },
-  nickname: { color: C.text, fontSize: 20, fontWeight: '900', marginBottom: 2 },
-  titleText: { color: C.accent, fontSize: 12, fontWeight: '700', marginBottom: 6 },
-  titleEmpty: { color: C.textDim, fontSize: 11, marginBottom: 6 },
-  tierChip: { borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 3, marginBottom: 4 },
-  tierChipText: { fontSize: 12, fontWeight: '800' },
+  lvT: { color: '#fff', fontSize: 10, fontWeight: '900' },
+  nick: { color: C.text, fontSize: 20, fontWeight: '900', marginBottom: 2 },
+  titleT: { color: C.accent, fontSize: 12, fontWeight: '700', marginBottom: 6 },
+  titleE: { color: C.dim, fontSize: 11, marginBottom: 6 },
+  tierChip: { borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 3, marginBottom: 8 },
+  tierChipT: { fontSize: 12, fontWeight: '800' },
 
-  // XP 바
-  xpSection: { marginTop: 4 },
-  xpBar: { height: 8, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden', marginBottom: 6 },
-  xpFill: { height: '100%', borderRadius: 4 },
-  xpLabels: { flexDirection: 'row', justifyContent: 'space-between' },
-  xpLeft: { color: C.textSub, fontSize: 11, fontWeight: '700' },
-  xpRight: { color: C.textDim, fontSize: 11, fontWeight: '600' },
+  // XP 바 (강화)
+  xpCenter: { color: C.sub, fontSize: 12, fontWeight: '800', textAlign: 'center', marginBottom: 4 },
+  xpTrack: { height: 10, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 5, overflow: 'hidden', position: 'relative' },
+  xpFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 5, backgroundColor: C.mint },
+  xpNextIcon: { position: 'absolute', right: 4, top: -1, fontSize: 10 },
 
-  // 전적 요약 가로
-  statsCard: { backgroundColor: C.cardBright, borderRadius: 14, marginBottom: 16, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
-  statsScroll: { paddingHorizontal: 8, paddingVertical: 12, gap: 4 },
-  statItem: { alignItems: 'center', minWidth: 80, paddingHorizontal: 8 },
+  // 전적 요약
+  statsCard: { backgroundColor: C.cardImportant, borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: C.border },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-around' },
+  statsGridMob: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around' },
+  statItem: { alignItems: 'center', paddingVertical: 6, minWidth: 80 },
+  statItemMob: { alignItems: 'center', paddingVertical: 6, width: '33%' as any },
   statIcon: { fontSize: 16, marginBottom: 2 },
-  statValue: { color: C.text, fontSize: 24, fontWeight: '900' },
-  statLabel: { color: C.textSub, fontSize: 11, fontWeight: '600', marginTop: 2 },
+  statVal: { color: C.text, fontSize: 24, fontWeight: '900' },
+  statLabel: { color: C.sub, fontSize: 11, fontWeight: '600', marginTop: 2 },
+  statsHint: { color: C.dim, fontSize: 11, fontWeight: '600', textAlign: 'center', marginTop: 8 },
 
-  // 카드 공통
-  card: { backgroundColor: C.card, borderRadius: 14, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: C.border },
-  cardCompact: { backgroundColor: C.card, borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: C.border },
+  // 카드
+  card: { backgroundColor: C.card, borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: C.border },
+  cardImportant: { backgroundColor: C.cardImportant, borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: C.border },
   cardTitle: { color: C.text, fontSize: 15, fontWeight: '800', marginBottom: 10 },
+  subText: { color: C.sub, fontSize: 12, fontWeight: '600' },
 
-  // 그리드
-  grid2: { flexDirection: 'row', gap: 16 },
-  grid3: { flexDirection: 'row', gap: 16 },
-  gridCol: { flex: 1 },
+  // CTA
+  emptyCta: { alignItems: 'center', paddingVertical: 24 },
+  emptyCtaMsg: { color: C.sub, fontSize: 15, fontWeight: '600', marginBottom: 18 },
+  ctaBtn: { backgroundColor: C.accent, borderRadius: 14, paddingHorizontal: 32, paddingVertical: 14, shadowColor: C.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6 },
+  ctaBtnText: { color: '#fff', fontSize: 16, fontWeight: '900', textAlign: 'center' },
 
-  // 빈 상태
-  emptyCompact: { alignItems: 'center', paddingVertical: 16 },
-  emptyMsg: { color: C.textSub, fontSize: 14, fontWeight: '600', marginBottom: 14 },
-  emptyMini: { paddingVertical: 12, alignItems: 'center' },
-  emptyMiniText: { color: C.textDim, fontSize: 12, fontWeight: '600' },
-
-  // CTA 버튼
-  ctaBtn: { backgroundColor: C.accent, borderRadius: 12, paddingHorizontal: 28, paddingVertical: 12, shadowColor: C.accent, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 5 },
-  ctaBtnText: { color: '#fff', fontSize: 15, fontWeight: '800', textAlign: 'center' },
-
-  // 승패 도트
+  // 도트
   dotsRow: { flexDirection: 'row', gap: 6, marginBottom: 10, justifyContent: 'center' },
   dot: { width: 10, height: 10, borderRadius: 5 },
 
-  // 최근 전적 리스트
+  // 최근 전적
   recentRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: C.border },
   recentBadge: { borderRadius: 5, paddingHorizontal: 8, paddingVertical: 3 },
-  recentBadgeText: { fontSize: 12, fontWeight: '800' },
-  recentScore: { color: C.textSub, fontSize: 12, fontWeight: '700' },
-  recentRank: { color: C.textDim, fontSize: 11, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
-  recentDate: { color: C.textDim, fontSize: 11 },
+  recentBadgeT: { fontSize: 12, fontWeight: '800' },
+  recentScore: { color: C.sub, fontSize: 12, fontWeight: '700' },
+  recentRank: { color: C.dim, fontSize: 11, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 4, paddingHorizontal: 5 },
+  recentDate: { color: C.dim, fontSize: 11 },
 
-  // RP 그래프
+  // 그래프
   graphWrap: { flexDirection: 'row', height: 80, alignItems: 'flex-end', gap: 2, marginBottom: 6 },
   graphCol: { flex: 1, height: '100%', justifyContent: 'flex-end', alignItems: 'center', position: 'relative' },
   graphDot: { position: 'absolute', width: 7, height: 7, borderRadius: 4, zIndex: 2 },
   graphBar: { width: '70%', borderRadius: 2, minHeight: 2 },
-  graphSum: { color: C.textSub, fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  graphSum: { color: C.sub, fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  graphEmpty: { height: 60, justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  graphDummy: { position: 'absolute', left: 10, right: 10, height: 1, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', borderStyle: 'dashed' },
+  graphEmptyText: { color: C.dim, fontSize: 12, fontWeight: '600', opacity: 0.5 },
 
   // 리더보드
-  lbTabs: { flexDirection: 'row', gap: 6, marginBottom: 10 },
-  lbTab: { flex: 1, paddingVertical: 7, alignItems: 'center', borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.04)' },
-  lbTabActive: { backgroundColor: 'rgba(78,205,196,0.12)', borderWidth: 1, borderColor: 'rgba(78,205,196,0.25)' },
-  lbTabText: { color: C.textDim, fontSize: 12, fontWeight: '700' },
-  lbTabTextActive: { color: C.mint },
-  lbRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7, paddingHorizontal: 6, borderRadius: 6 },
+  sideCard: { backgroundColor: C.card, borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: C.border },
+  lbTabs: { flexDirection: 'row', gap: 4, marginBottom: 10 },
+  lbTab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.04)', position: 'relative' },
+  lbTabActive: { backgroundColor: 'rgba(255,255,255,0.1)' },
+  lbTabText: { color: C.dim, fontSize: 12, fontWeight: '700' },
+  lbTabTextAct: { color: C.mint },
+  lbTabLine: { position: 'absolute', bottom: 0, left: '20%' as any, right: '20%' as any, height: 2, backgroundColor: C.mint, borderRadius: 1 },
+  lbRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 6 },
   lbRowMe: { backgroundColor: 'rgba(78,205,196,0.1)', borderWidth: 1, borderColor: 'rgba(78,205,196,0.2)' },
-  lbRank: { color: C.textSub, fontSize: 13, fontWeight: '800', width: 22, textAlign: 'center' },
+  lbRank: { color: C.sub, fontSize: 13, fontWeight: '800', width: 22, textAlign: 'center' },
   lbName: { flex: 1, color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' },
   lbNameMe: { color: C.mint, fontWeight: '800' },
-  lbXp: { color: C.textDim, fontSize: 12, fontWeight: '700' },
+  lbXp: { color: C.dim, fontSize: 12, fontWeight: '700' },
+  lbToggle: { alignItems: 'center', paddingVertical: 10 },
+  lbToggleText: { color: C.mint, fontSize: 12, fontWeight: '700' },
+  emptyMini: { paddingVertical: 12, alignItems: 'center' },
+  emptyMiniT: { color: C.dim, fontSize: 12 },
 
   // 업적
   achBar: { height: 4, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 2, marginBottom: 10, overflow: 'hidden' },
-  achBarFill: { height: '100%', backgroundColor: C.mint, borderRadius: 2 },
+  achFill: { height: '100%', backgroundColor: C.mint, borderRadius: 2 },
   achScroll: { gap: 8, paddingVertical: 4 },
   achSlot: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   achLocked: { borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.08)' },
   achIcon: { fontSize: 20 },
   achMore: { color: C.mint, fontSize: 12, fontWeight: '700', textAlign: 'right', marginTop: 6 },
 
-  // 시즌
-  seasonLine: { color: C.textSub, fontSize: 12, fontWeight: '600' },
+  // 데스크톱 레이아웃
+  desktopLayout: { flexDirection: 'row', gap: 20 },
+  mainCol: { flex: 7 },
+  sideCol: { flex: 3 },
 
   // 모달
   modalOvl: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
