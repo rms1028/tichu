@@ -303,8 +303,8 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
               <View style={P.statBox}><Text style={P.statIcon}>{'📊'}</Text><Text style={[P.statNum, { color: winRateColor }]}>{winRate >= 0 ? `${winRate}%` : '—'}</Text><Text style={P.statLabel}>{'승률'}</Text></View>
               <View style={P.statBox}><Text style={P.statIcon}>{'🎯'}</Text><Text style={P.statNum}>{tichuRate >= 0 ? `${tichuRate}%` : '—'}</Text><Text style={P.statLabel}>{'티츄 성공률'}</Text></View>
               <View style={P.statBox}><Text style={P.statIcon}>{'🔥'}</Text><Text style={P.statNum}>{hasData ? us.winStreak : '—'}</Text><Text style={P.statLabel}>{'최고 연승'}</Text></View>
-              <View style={P.statBox}><Text style={P.statIcon}>{'👑'}</Text><Text style={P.statNum}>{'—'}</Text><Text style={P.statLabel}>{'라지 티츄 성공률'}</Text></View>
-              <View style={P.statBox}><Text style={P.statIcon}>{'🤝'}</Text><Text style={P.statNum}>{'—'}</Text><Text style={P.statLabel}>{'원투 성공'}</Text></View>
+              <View style={P.statBox}><Text style={P.statIcon}>{'👑'}</Text><Text style={P.statNum}>{(() => { const t = us.largeTichuSuccess + us.largeTichuFail; return t > 0 ? `${Math.round(us.largeTichuSuccess / t * 100)}%` : '—'; })()}</Text><Text style={P.statLabel}>{'라지 티츄'}</Text></View>
+              <View style={P.statBox}><Text style={P.statIcon}>{'🤝'}</Text><Text style={P.statNum}>{hasData ? us.oneTwoFinish : '—'}</Text><Text style={P.statLabel}>{'원투 성공'}</Text></View>
             </View>
           </View>
 

@@ -369,7 +369,9 @@ export function useSocket() {
     // ── 로그인 ──────────────────────────────────────────────
     socket.on('login_success', (data: {
       userId: string; nickname: string; coins: number; xp: number;
-      totalGames: number; wins: number; losses: number; tichuSuccess: number; winStreak: number;
+      totalGames: number; wins: number; losses: number;
+      tichuSuccess: number; tichuFail?: number; largeTichuSuccess?: number; largeTichuFail?: number; oneTwoFinish?: number;
+      winStreak: number;
       ownedAvatars?: string; ownedCardBacks?: string; equippedAvatar?: string; equippedCardBack?: string;
     }) => {
       useGameStore.setState({ dbUserId: data.userId });
@@ -383,6 +385,10 @@ export function useSocket() {
         wins: data.wins,
         losses: data.losses,
         tichuSuccess: data.tichuSuccess,
+        tichuFail: data.tichuFail,
+        largeTichuSuccess: data.largeTichuSuccess,
+        largeTichuFail: data.largeTichuFail,
+        oneTwoFinish: data.oneTwoFinish,
         winStreak: data.winStreak,
         ownedAvatars: data.ownedAvatars,
         ownedCardBacks: data.ownedCardBacks,

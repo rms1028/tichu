@@ -101,6 +101,9 @@ interface UserState {
   losses: number;
   tichuSuccess: number;
   tichuFail: number;
+  largeTichuSuccess: number;
+  largeTichuFail: number;
+  oneTwoFinish: number;
   winStreak: number;
 
   // 출석
@@ -153,7 +156,9 @@ interface UserState {
   isGuest: () => boolean;
   applyServerRewards: (xp: number, coins: number, won: boolean, tichuSuccess: boolean) => void;
   syncFromServer: (data: {
-    coins: number; xp: number; totalGames: number; wins: number; losses: number; tichuSuccess: number; winStreak: number;
+    coins: number; xp: number; totalGames: number; wins: number; losses: number;
+    tichuSuccess: number; tichuFail?: number; largeTichuSuccess?: number; largeTichuFail?: number; oneTwoFinish?: number;
+    winStreak: number;
     ownedAvatars?: string; ownedCardBacks?: string; equippedAvatar?: string; equippedCardBack?: string;
   }) => void;
 }
@@ -204,6 +209,9 @@ export const useUserStore = create<UserState>((set, get) => ({
   losses: saved.losses ?? 0,
   tichuSuccess: saved.tichuSuccess ?? 0,
   tichuFail: saved.tichuFail ?? 0,
+  largeTichuSuccess: saved.largeTichuSuccess ?? 0,
+  largeTichuFail: saved.largeTichuFail ?? 0,
+  oneTwoFinish: saved.oneTwoFinish ?? 0,
   winStreak: saved.winStreak ?? 0,
   attendanceStreak: saved.attendanceStreak ?? 0,
   lastAttendanceDate: saved.lastAttendanceDate ?? '',
@@ -377,6 +385,10 @@ export const useUserStore = create<UserState>((set, get) => ({
       wins: data.wins,
       losses: data.losses,
       tichuSuccess: data.tichuSuccess,
+      tichuFail: data.tichuFail ?? s.tichuFail,
+      largeTichuSuccess: data.largeTichuSuccess ?? s.largeTichuSuccess,
+      largeTichuFail: data.largeTichuFail ?? s.largeTichuFail,
+      oneTwoFinish: data.oneTwoFinish ?? s.oneTwoFinish,
       winStreak: data.winStreak,
       ...(data.ownedAvatars ? { ownedAvatars: data.ownedAvatars.split(',').filter(Boolean) } : {}),
       ...(data.ownedCardBacks ? { ownedCardBacks: data.ownedCardBacks.split(',').filter(Boolean) } : {}),

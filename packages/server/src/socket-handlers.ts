@@ -232,6 +232,10 @@ export function registerSocketHandlers(io: Server): void {
           wins: user.wins,
           losses: user.losses,
           tichuSuccess: user.tichuSuccess,
+          tichuFail: user.tichuFail,
+          largeTichuSuccess: user.largeTichuSuccess,
+          largeTichuFail: user.largeTichuFail,
+          oneTwoFinish: user.oneTwoFinish,
           winStreak: user.winStreak,
           ownedAvatars: user.ownedAvatars,
           ownedCardBacks: user.ownedCardBacks,
@@ -276,6 +280,10 @@ export function registerSocketHandlers(io: Server): void {
           wins: user.wins,
           losses: user.losses,
           tichuSuccess: user.tichuSuccess,
+          tichuFail: user.tichuFail,
+          largeTichuSuccess: user.largeTichuSuccess,
+          largeTichuFail: user.largeTichuFail,
+          oneTwoFinish: user.oneTwoFinish,
           winStreak: user.winStreak,
           ownedAvatars: user.ownedAvatars,
           ownedCardBacks: user.ownedCardBacks,
@@ -2050,7 +2058,7 @@ async function recordGameResults(io: Server, room: GameRoom): Promise<void> {
         finishRank,
         roundCount: room.roundNumber,
       });
-      // rankXp + xp + coins 통합 업데이트
+      // rankXp + xp + coins + 라지 티츄/원투 통합 업데이트
       await prisma.user.updateMany({
         where: { OR: [{ guestId: player.playerId }, { id: player.playerId }] },
         data: {
@@ -2060,6 +2068,9 @@ async function recordGameResults(io: Server, room: GameRoom): Promise<void> {
           currentTier: tierAfter.tier,
           coins: { increment: coinGain },
           lastActiveAt: new Date(),
+          ...(grandTichu && tichuSuccess ? { largeTichuSuccess: { increment: 1 } } : {}),
+          ...(grandTichu && !tichuSuccess ? { largeTichuFail: { increment: 1 } } : {}),
+          ...(isOneTwo && won ? { oneTwoFinish: { increment: 1 } } : {}),
         },
       });
     } catch (e) {

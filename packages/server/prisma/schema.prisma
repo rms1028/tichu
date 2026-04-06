@@ -28,6 +28,9 @@ model User {
   losses        Int      @default(0)
   tichuSuccess  Int      @default(0)
   tichuFail     Int      @default(0)
+  largeTichuSuccess Int  @default(0)
+  largeTichuFail    Int  @default(0)
+  oneTwoFinish  Int      @default(0)
   winStreak     Int      @default(0)
   maxWinStreak  Int      @default(0)
 
