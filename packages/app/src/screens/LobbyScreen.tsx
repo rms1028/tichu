@@ -204,7 +204,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
             <View style={[PS.tierPill, { borderColor: tier.color, backgroundColor: `${tier.color}22` }]}>
               <Text style={[PS.tierText, { color: tier.color }]}>{tier.icon} {tier.name}</Text>
             </View>
-            <Text style={PS.joined}>{'가입일: 2024.01.15'}</Text>
           </View>
           <View style={PS.divider} />
           {/* 티어 & XP */}
@@ -228,42 +227,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
               <View style={PS.statCard}><Text style={[PS.statNum, { color: winRate >= 50 ? '#10b981' : '#ef4444' }]}>{winRate}%</Text><Text style={PS.statLabel}>{'승률'}</Text></View>
               <View style={PS.statCard}><Text style={PS.statNum}>{us.tichuSuccess}</Text><Text style={PS.statLabel}>{'티츄 성공'}</Text></View>
             </View>
-          </View>
-          {/* 출석 현황 */}
-          <View style={PS.section}>
-            <View style={PS.secTitleRow}>
-              <View style={[PS.secBar, { backgroundColor: '#F59E0B' }]} />
-              <Text style={PS.secTitle}>{'출석 현황'}</Text>
-              <View style={PS.streakBadge}><Text style={PS.streakText}>{'🔥 '}{us.attendanceStreak}{'일 연속'}</Text></View>
-            </View>
-            <View style={PS.attGrid}>{buildAttendance(us.attendanceStreak, us.lastAttendanceDate === new Date().toISOString().slice(0, 10)).map((a, i) => (
-              <View key={i} style={[PS.attCell, a.checked && PS.attChecked, a.day === us.attendanceStreak + 1 && !a.checked && PS.attToday]}>
-                <Text style={PS.attDay}>{a.day}{'일'}</Text>
-                <Text style={PS.attIcon}>{a.checked ? '✅' : a.day === us.attendanceStreak + 1 ? '📌' : '🔒'}</Text>
-              </View>
-            ))}</View>
-          </View>
-          {/* 메뉴 */}
-          <View style={PS.section}>
-            <View style={PS.secTitleRow}><View style={[PS.secBar, { backgroundColor: '#F59E0B' }]} /><Text style={PS.secTitle}>{'메뉴'}</Text></View>
-            {[
-              { icon: '🏅', text: '업적', page: 'achievements' as Page },
-              { icon: '🏆', text: '랭킹', page: 'ranking' as Page },
-              { icon: '🛒', text: '상점', page: 'shop' as Page },
-              { icon: '⚙️', text: '설정', page: 'settings' as Page },
-            ].map((m, i) => (
-              <TouchableOpacity key={i} style={PS.menuItem} onPress={() => setPage(m.page)} activeOpacity={0.7}>
-                <Text style={PS.menuIcon}>{m.icon}</Text>
-                <Text style={PS.menuText}>{m.text}</Text>
-                <Text style={PS.menuArrow}>{'›'}</Text>
-              </TouchableOpacity>
-            ))}
-            <View style={{ height: 12 }} />
-            <TouchableOpacity style={PS.menuItem} activeOpacity={0.7} onPress={() => { setNick(''); setPage('main'); }}>
-              <Text style={PS.menuIcon}>{'🚪'}</Text>
-              <Text style={[PS.menuText, { color: '#ef4444' }]}>{'로그아웃'}</Text>
-              <Text style={PS.menuArrow}>{'›'}</Text>
-            </TouchableOpacity>
           </View>
         </ScrollView>
         {/* 닉네임 편집 모달 (프로필 페이지) */}
