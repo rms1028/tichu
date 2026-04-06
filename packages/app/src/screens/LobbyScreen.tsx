@@ -26,6 +26,7 @@ interface LobbyScreenProps {
   onBuyShopItem?: (itemId: string, category: 'avatar' | 'cardback', price: number) => void;
   onEquipShopItem?: (itemId: string, category: 'avatar' | 'cardback') => void;
   onChangeNickname?: (nickname: string) => void;
+  onGetGameHistory?: () => void;
 }
 
 // 티어
@@ -69,7 +70,7 @@ function FloatingSymbol({ symbol, x, delay }: { symbol: string; x: number; delay
   return <Animated.Text style={[{ position: 'absolute', left: `${x}%` as any, top: `${20 + delay * 7}%` as any, fontSize: 22, color: '#fff', opacity: 0.04 }, s]}>{symbol}</Animated.Text>;
 }
 
-export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRooms, onGetLeaderboard, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite, onBuyShopItem, onEquipShopItem, onChangeNickname }: LobbyScreenProps) {
+export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRooms, onGetLeaderboard, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite, onBuyShopItem, onEquipShopItem, onChangeNickname, onGetGameHistory }: LobbyScreenProps) {
   const savedNickname = useUserStore((s) => s.nickname);
   const savedPlayerId = useUserStore((s) => s.playerId);
   const userSetNickname = useUserStore((s) => s.setNickname);
@@ -205,7 +206,10 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
     const unlockedAchs = achievements.filter(a => a.unlocked);
     const lockedAchs = achievements.filter(a => !a.unlocked).slice(0, Math.max(0, 8 - unlockedAchs.length));
     const displayAchs = [...unlockedAchs, ...lockedAchs].slice(0, 8);
-    const recentGames = us.recentGames ?? [];
+    const serverHistory = useGameStore.getState().gameHistory ?? [];
+    const recentGames = serverHistory.length > 0
+      ? serverHistory.map(g => ({ won: g.won, myScore: g.myScore, opScore: g.opScore, date: g.date, rp: 0, tichu: g.tichu, rank: g.rank }))
+      : (us.recentGames ?? []).map(g => ({ ...g, tichu: null as string | null, rank: 0 }));
     const unlockedTitles = getUnlockedTitles(us);
     const activeTitle = unlockedTitles.find(t => t.id === us.selectedTitle) ?? unlockedTitles[0] ?? null;
     const frame = TIER_FRAME_COLORS[myTier.key] ?? TIER_FRAME_COLORS['iron']!;
@@ -389,7 +393,8 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                     <View style={[P.recentBadge, { backgroundColor: g.won ? 'rgba(93,202,165,0.15)' : 'rgba(239,68,68,0.15)' }]}>
                       <Text style={[P.recentBadgeText, { color: g.won ? '#5dcaa5' : '#ef4444' }]}>{g.won ? '승' : '패'}</Text>
                     </View>
-                    {g.rp > 0 && <Text style={P.recentRp}>{g.rp} RP</Text>}
+                    {g.myScore > 0 && <Text style={P.recentScore}>{g.myScore}{' : '}{g.opScore}</Text>}
+                    {g.rank > 0 && <Text style={P.recentRank}>{g.rank}{'등'}</Text>}
                     <View style={{ flex: 1 }} />
                     <Text style={P.recentDate}>{g.date}</Text>
                   </View>
@@ -648,7 +653,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
       </View>
       {/* 상단 바 */}
       <Animated.View entering={FadeIn.delay(0).duration(500)} style={S.topBar}>
-        <TouchableOpacity style={S.profileBtn} activeOpacity={0.8} onPress={() => setPage('profile')}>
+        <TouchableOpacity style={S.profileBtn} activeOpacity={0.8} onPress={() => { setPage('profile'); onGetLeaderboard?.(); onGetGameHistory?.(); }}>
           <View style={[S.av, { borderColor: tier.color }]}><Text style={{ fontSize: 18 }}>{avatarEmoji}</Text></View>
           <Text style={S.nick}>{name}</Text>
           <Text style={S.tierIcon}>{tier.icon}</Text>
@@ -1165,6 +1170,8 @@ const P = StyleSheet.create({
   recentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
   recentBadge: { borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, minWidth: 36, alignItems: 'center' },
   recentBadgeText: { fontSize: 13, fontWeight: '800' },
+  recentScore: { color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '700' },
+  recentRank: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '600', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1 },
   recentRp: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '700' },
   recentDate: { color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: '600' },
 

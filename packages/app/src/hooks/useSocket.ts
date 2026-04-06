@@ -411,6 +411,15 @@ export function useSocket() {
       useGameStore.setState({ leaderboard: data.entries });
     });
 
+    socket.on('game_history', (data: { games: { won: boolean; myScore: number; opScore: number; tichu: string | null; tichuSuccess: boolean; rank: number; date: string }[] }) => {
+      // userStore의 recentGames를 서버 데이터로 업데이트
+      const us = require('../stores/userStore').useUserStore.getState();
+      const recentGames = data.games.map(g => ({ won: g.won, myScore: g.myScore, opScore: g.opScore, date: g.date, rp: 0 }));
+      us.syncRecentGames(recentGames);
+      // 상세 데이터는 gameStore에도 저장
+      useGameStore.setState({ gameHistory: data.games });
+    });
+
     socket.on('season_info', (data: any) => {
       useGameStore.setState({ seasonInfo: data });
     });
@@ -585,6 +594,10 @@ export function useSocket() {
     socketRef.current?.emit('firebase_login', { idToken, nickname });
   }, []);
 
+  const getGameHistory = useCallback(() => {
+    socketRef.current?.emit('get_game_history');
+  }, []);
+
   const getLeaderboard = useCallback(() => {
     socketRef.current?.emit('get_leaderboard');
   }, []);
@@ -679,6 +692,7 @@ export function useSocket() {
     guestLogin,
     firebaseLogin,
     getLeaderboard,
+    getGameHistory,
     getSeasonInfo,
     getSeasonLeaderboard,
     claimSeasonReward,

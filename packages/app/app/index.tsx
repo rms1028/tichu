@@ -54,7 +54,7 @@ function AppInner() {
     queueMatch, cancelMatch,
     createCustomRoom, listRooms, startGame, addBotToSeat, removeBot,
     friendInit, friendSearch, friendRequest, friendAccept, friendReject, friendRemove, friendInvite,
-    guestLogin, firebaseLogin, getLeaderboard, sendEmote, buyShopItem, equipShopItem, changeNickname,
+    guestLogin, firebaseLogin, getLeaderboard, getGameHistory, sendEmote, buyShopItem, equipShopItem, changeNickname,
     leaveRoom, moveSeat, shuffleTeams,
   } = useSocket();
 
@@ -205,6 +205,7 @@ function AppInner() {
         onBuyShopItem={buyShopItem}
         onEquipShopItem={equipShopItem}
         onChangeNickname={changeNickname}
+        onGetGameHistory={getGameHistory}
       />
       <TutorialModal visible={showTutorial} onClose={() => setShowTutorial(false)} />
       </>

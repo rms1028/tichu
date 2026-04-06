@@ -28,7 +28,7 @@ import {
 } from './friends.js';
 import {
   findOrCreateGuestUser, createOrUpdateFirebaseUser, getUserProfile,
-  recordGameResult as dbRecordGameResult, getLeaderboard,
+  recordGameResult as dbRecordGameResult, getLeaderboard, getGameHistory,
   dbSendFriendRequest, dbAcceptFriendRequest, dbRejectFriendRequest,
   dbRemoveFriend, dbGetFriendsWithNickname, dbGetPendingRequests,
   dbFindUserByCode,
@@ -296,6 +296,25 @@ export function registerSocketHandlers(io: Server): void {
       } catch (err) {
         console.error('[get_leaderboard] error:', err);
       }
+    });
+
+    // ── 전적 조회 ─────────────────────────────────────────
+    socket.on('get_game_history', async () => {
+      if (!dbUserId) return;
+      try {
+        const history = await getGameHistory(dbUserId, 20);
+        socket.emit('game_history', {
+          games: history.map(g => ({
+            won: g.won,
+            myScore: g.score,
+            opScore: g.opponentScore,
+            tichu: g.tichuDeclared,
+            tichuSuccess: g.tichuSuccess,
+            rank: g.finishRank,
+            date: g.createdAt.toISOString().slice(0, 10),
+          })),
+        });
+      } catch (err) { console.error('[get_game_history] error:', err); }
     });
 
     // ── 시즌 ──────────────────────────────────────────────

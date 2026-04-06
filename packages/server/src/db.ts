@@ -177,6 +177,21 @@ export async function dbFindUserByCode(code: string): Promise<{ id: string; nick
   return user;
 }
 
+// ── 전적 조회 ──────────────────────────────────────────────
+
+export async function getGameHistory(userId: string, limit = 20) {
+  return prisma.gameResult.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+    select: {
+      id: true, won: true, score: true, opponentScore: true,
+      tichuDeclared: true, tichuSuccess: true, finishRank: true,
+      createdAt: true,
+    },
+  });
+}
+
 // ── 랭킹 ────────────────────────────────────────────────────
 
 export async function getLeaderboard(limit = 20) {

@@ -146,6 +146,7 @@ interface UserState {
   equipCardBack: (id: string) => void;
   setTitle: (id: string) => void;
   setProfileBg: (id: string) => void;
+  syncRecentGames: (games: { won: boolean; myScore: number; opScore: number; date: string; rp: number }[]) => void;
   setNickname: (name: string) => void;
   setSetting: (key: 'soundOn' | 'musicOn' | 'ttsOn' | 'notifyOn' | 'friendNotify' | 'gameNotify', value: boolean) => void;
   setPlayerId: (id: string) => void;
@@ -321,6 +322,7 @@ export const useUserStore = create<UserState>((set, get) => ({
   equipCardBack: (id) => set(s => { const ns = { ...s, equippedCardBack: id }; saveState(ns); return ns; }),
   setTitle: (id) => set(s => { const ns = { ...s, selectedTitle: id }; saveState(ns); return ns; }),
   setProfileBg: (id) => set(s => { const ns = { ...s, profileBg: id }; saveState(ns); return ns; }),
+  syncRecentGames: (games) => set(s => { const ns = { ...s, recentGames: games.slice(0, 20) }; saveState(ns); return ns; }),
   setNickname: (name) => set(s => { const ns = { ...s, nickname: name }; saveState(ns); return ns; }),
   setSetting: (key, value) => {
     if (key === 'ttsOn') {
