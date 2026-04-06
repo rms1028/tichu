@@ -50,7 +50,8 @@ function buildAttendance(streak: number, claimedToday: boolean) {
 
 // 친구 (실제 데이터는 gameStore에서 가져옴)
 
-import { useUserStore, getTier, SHOP_AVATARS } from '../stores/userStore';
+import { useUserStore, getTier, TIERS as USER_TIERS, SHOP_AVATARS, getUnlockedTitles, ALL_TITLES, PROFILE_BGS, TIER_FRAME_COLORS } from '../stores/userStore';
+import { useAchievementStore } from '../stores/achievementStore';
 import { RankingScreen } from './RankingScreen';
 import { ShopScreen } from './ShopScreen';
 import { AchievementsScreen } from './AchievementsScreen';
@@ -79,6 +80,8 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
   const [showNickEdit, setShowNickEdit] = useState(!savedNickname);
   const [showAttendance, setShowAttendance] = useState(() => useUserStore.getState().checkAttendance());
   const [searchCode, setSearchCode] = useState('');
+  const [lbTab, setLbTab] = useState<'all' | 'friends' | 'weekly'>('all');
+  const [showTitlePicker, setShowTitlePicker] = useState(false);
 
   // 친구 데이터 (gameStore)
   const friendCode = useGameStore((s) => s.friendCode);
@@ -102,6 +105,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
   const [joinPw, setJoinPw] = useState('');
   const [joinTarget, setJoinTarget] = useState<{ roomId: string; roomName: string } | null>(null);
   const customRoomList = useGameStore((s) => s.customRoomList);
+  const [roomSearch, setRoomSearch] = useState('');
   const [matching, setMatching] = useState(false);
   const [matchSec, setMatchSec] = useState(0);
   const [activeTab, setActiveTab] = useState(0);
@@ -185,56 +189,311 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
   }
   if (page === 'profile') {
     const us = useUserStore.getState();
-    const winRate = us.totalGames > 0 ? Math.round(us.wins / us.totalGames * 100) : 0;
-    const nextTier = TIERS[Math.min(TIERS.indexOf(tier) + 1, TIERS.length - 1)]!;
+    const hasData = us.totalGames > 0;
+    const winRate = hasData ? Math.round(us.wins / us.totalGames * 100) : -1;
+    const winRateColor = winRate < 0 ? 'rgba(255,255,255,0.3)' : winRate >= 60 ? '#5dcaa5' : winRate >= 50 ? '#10b981' : winRate >= 40 ? '#F59E0B' : '#ef4444';
+    const myTier = getTier(us.xp);
+    const myTierIdx = USER_TIERS.indexOf(myTier);
+    const nextTierDef = myTierIdx < USER_TIERS.length - 1 ? USER_TIERS[myTierIdx + 1]! : myTier;
+    const isMaxTier = myTier === nextTierDef;
+    const xpInTier = us.xp - myTier.min;
+    const xpRange = myTier.max - myTier.min + 1;
+    const xpPctLocal = Math.min(100, Math.round((xpInTier / xpRange) * 100));
+    const level = Math.max(1, Math.floor(us.xp / 100) + 1);
+    const achievements = useAchievementStore.getState().achievements;
+    const unlockedAchs = achievements.filter(a => a.unlocked);
+    const lockedAchs = achievements.filter(a => !a.unlocked).slice(0, Math.max(0, 8 - unlockedAchs.length));
+    const displayAchs = [...unlockedAchs, ...lockedAchs].slice(0, 8);
+    const recentGames = us.recentGames ?? [];
+    const unlockedTitles = getUnlockedTitles(us);
+    const activeTitle = unlockedTitles.find(t => t.id === us.selectedTitle) ?? unlockedTitles[0] ?? null;
+    const frame = TIER_FRAME_COLORS[myTier.key] ?? TIER_FRAME_COLORS['iron']!;
+    const leaderboard = useGameStore.getState().leaderboard ?? [];
+    const seasonInfo = useGameStore.getState().seasonInfo;
+    const tichuTotal = us.tichuSuccess + us.tichuFail;
+    const tichuRate = tichuTotal > 0 ? Math.round(us.tichuSuccess / tichuTotal * 100) : -1;
+
+    // RP 그래프 데이터
+    const graphData = recentGames.slice(0, 20).reverse();
+    const graphMin = graphData.length > 0 ? Math.min(...graphData.map(g => g.rp)) - 20 : 0;
+    const graphMax = graphData.length > 0 ? Math.max(...graphData.map(g => g.rp)) + 20 : 100;
+    const graphRange = Math.max(1, graphMax - graphMin);
+    const graphWins = graphData.filter(g => g.won).length;
+    const graphLosses = graphData.length - graphWins;
+    const graphWinRate = graphData.length > 0 ? Math.round(graphWins / graphData.length * 100) : 0;
+
     return (
       <SafeAreaView style={S.root}>
         <BackgroundWatermark />
-        <ScrollView style={{ flex: 1, zIndex: 5 }} contentContainerStyle={PS.scroll}>
-          <TouchableOpacity onPress={() => setPage('main')} style={S.backBtn}><Text style={S.backText}>{'← 뒤로'}</Text></TouchableOpacity>
-          {/* 프로필 헤더 */}
-          <View style={PS.header}>
-            <View style={[PS.avatarGlow, { shadowColor: tier.color }]}>
-              <View style={[PS.avatar, { borderColor: tier.color }]}><Text style={PS.avatarEmoji}>{avatarEmoji}</Text></View>
-            </View>
-            <View style={PS.nameRow}>
-              <Text style={PS.name}>{name}</Text>
-              <TouchableOpacity onPress={() => setShowNickEdit(true)}><Text style={PS.editIcon}>{'✏️'}</Text></TouchableOpacity>
-            </View>
-            <View style={[PS.tierPill, { borderColor: tier.color, backgroundColor: `${tier.color}22` }]}>
-              <Text style={[PS.tierText, { color: tier.color }]}>{tier.icon} {tier.name}</Text>
-            </View>
+        <ScrollView style={{ flex: 1, zIndex: 5 }} contentContainerStyle={P.scroll}>
+          {/* 상단 네비게이션 */}
+          <View style={P.nav}>
+            <TouchableOpacity onPress={() => setPage('main')} style={P.navBtn} activeOpacity={0.7}>
+              <Text style={P.navBtnText}>{'← 뒤로'}</Text>
+            </TouchableOpacity>
+            <Text style={P.navTitle}>{'프로필'}</Text>
+            <TouchableOpacity onPress={() => setShowNickEdit(true)} style={P.navBtn} activeOpacity={0.7}>
+              <Text style={P.navBtnText}>{'✏️ 편집'}</Text>
+            </TouchableOpacity>
           </View>
-          <View style={PS.divider} />
-          {/* 티어 & XP */}
-          <View style={PS.section}>
-            <View style={PS.secTitleRow}><View style={[PS.secBar, { backgroundColor: '#F59E0B' }]} /><Text style={PS.secTitle}>{'티어 & XP'}</Text></View>
-            <View style={PS.xpBarRow}>
-              <Text style={PS.xpTierIcon}>{tier.icon}</Text>
-              <View style={PS.xpBarWrap}>
-                <Text style={PS.xpText}>{RP} / {tier.max} RP</Text>
-                <View style={PS.xpBg}><View style={[PS.xpFill, { width: `${rpPct}%`, backgroundColor: tier.color }]} /></View>
+
+          {/* ── 1. 프로필 헤더 카드 ── */}
+          <View style={P.card}>
+            <View style={P.headerCenter}>
+              <View style={[P.avatarRing, { borderColor: frame.border, shadowColor: frame.shadow }]}>
+                <View style={P.avatarInner}><Text style={P.avatarEmoji}>{avatarEmoji}</Text></View>
+                <View style={[P.levelBadge, { backgroundColor: myTier.color }]}><Text style={P.levelText}>{level}</Text></View>
               </View>
-              <Text style={PS.xpTierIcon}>{nextTier.icon}</Text>
+              <Text style={P.nickname}>{name}</Text>
+              {activeTitle && (
+                <TouchableOpacity onPress={() => setShowTitlePicker(true)} activeOpacity={0.7}>
+                  <Text style={P.titleText}>{activeTitle.icon} {activeTitle.name}</Text>
+                </TouchableOpacity>
+              )}
+              {!activeTitle && unlockedTitles.length === 0 && (
+                <TouchableOpacity onPress={() => setShowTitlePicker(true)} activeOpacity={0.7}>
+                  <Text style={P.titleTextEmpty}>{'어떤 칭호를 얻을 수 있는지 확인해보세요 ›'}</Text>
+                </TouchableOpacity>
+              )}
+              <View style={[P.tierChip, { borderColor: myTier.color, backgroundColor: `${myTier.color}18` }]}>
+                <Text style={[P.tierChipText, { color: myTier.color }]}>{myTier.icon} {myTier.name}</Text>
+              </View>
             </View>
-            <Text style={PS.xpNext}>{'다음 티어: '}{nextTier.icon}{' '}{nextTier.name}</Text>
           </View>
-          {/* 전적 통계 */}
-          <View style={PS.section}>
-            <View style={PS.secTitleRow}><View style={[PS.secBar, { backgroundColor: '#F59E0B' }]} /><Text style={PS.secTitle}>{'전적 통계'}</Text></View>
-            <View style={PS.statsGrid}>
-              <View style={PS.statCard}><Text style={PS.statNum}>{us.totalGames}</Text><Text style={PS.statLabel}>{'총 게임'}</Text></View>
-              <View style={PS.statCard}><Text style={[PS.statNum, { color: winRate >= 50 ? '#10b981' : '#ef4444' }]}>{winRate}%</Text><Text style={PS.statLabel}>{'승률'}</Text></View>
-              <View style={PS.statCard}><Text style={PS.statNum}>{us.tichuSuccess}</Text><Text style={PS.statLabel}>{'티츄 성공'}</Text></View>
+
+          {/* ── 2. 티어 & XP 카드 ── */}
+          <View style={P.card}>
+            <View style={P.cardTitleRow}>
+              <Text style={P.cardTitle}>{'티어 & XP'}</Text>
+              {!isMaxTier && <Text style={P.cardTitleRight}>{'다음: '}{nextTierDef.icon}{' '}{nextTierDef.name}</Text>}
+            </View>
+            <View style={P.xpBar}>
+              <View style={[P.xpFill, { width: `${xpPctLocal}%`, backgroundColor: myTier.color }]} />
+            </View>
+            <View style={P.xpLabels}>
+              <Text style={P.xpLabelLeft}>{myTier.icon} {myTier.name}</Text>
+              <Text style={P.xpLabelCenter}>{us.xp} / {isMaxTier ? '∞' : myTier.max} RP</Text>
+              <Text style={P.xpLabelRight}>{isMaxTier ? '' : `${nextTierDef.icon} ${nextTierDef.name}`}</Text>
+            </View>
+            {!isMaxTier && <Text style={P.xpRemaining}>{'다음 티어까지 '}{myTier.max - us.xp}{' RP'}</Text>}
+          </View>
+
+          {/* ── 3. 전적 통계 카드 (확장 2×3) ── */}
+          <View style={P.card}>
+            <View style={P.cardTitleRow}>
+              <Text style={P.cardTitle}>{'전적 통계'}</Text>
+              {seasonInfo && <Text style={P.cardTitleRight}>{seasonInfo.seasonName}</Text>}
+            </View>
+            <View style={P.statsGrid}>
+              <View style={P.statBox}><Text style={P.statIcon}>{'🎮'}</Text><Text style={P.statNum}>{hasData ? us.totalGames : '—'}</Text><Text style={P.statLabel}>{'총 게임'}</Text></View>
+              <View style={P.statBox}><Text style={P.statIcon}>{'📊'}</Text><Text style={[P.statNum, { color: winRateColor }]}>{winRate >= 0 ? `${winRate}%` : '—'}</Text><Text style={P.statLabel}>{'승률'}</Text></View>
+              <View style={P.statBox}><Text style={P.statIcon}>{'🎯'}</Text><Text style={P.statNum}>{tichuRate >= 0 ? `${tichuRate}%` : '—'}</Text><Text style={P.statLabel}>{'티츄 성공률'}</Text></View>
+              <View style={P.statBox}><Text style={P.statIcon}>{'🔥'}</Text><Text style={P.statNum}>{hasData ? us.winStreak : '—'}</Text><Text style={P.statLabel}>{'최고 연승'}</Text></View>
+              <View style={P.statBox}><Text style={P.statIcon}>{'👑'}</Text><Text style={P.statNum}>{'—'}</Text><Text style={P.statLabel}>{'라지 티츄 성공률'}</Text></View>
+              <View style={P.statBox}><Text style={P.statIcon}>{'🤝'}</Text><Text style={P.statNum}>{'—'}</Text><Text style={P.statLabel}>{'원투 성공'}</Text></View>
             </View>
           </View>
+
+          {/* ── 4. RP 그래프 카드 ── */}
+          <View style={P.card}>
+            <Text style={P.cardTitle}>{'RP 변화'}</Text>
+            {graphData.length < 2 ? (
+              <View style={P.emptyState}>
+                <Text style={P.emptyIcon}>{'📈'}</Text>
+                <Text style={P.emptyText}>{'게임을 더 플레이하면 그래프가 표시됩니다'}</Text>
+              </View>
+            ) : (
+              <>
+                <View style={P.graphWrap}>
+                  {graphData.map((g, i) => {
+                    const pct = ((g.rp - graphMin) / graphRange) * 100;
+                    return (
+                      <View key={i} style={P.graphCol}>
+                        <View style={[P.graphDot, { bottom: `${pct}%`, backgroundColor: g.won ? '#4CAF50' : '#F44336' }]} />
+                        <View style={[P.graphBar, { height: `${pct}%`, backgroundColor: g.won ? 'rgba(76,175,80,0.2)' : 'rgba(244,67,54,0.15)' }]} />
+                      </View>
+                    );
+                  })}
+                </View>
+                <Text style={P.graphSummary}>
+                  {'최근 '}{graphData.length}{'게임: '}{graphWins}{'승 '}{graphLosses}{'패 (승률 '}{graphWinRate}{'%)'}
+                </Text>
+              </>
+            )}
+          </View>
+
+          {/* ── 5. 리더보드 카드 ── */}
+          <View style={P.card}>
+            <Text style={P.cardTitle}>{'리더보드'}</Text>
+            <View style={P.lbTabs}>
+              {(['all', 'friends', 'weekly'] as const).map(t => (
+                <TouchableOpacity key={t} style={[P.lbTab, lbTab === t && P.lbTabActive]} onPress={() => setLbTab(t)}>
+                  <Text style={[P.lbTabText, lbTab === t && P.lbTabTextActive]}>
+                    {t === 'all' ? '전체' : t === 'friends' ? '친구' : '주간'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {lbTab === 'all' && leaderboard.length > 0 ? (
+              <View style={P.lbList}>
+                {leaderboard.slice(0, 10).map((entry, i) => {
+                  const isMe = entry.id === useGameStore.getState().dbUserId;
+                  const entryTier = getTier(entry.xp);
+                  return (
+                    <View key={i} style={[P.lbRow, isMe && P.lbRowMe]}>
+                      <Text style={P.lbRank}>{i + 1}</Text>
+                      <Text style={P.lbTierIcon}>{entryTier.icon}</Text>
+                      <Text style={[P.lbName, isMe && P.lbNameMe]} numberOfLines={1}>{entry.nickname}</Text>
+                      <Text style={P.lbXp}>{entry.xp} RP</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : lbTab !== 'all' ? (
+              <View>
+                <View style={{ opacity: 0.15 }}>
+                  {[1, 2, 3].map(i => (
+                    <View key={i} style={P.lbRow}>
+                      <Text style={P.lbRank}>{i}</Text>
+                      <Text style={P.lbTierIcon}>{'🔩'}</Text>
+                      <View style={{ flex: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 6, marginRight: 8 }} />
+                      <Text style={P.lbXp}>{'— RP'}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={P.emptyTextOverlay}>{lbTab === 'friends' ? '친구와 함께 플레이하면 랭킹이 표시됩니다' : '주간 랭킹은 곧 제공될 예정입니다'}</Text>
+              </View>
+            ) : (
+              <View style={P.emptyState}><Text style={P.emptyText}>{'첫 게임을 완료하면 랭킹에 등록됩니다'}</Text></View>
+            )}
+          </View>
+
+          {/* ── 6. 최근 전적 카드 ── */}
+          <View style={P.card}>
+            <Text style={P.cardTitle}>{'최근 전적'}</Text>
+            {recentGames.length === 0 ? (
+              <View style={P.emptyState}>
+                <Text style={P.emptyIcon}>{'🃏'}</Text>
+                <Text style={P.emptyText}>{'아직 전적이 없습니다'}</Text>
+                <TouchableOpacity style={P.ctaBtn} onPress={() => setPage('main')} activeOpacity={0.8}>
+                  <Text style={P.ctaBtnText}>{'첫 게임 시작하기'}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={P.recentList}>
+                {recentGames.slice(0, 10).map((g, i) => (
+                  <View key={i} style={P.recentRow}>
+                    <View style={[P.recentBadge, { backgroundColor: g.won ? 'rgba(93,202,165,0.15)' : 'rgba(239,68,68,0.15)' }]}>
+                      <Text style={[P.recentBadgeText, { color: g.won ? '#5dcaa5' : '#ef4444' }]}>{g.won ? '승' : '패'}</Text>
+                    </View>
+                    {g.rp > 0 && <Text style={P.recentRp}>{g.rp} RP</Text>}
+                    <View style={{ flex: 1 }} />
+                    <Text style={P.recentDate}>{g.date}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* ── 7. 파트너 케미 카드 ── */}
+          <View style={P.card}>
+            <Text style={P.cardTitle}>{'파트너 케미'}</Text>
+            <View style={P.emptyState}>
+              <Text style={P.emptyIcon}>{'🤝'}</Text>
+              <Text style={P.emptyText}>{'데이터 수집 중 — 더 많은 게임을 플레이해주세요'}</Text>
+            </View>
+          </View>
+
+          {/* ── 8. 업적 카드 ── */}
+          <View style={P.card}>
+            <View style={P.cardTitleRow}>
+              <Text style={P.cardTitle}>{'업적'}</Text>
+              <Text style={P.cardTitleRight}>{unlockedAchs.length}{' / '}{achievements.length}</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={P.achScroll} contentContainerStyle={P.achRow}>
+              {achievements.map((a, i) => (
+                <View key={i} style={[P.achSlot, !a.unlocked && P.achLocked]}>
+                  <Text style={[P.achIcon, !a.unlocked && P.achIconLocked]}>{a.icon}</Text>
+                  <Text style={[P.achName, !a.unlocked && P.achNameLocked]} numberOfLines={1}>{a.name}</Text>
+                </View>
+              ))}
+            </ScrollView>
+            <View style={P.achFooter}>
+              <Text style={P.achHint}>{'게임을 플레이하여 잠금 해제'}</Text>
+              <TouchableOpacity onPress={() => setPage('achievements')}><Text style={P.achMore}>{'더보기 ›'}</Text></TouchableOpacity>
+            </View>
+          </View>
+
+          {/* ── 9. 시즌 보상 카드 ── */}
+          <View style={P.card}>
+            <Text style={P.cardTitle}>{'시즌 보상'}</Text>
+            {seasonInfo ? (
+              <View>
+                <View style={P.seasonRow}>
+                  <Text style={P.seasonLabel}>{seasonInfo.seasonName}</Text>
+                  <Text style={P.seasonDays}>{'남은 기간: '}{seasonInfo.remainingDays}{'일'}</Text>
+                </View>
+                <View style={P.seasonRow}>
+                  <Text style={P.seasonLabel}>{'현재 레이팅'}</Text>
+                  <Text style={P.seasonValue}>{seasonInfo.myRating} RP</Text>
+                </View>
+                <View style={P.seasonRow}>
+                  <Text style={P.seasonLabel}>{'시즌 순위'}</Text>
+                  <Text style={P.seasonValue}>{'#'}{seasonInfo.myRank}</Text>
+                </View>
+                <View style={P.seasonRewards}>
+                  {USER_TIERS.slice(0, 5).map((t, i) => (
+                    <View key={i} style={[P.seasonRewardSlot, myTierIdx >= i && P.seasonRewardUnlocked]}>
+                      <Text style={{ fontSize: 18 }}>{t.icon}</Text>
+                      <Text style={P.seasonRewardName}>{t.name}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : (
+              <View style={P.emptyState}>
+                <Text style={P.emptyIcon}>{'🏅'}</Text>
+                <Text style={P.emptyText}>{'시즌 진행 중 — 시즌 종료 시 달성 티어에 따라 보상이 지급됩니다'}</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={{ height: 30 }} />
         </ScrollView>
-        {/* 닉네임 편집 모달 (프로필 페이지) */}
+
+        {/* 닉네임 편집 모달 */}
         <Modal visible={showNickEdit} transparent animationType="fade">
           <View style={S.mOvl}><View style={S.mBox}>
             <Text style={S.mTitle}>{'✏️ 닉네임 변경'}</Text>
             <TextInput style={S.mInput} value={nick} onChangeText={setNick} placeholder={'닉네임 입력'} placeholderTextColor="rgba(255,255,255,0.3)" maxLength={12} />
             <TouchableOpacity style={[S.mOk, !nick.trim() && { opacity: 0.4 }]} onPress={() => { if (nick.trim()) { userSetNickname(nick.trim()); onChangeNickname?.(nick.trim()); setShowNickEdit(false); } }} disabled={!nick.trim()}><Text style={S.mOkT}>{'확인'}</Text></TouchableOpacity>
+          </View></View>
+        </Modal>
+
+        {/* 칭호 선택 모달 */}
+        <Modal visible={showTitlePicker} transparent animationType="fade">
+          <View style={S.mOvl}><View style={[S.mBox, { maxWidth: 360 }]}>
+            <Text style={S.mTitle}>{'🏅 칭호 선택'}</Text>
+            <View style={{ gap: 6 }}>
+              {ALL_TITLES.map(t => {
+                const isUnlocked = unlockedTitles.some(u => u.id === t.id);
+                const isSelected = us.selectedTitle === t.id;
+                return (
+                  <TouchableOpacity key={t.id} style={[P.titleOption, isSelected && P.titleOptionActive, !isUnlocked && P.titleOptionLocked]}
+                    onPress={() => { if (isUnlocked) { useUserStore.getState().setTitle(t.id); setShowTitlePicker(false); } }}
+                    disabled={!isUnlocked} activeOpacity={isUnlocked ? 0.7 : 1}>
+                    <Text style={{ fontSize: 18, opacity: isUnlocked ? 1 : 0.3 }}>{t.icon}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[P.titleOptionName, !isUnlocked && { color: 'rgba(255,255,255,0.3)' }]}>{t.name}</Text>
+                      <Text style={P.titleOptionDesc}>{t.desc}</Text>
+                    </View>
+                    {isSelected && <Text style={{ color: '#5dcaa5' }}>{'✓'}</Text>}
+                    {!isUnlocked && <Text style={{ fontSize: 14 }}>{'🔒'}</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <TouchableOpacity style={[S.mOk, { marginTop: 12 }]} onPress={() => setShowTitlePicker(false)}><Text style={S.mOkT}>{'닫기'}</Text></TouchableOpacity>
           </View></View>
         </Modal>
       </SafeAreaView>
@@ -442,7 +701,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
       </Modal>
       {/* 커스텀 방 모달 */}
       <Modal visible={showRoom} transparent animationType="fade">
-        <View style={S.mOvl}><View style={[S.mBox, { maxWidth: 420, minHeight: 350 }]}>
+        <View style={S.mOvl}><View style={[S.mBox, { maxWidth: 460, minHeight: 480, maxHeight: '85%' as any }]}>
           <Text style={S.mTitle}>{'🎮 커스텀 매치'}</Text>
           {/* 탭 */}
           <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
@@ -460,32 +719,45 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
             </TouchableOpacity>
           </View>
           {customTab === 'list' ? (
-            <View style={{ flex: 1, minHeight: 180 }}>
-              {customRoomList.length === 0 ? (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 14 }}>대기 중인 방이 없습니다</Text>
-                  <TouchableOpacity style={{ marginTop: 12, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 8 }} onPress={() => onListRooms?.()}>
-                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>새로고침</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <ScrollView style={{ maxHeight: 200 }}>
-                  {customRoomList.map(r => (
-                    <TouchableOpacity
-                      key={r.roomId}
-                      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}
-                      onPress={() => {
-                        if (r.hasPassword) { setJoinTarget(r); setJoinPw(''); }
-                        else { onJoin(r.roomId, savedPlayerId, name); setShowRoom(false); }
-                      }}
-                    >
-                      <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700', flex: 1 }}>{r.roomName}</Text>
-                      <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginRight: 8 }}>{r.playerCount}/4</Text>
-                      {r.hasPassword && <Text style={{ fontSize: 14 }}>🔒</Text>}
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
+            <View style={{ flex: 1, minHeight: 360 }}>
+              {/* 검색 + 새로고침 */}
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
+                <TextInput
+                  style={[S.mInput, { flex: 1, paddingVertical: 7, fontSize: 13 }]}
+                  value={roomSearch}
+                  onChangeText={setRoomSearch}
+                  placeholder={'방 이름 검색...'}
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                />
+                <TouchableOpacity style={{ paddingHorizontal: 12, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 8, justifyContent: 'center' }} onPress={() => onListRooms?.()}>
+                  <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>{'🔄'}</Text>
+                </TouchableOpacity>
+              </View>
+              {(() => {
+                const filtered = customRoomList.filter(r => !roomSearch.trim() || r.roomName.toLowerCase().includes(roomSearch.trim().toLowerCase()));
+                return filtered.length === 0 ? (
+                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 14 }}>{customRoomList.length === 0 ? '대기 중인 방이 없습니다' : '검색 결과가 없습니다'}</Text>
+                  </View>
+                ) : (
+                  <ScrollView style={{ maxHeight: 320 }}>
+                    {filtered.map(r => (
+                      <TouchableOpacity
+                        key={r.roomId}
+                        style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}
+                        onPress={() => {
+                          if (r.hasPassword) { setJoinTarget(r); setJoinPw(''); }
+                          else { onJoin(r.roomId, savedPlayerId, name); setShowRoom(false); }
+                        }}
+                      >
+                        <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700', flex: 1 }} numberOfLines={1}>{r.roomName}</Text>
+                        <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginRight: 8 }}>{r.playerCount}/4</Text>
+                        {r.hasPassword && <Text style={{ fontSize: 14 }}>{'🔒'}</Text>}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                );
+              })()}
               {/* 비밀번호 입력 */}
               {joinTarget && (
                 <View style={{ marginTop: 12, gap: 8 }}>
@@ -672,57 +944,118 @@ const S = StyleSheet.create({
   mTabText: { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '700' },
   mTabTextActive: { color: '#F59E0B' },
 });
-// 프로필 전용 스타일
-const PS = StyleSheet.create({
-  scroll: { paddingHorizontal: 20, paddingBottom: 30, maxWidth: 700, alignSelf: 'center', width: '100%' },
+// ── 프로필 스타일 ──────────────────────────────────────────
+const P = StyleSheet.create({
+  scroll: { paddingHorizontal: 16, paddingBottom: 30, maxWidth: 500, alignSelf: 'center', width: '100%' },
 
-  // 헤더
-  header: { alignItems: 'center', paddingVertical: 16 },
-  avatarGlow: { shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 10, marginBottom: 10 },
-  avatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3.5, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
-  avatarEmoji: { fontSize: 50 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  name: { color: '#fff', fontSize: 22, fontWeight: '900' },
-  editIcon: { fontSize: 16, opacity: 0.5 },
-  tierPill: { borderWidth: 1.5, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 4, marginBottom: 4 },
-  tierText: { fontSize: 13, fontWeight: '800' },
-  joined: { color: 'rgba(255,255,255,0.25)', fontSize: 11, marginTop: 2 },
-  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginVertical: 12 },
+  // 네비게이션
+  nav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  navBtn: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  navBtnText: { color: 'rgba(255,255,255,0.7)', fontSize: 14, fontWeight: '700' },
+  navTitle: { color: '#fff', fontSize: 17, fontWeight: '900' },
 
-  // 섹션 공통
-  section: { marginBottom: 16 },
-  secTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  secBar: { width: 3, height: 16, borderRadius: 2 },
-  secTitle: { color: 'rgba(255,255,255,0.7)', fontSize: 15, fontWeight: '800' },
+  // 카드 공통
+  card: { backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  cardTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  cardTitle: { color: '#fff', fontSize: 15, fontWeight: '800', marginBottom: 12 },
+  cardTitleRight: { color: '#e8a42a', fontSize: 12, fontWeight: '700' },
 
-  // 티어 & XP
-  xpBarRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  xpTierIcon: { fontSize: 20 },
-  xpBarWrap: { flex: 1 },
-  xpText: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700', textAlign: 'center', marginBottom: 4 },
-  xpBg: { height: 8, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' },
-  xpFill: { height: '100%', borderRadius: 4 },
-  xpNext: { color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '700', marginTop: 6, textAlign: 'center' },
+  // 프로필 헤더
+  headerCenter: { alignItems: 'center' },
+  avatarRing: { width: 88, height: 88, borderRadius: 44, borderWidth: 3.5, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', marginBottom: 12, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 20, elevation: 10 },
+  avatarInner: { width: 78, height: 78, borderRadius: 39, alignItems: 'center', justifyContent: 'center' },
+  avatarEmoji: { fontSize: 42 },
+  levelBadge: { position: 'absolute', bottom: -2, right: -2, width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5, borderColor: 'rgba(0,0,0,0.6)' },
+  levelText: { color: '#fff', fontSize: 11, fontWeight: '900' },
+  nickname: { color: '#fff', fontSize: 22, fontWeight: '900', marginBottom: 4 },
+  titleText: { color: '#e8a42a', fontSize: 12, fontWeight: '700', marginBottom: 8 },
+  titleTextEmpty: { color: 'rgba(255,255,255,0.25)', fontSize: 11, fontWeight: '600', marginBottom: 8 },
+  tierChip: { borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 4 },
+  tierChipText: { fontSize: 13, fontWeight: '800' },
 
-  // 전적
-  statsGrid: { flexDirection: 'row', gap: 12 },
-  statCard: { flex: 1, backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  statNum: { color: '#fff', fontSize: 28, fontWeight: '900' },
-  statLabel: { color: 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: '600', marginTop: 4 },
+  // XP 바
+  xpBar: { height: 10, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 5, overflow: 'hidden', marginBottom: 8 },
+  xpFill: { height: '100%', borderRadius: 5 },
+  xpLabels: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  xpLabelLeft: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700' },
+  xpLabelCenter: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '800' },
+  xpLabelRight: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '700' },
+  xpRemaining: { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '600', textAlign: 'center', marginTop: 6 },
 
-  // 출석
-  streakBadge: { backgroundColor: 'rgba(245,158,11,0.12)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, marginLeft: 'auto' },
-  streakText: { color: '#F59E0B', fontSize: 11, fontWeight: '800' },
-  attGrid: { flexDirection: 'row', gap: 6, justifyContent: 'center' },
-  attCell: { alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 8, minWidth: 48, gap: 3 },
-  attChecked: { backgroundColor: 'rgba(16,185,129,0.1)' },
-  attToday: { borderWidth: 2, borderColor: '#F59E0B' },
-  attDay: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '700' },
-  attIcon: { fontSize: 16 },
+  // 전적 2x3 그리드
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  statBox: { width: '47%' as any, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
+  statIcon: { fontSize: 16, marginBottom: 2 },
+  statNum: { color: '#fff', fontSize: 22, fontWeight: '900' },
+  statLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '600', marginTop: 2 },
 
-  // 메뉴
-  menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
-  menuIcon: { fontSize: 18, width: 30 },
-  menuText: { flex: 1, color: 'rgba(255,255,255,0.7)', fontSize: 15, fontWeight: '600' },
-  menuArrow: { color: 'rgba(255,255,255,0.2)', fontSize: 18 },
+  // RP 그래프
+  graphWrap: { flexDirection: 'row', height: 100, alignItems: 'flex-end', gap: 2, marginBottom: 8, paddingHorizontal: 2 },
+  graphCol: { flex: 1, height: '100%', justifyContent: 'flex-end', alignItems: 'center', position: 'relative' },
+  graphDot: { position: 'absolute', width: 8, height: 8, borderRadius: 4, zIndex: 2 },
+  graphBar: { width: '80%', borderRadius: 2, minHeight: 2 },
+  graphSummary: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '700', textAlign: 'center' },
+
+  // 리더보드
+  lbTabs: { flexDirection: 'row', gap: 6, marginBottom: 12 },
+  lbTab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.04)' },
+  lbTabActive: { backgroundColor: 'rgba(93,202,165,0.15)', borderWidth: 1, borderColor: 'rgba(93,202,165,0.3)' },
+  lbTabText: { color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '700' },
+  lbTabTextActive: { color: '#5dcaa5' },
+  lbList: { gap: 2 },
+  lbRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 8, borderRadius: 8 },
+  lbRowMe: { backgroundColor: 'rgba(93,202,165,0.1)', borderWidth: 1, borderColor: 'rgba(93,202,165,0.2)' },
+  lbRank: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '800', width: 24, textAlign: 'center' },
+  lbTierIcon: { fontSize: 16 },
+  lbName: { flex: 1, color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' },
+  lbNameMe: { color: '#5dcaa5', fontWeight: '800' },
+  lbXp: { color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '700' },
+
+  // 빈 상태
+  emptyState: { alignItems: 'center', paddingVertical: 20 },
+  emptyIcon: { fontSize: 36, marginBottom: 8, opacity: 0.4 },
+  emptyText: { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '600', marginBottom: 14, textAlign: 'center' },
+  ctaBtn: { backgroundColor: '#5dcaa5', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 10 },
+  ctaBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+
+  // 최근 전적
+  recentList: { gap: 4 },
+  recentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
+  recentBadge: { borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, minWidth: 36, alignItems: 'center' },
+  recentBadgeText: { fontSize: 13, fontWeight: '800' },
+  recentRp: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '700' },
+  recentDate: { color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: '600' },
+
+  // 업적
+  achScroll: { marginBottom: 8 },
+  achRow: { gap: 10, paddingVertical: 4 },
+  achSlot: { width: 64, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, paddingVertical: 10, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.08)' },
+  achLocked: { borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.1)', backgroundColor: 'rgba(0,0,0,0.15)' },
+  achIcon: { fontSize: 24, marginBottom: 4 },
+  achIconLocked: { opacity: 0.25 },
+  achName: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '700', textAlign: 'center' },
+  achNameLocked: { color: 'rgba(255,255,255,0.25)' },
+  achFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  achHint: { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '600' },
+  achMore: { color: '#5dcaa5', fontSize: 12, fontWeight: '700' },
+
+  // 시즌 보상
+  seasonRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
+  seasonLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '600' },
+  seasonDays: { color: '#e8a42a', fontSize: 12, fontWeight: '700' },
+  seasonValue: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  seasonRewards: { flexDirection: 'row', gap: 8, marginTop: 12, justifyContent: 'center' },
+  seasonRewardSlot: { alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10, opacity: 0.4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  seasonRewardUnlocked: { opacity: 1, borderColor: 'rgba(232,164,42,0.3)', backgroundColor: 'rgba(232,164,42,0.08)' },
+  seasonRewardName: { color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '700', marginTop: 2 },
+
+  // 칭호 선택
+  titleOption: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  titleOptionActive: { borderColor: 'rgba(93,202,165,0.3)', backgroundColor: 'rgba(93,202,165,0.08)' },
+  titleOptionName: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  titleOptionDesc: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '600' },
+  titleOptionLocked: { opacity: 0.6, backgroundColor: 'rgba(0,0,0,0.15)' },
+
+  // 리더보드 오버레이 텍스트
+  emptyTextOverlay: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '600', textAlign: 'center', marginTop: -40, paddingVertical: 10 },
 });

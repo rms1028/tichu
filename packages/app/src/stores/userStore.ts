@@ -119,6 +119,13 @@ interface UserState {
   friendNotify: boolean;
   gameNotify: boolean;
 
+  // 최근 전적 (RP 추적 포함)
+  recentGames: { won: boolean; myScore: number; opScore: number; date: string; rp: number }[];
+
+  // 프로필 커스터마이징
+  selectedTitle: string;    // 선택한 칭호 ID
+  profileBg: string;        // 프로필 배경 ID
+
   // 상점
   ownedAvatars: string[];
   ownedCardBacks: string[];
@@ -137,6 +144,8 @@ interface UserState {
   buyItem: (item: ShopItem) => boolean; // returns success
   equipAvatar: (id: string) => void;
   equipCardBack: (id: string) => void;
+  setTitle: (id: string) => void;
+  setProfileBg: (id: string) => void;
   setNickname: (name: string) => void;
   setSetting: (key: 'soundOn' | 'musicOn' | 'ttsOn' | 'notifyOn' | 'friendNotify' | 'gameNotify', value: boolean) => void;
   setPlayerId: (id: string) => void;
@@ -199,6 +208,9 @@ export const useUserStore = create<UserState>((set, get) => ({
   lastAttendanceDate: saved.lastAttendanceDate ?? '',
   missions: saved.lastMissionDate === today ? (saved.missions ?? createDailyMissions()) : createDailyMissions(),
   lastMissionDate: saved.lastMissionDate ?? '',
+  recentGames: saved.recentGames ?? [],
+  selectedTitle: saved.selectedTitle ?? '',
+  profileBg: saved.profileBg ?? 'default',
   ownedAvatars: saved.ownedAvatars ?? ['dragon'],
   ownedCardBacks: saved.ownedCardBacks ?? ['classic'],
   equippedAvatar: saved.equippedAvatar ?? 'dragon',
@@ -307,6 +319,8 @@ export const useUserStore = create<UserState>((set, get) => ({
 
   equipAvatar: (id) => set(s => { const ns = { ...s, equippedAvatar: id }; saveState(ns); return ns; }),
   equipCardBack: (id) => set(s => { const ns = { ...s, equippedCardBack: id }; saveState(ns); return ns; }),
+  setTitle: (id) => set(s => { const ns = { ...s, selectedTitle: id }; saveState(ns); return ns; }),
+  setProfileBg: (id) => set(s => { const ns = { ...s, profileBg: id }; saveState(ns); return ns; }),
   setNickname: (name) => set(s => { const ns = { ...s, nickname: name }; saveState(ns); return ns; }),
   setSetting: (key, value) => {
     if (key === 'ttsOn') {
@@ -322,6 +336,11 @@ export const useUserStore = create<UserState>((set, get) => ({
 
   // 서버에서 보상 수신 시 로컬 스토어 업데이트
   applyServerRewards: (xp, coins, won, tichuSuccess) => set(s => {
+    const newRp = s.xp + xp;
+    const recentGames = [
+      { won, myScore: 0, opScore: 0, date: new Date().toISOString().slice(0, 10), rp: newRp },
+      ...s.recentGames,
+    ].slice(0, 20);
     const ns = {
       ...s,
       xp: s.xp + xp,
@@ -331,6 +350,7 @@ export const useUserStore = create<UserState>((set, get) => ({
       losses: s.losses + (won ? 0 : 1),
       winStreak: won ? s.winStreak + 1 : 0,
       tichuSuccess: s.tichuSuccess + (tichuSuccess ? 1 : 0),
+      recentGames,
     };
     // 미션 업데이트
     const missions = [...ns.missions];
@@ -379,3 +399,57 @@ function isYesterday(dateStr: string): boolean {
   y.setDate(y.getDate() - 1);
   return d.toISOString().slice(0, 10) === y.toISOString().slice(0, 10);
 }
+
+// ── 칭호 시스템 ─────────────────────────────────────────────
+
+export interface Title {
+  id: string;
+  name: string;
+  icon: string;
+  desc: string;
+  check: (s: { totalGames: number; wins: number; tichuSuccess: number; tichuFail: number; winStreak: number }) => boolean;
+}
+
+export const ALL_TITLES: Title[] = [
+  { id: 'tichu_master', name: '티츄 마스터', icon: '🎯', desc: '티츄 성공률 80% 이상 (최소 10회)', check: s => s.tichuSuccess >= 10 && s.tichuSuccess / Math.max(1, s.tichuSuccess + s.tichuFail) >= 0.8 },
+  { id: 'challenger', name: '도전자', icon: '🔥', desc: '티츄 20회 이상 선언', check: s => (s.tichuSuccess + s.tichuFail) >= 20 },
+  { id: 'safe_player', name: '안전 제일', icon: '🛡️', desc: '100게임 이상 + 티츄 미선언', check: s => s.totalGames >= 100 && s.tichuSuccess === 0 && s.tichuFail === 0 },
+  { id: 'veteran', name: '베테랑', icon: '⭐', desc: '100게임 이상 플레이', check: s => s.totalGames >= 100 },
+  { id: 'winner', name: '승리의 전사', icon: '🏆', desc: '승률 60% 이상 (최소 20게임)', check: s => s.totalGames >= 20 && s.wins / s.totalGames >= 0.6 },
+  { id: 'streak_king', name: '연승왕', icon: '👑', desc: '10연승 이상 달성', check: s => s.winStreak >= 10 },
+  { id: 'newcomer', name: '신입', icon: '🌱', desc: '첫 게임 완료', check: s => s.totalGames >= 1 },
+];
+
+export function getUnlockedTitles(stats: { totalGames: number; wins: number; tichuSuccess: number; tichuFail: number; winStreak: number }): Title[] {
+  return ALL_TITLES.filter(t => t.check(stats));
+}
+
+// ── 프로필 배경 ─────────────────────────────────────────────
+
+export interface ProfileBg {
+  id: string;
+  name: string;
+  colors: [string, string]; // gradient
+  minTier: number;          // 0=iron, 5=dragon
+}
+
+export const PROFILE_BGS: ProfileBg[] = [
+  { id: 'default', name: '기본', colors: ['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.3)'], minTier: 0 },
+  { id: 'forest', name: '숲', colors: ['rgba(26,92,58,0.4)', 'rgba(10,40,25,0.5)'], minTier: 0 },
+  { id: 'bronze_glow', name: '브론즈', colors: ['rgba(205,127,50,0.15)', 'rgba(0,0,0,0.3)'], minTier: 1 },
+  { id: 'silver_shine', name: '실버', colors: ['rgba(192,192,192,0.12)', 'rgba(0,0,0,0.3)'], minTier: 2 },
+  { id: 'gold_radiance', name: '골드', colors: ['rgba(218,165,32,0.15)', 'rgba(0,0,0,0.3)'], minTier: 3 },
+  { id: 'diamond_aurora', name: '다이아', colors: ['rgba(0,170,221,0.12)', 'rgba(0,0,0,0.3)'], minTier: 4 },
+  { id: 'dragon_flame', name: '드래곤', colors: ['rgba(204,51,51,0.15)', 'rgba(50,0,0,0.3)'], minTier: 5 },
+];
+
+// ── 아바타 프레임 색상 (티어 기반 자동) ─────────────────────
+
+export const TIER_FRAME_COLORS: Record<string, { border: string; shadow: string }> = {
+  iron: { border: '#888880', shadow: 'transparent' },
+  bronze: { border: '#CD7F32', shadow: 'rgba(205,127,50,0.3)' },
+  silver: { border: '#C0C0C0', shadow: 'rgba(192,192,192,0.3)' },
+  gold: { border: '#DAA520', shadow: 'rgba(218,165,32,0.4)' },
+  diamond: { border: '#00AADD', shadow: 'rgba(0,170,221,0.4)' },
+  dragon: { border: '#CC3333', shadow: 'rgba(204,51,51,0.5)' },
+};
