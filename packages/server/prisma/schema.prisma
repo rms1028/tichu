@@ -64,6 +64,7 @@ model User {
   blockedByUsers   Block[]          @relation("Blocked")
   gameResults      GameResult[]
   seasonRankings   SeasonRanking[]
+  pushTokens       PushToken[]
 
   @@index([nickname])
 }
@@ -177,4 +178,18 @@ model Block {
   createdAt  DateTime @default(now())
 
   @@unique([blockerId, blockedId])
+}
+
+// ── 푸시 토큰 ──────────────────────────────────────────────
+
+model PushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  platform  String                       // "ios" | "android" | "web"
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }

@@ -410,19 +410,25 @@ const styles = StyleSheet.create({
     fontSize: mob(12, 22),
     fontWeight: '900',
   },
-  // 패스 말풍선 — 일반 flow, 아바타 위에 배치
+  // 패스 말풍선 — absolute로 부모 너비에 종속되지 않음
   passBubble: {
+    position: 'absolute',
+    top: mob(-20, -28),
+    left: '50%',
+    transform: [{ translateX: '-50%' }],
     backgroundColor: 'rgba(100,116,139,0.9)',
     borderRadius: mob(8, 12),
-    paddingHorizontal: mob(6, 14),
+    paddingHorizontal: mob(8, 14),
     paddingVertical: mob(2, 4),
-    marginBottom: mob(2, 4),
-  },
+    zIndex: 20,
+    alignItems: 'center',
+  } as any,
   passBubbleText: {
     color: '#fff',
     fontSize: mob(10, 16),
     fontWeight: '900',
-  },
+    whiteSpace: 'nowrap',
+  } as any,
   // 패스 뱃지 (작은 표시)
   passBadge: {
     backgroundColor: 'rgba(120,144,156,0.4)',

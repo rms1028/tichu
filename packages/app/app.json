@@ -33,7 +33,15 @@
       "backgroundColor": "#1a472a"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#1a472a",
+          "sounds": []
+        }
+      ]
     ]
   }
 }

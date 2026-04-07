@@ -98,6 +98,8 @@ export function resolveBombWindow(room: GameRoom): GameEvent[] {
   if (bw.pendingBombs.length === 0) {
     // 폭탄 없음 → 정상 진행
     room.bombWindow = null;
+    // M2: 폭탄 윈도우에서 일시정지된 턴 타이머 상태 정리
+    delete room.turnTimer.pausedRemainingMs;
     events.push({ type: 'bomb_window_end' });
     return events;
   }

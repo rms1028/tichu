@@ -138,7 +138,7 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu, onSubmitBomb }: Acti
         disabled={!hasSelection}
         activeOpacity={0.7}
       >
-        <Text style={[styles.clearText, !hasSelection && styles.clearTextDisabled]}>초기화</Text>
+        <Text style={[styles.clearText, !hasSelection && styles.clearTextDisabled]} numberOfLines={1}>초기화</Text>
       </TouchableOpacity>
       {!isLead && (
         <TouchableOpacity
@@ -147,7 +147,7 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu, onSubmitBomb }: Acti
           disabled={!isMyTurn || wishForcesPlay}
           activeOpacity={0.7}
         >
-          <Text style={[styles.passText, (!isMyTurn || wishForcesPlay) && styles.passTextDisabled]}>
+          <Text style={[styles.passText, (!isMyTurn || wishForcesPlay) && styles.passTextDisabled]} numberOfLines={1}>
             {wishForcesPlay ? '소원!' : '패스'}
           </Text>
         </TouchableOpacity>
@@ -163,7 +163,7 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu, onSubmitBomb }: Acti
         disabled={!canAct}
         activeOpacity={0.8}
       >
-        <Text style={styles.playText}>{canBombOutOfTurn ? '폭탄!' : '내기'}</Text>
+        <Text style={styles.playText} numberOfLines={1}>{canBombOutOfTurn ? '폭탄!' : '내기'}</Text>
       </AnimatedTouchable>
       {/* 소원 선택 그리드 */}
       {showWishPicker && (
@@ -197,18 +197,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 8,
-    gap: mob(14, 18),
+    gap: mob(10, 18),
     position: 'relative',
+    flexShrink: 0,
   },
   button: {
-    paddingHorizontal: mob(16, 26),
     paddingVertical: mob(11, 15),
     borderRadius: mob(12, 16),
-    minWidth: mob(60, 88),
+    width: mob(68, 96),
     minHeight: mob(46, 50),
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
+    flexShrink: 0,
+    flexGrow: 0,
   },
   clearButton: {
     backgroundColor: 'rgba(255,255,255,0.12)',
@@ -222,7 +224,8 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: mob(13, 16),
     fontWeight: '700',
-  },
+    whiteSpace: 'nowrap',
+  } as any,
   clearTextDisabled: {
     color: 'rgba(255,255,255,0.2)',
   },
@@ -238,7 +241,8 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: mob(13, 16),
     fontWeight: '800',
-  },
+    whiteSpace: 'nowrap',
+  } as any,
   passTextDisabled: {
     color: 'rgba(255,255,255,0.2)',
   },
@@ -266,7 +270,8 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
+    whiteSpace: 'nowrap',
+  } as any,
   disabledPlay: {
     backgroundColor: 'rgba(217,119,6,0.3)',
     borderColor: 'rgba(245,158,11,0.3)',

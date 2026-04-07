@@ -114,6 +114,7 @@ export interface GameState {
   friendRequests: { fromId: string; fromNickname: string }[];
   friendSearchResult: { found: boolean; playerId?: string; nickname?: string } | null;
   friendInvite: { fromNickname: string; roomId: string } | null;
+  pendingInviteRoomId: string | null;
   emoteEvent: { seat: number; emoji: string; label: string; ts: number } | null;
   dbUserId: string | null;
   leaderboard: { id: string; nickname: string; xp: number; wins: number; totalGames: number }[];
@@ -214,6 +215,7 @@ const INITIAL_STATE = {
   friendRequests: [] as { fromId: string; fromNickname: string }[],
   friendSearchResult: null as { found: boolean; playerId?: string; nickname?: string } | null,
   friendInvite: null as { fromNickname: string; roomId: string } | null,
+  pendingInviteRoomId: null as string | null,
   emoteEvent: null as { seat: number; emoji: string; label: string; ts: number } | null,
   dbUserId: null as string | null,
   leaderboard: [] as { id: string; nickname: string; xp: number; wins: number; totalGames: number }[],
@@ -261,11 +263,22 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((prev) => {
       // 서버에서 빈 핸드가 왔는데 게임 진행 중이면 기존 핸드 유지 (재접속 타이밍 이슈 방지)
       const myHand = (state.myHand && state.myHand.length > 0) ? state.myHand : prev.myHand;
+      const mySeat = state.mySeat ?? prev.mySeat;
+      const currentTurn = state.currentTurn ?? prev.currentTurn;
       return {
         ...prev,
         ...state,
         myHand,
-        isMyTurn: (state.currentTurn ?? prev.currentTurn) === prev.mySeat,
+        mySeat,
+        currentTurn,
+        isMyTurn: currentTurn === mySeat,
+        // 재접속 시 UI 상태 초기화
+        selectedCards: [],
+        passedSeats: [],
+        lastPlayEvent: null,
+        trickWonEvent: null,
+        errorMsg: null,
+        turnStartedAt: Date.now(),
       };
     });
   },
@@ -289,9 +302,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   })),
 
   onCardDealt: (cards) => {
-    // 재접속 직후 지연된 cards_dealt 이벤트 무시 (game_state_sync가 이미 올바른 핸드 제공)
-    if (Date.now() - lastSyncAt < SYNC_GUARD_MS) {
-      console.log('[onCardDealt] ignoring stale cards_dealt (within sync guard window)');
+    // 재접속 직후 지연된 cards_dealt가 game_state_sync 핸드를 덮어쓰는 것 방지
+    // 단, 카드 수가 다르면 새 딜링이므로 항상 반영
+    const currentHand = get().myHand;
+    if (Date.now() - lastSyncAt < SYNC_GUARD_MS && currentHand.length === cards.length) {
+      console.log('[onCardDealt] ignoring duplicate cards_dealt (within sync guard window, same count)');
       return;
     }
     set({ myHand: cards });
@@ -436,6 +451,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   reset: () => {
     saveSession(null, -1);
+    lastSyncAt = 0;
     const { connected } = get();
     set({ ...INITIAL_STATE, connected });
   },

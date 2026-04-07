@@ -99,9 +99,9 @@ export function ProfilePage({ onBack, onEdit, onStartGame, onAchievements, showN
   // ── 전적 요약 아이템 ──────────────────────────────────────
   const Stat = ({ icon, val, label, color }: { icon: string; val: string; label: string; color?: string }) => (
     <View style={IS_MOBILE ? $.statItemMob : $.statItem}>
-      <Text style={$.statIcon}>{icon}</Text>
-      <Text style={[$.statVal, color ? { color } : null]}>{val}</Text>
-      <Text style={$.statLabel}>{label}</Text>
+      <Text style={IS_MOBILE ? $.statIconMob : $.statIcon}>{icon}</Text>
+      <Text style={[IS_MOBILE ? $.statValMob : $.statVal, color ? { color } : null]}>{val}</Text>
+      <Text style={IS_MOBILE ? $.statLabelMob : $.statLabel}>{label}</Text>
     </View>
   );
 
@@ -113,7 +113,7 @@ export function ProfilePage({ onBack, onEdit, onStartGame, onAchievements, showN
   const MainContent = () => (
     <>
       {/* 전적 요약 */}
-      <Animated.View entering={D(1)} style={$.statsCard}>
+      <Animated.View entering={D(1)} style={IS_MOBILE ? $.statsCardMob : $.statsCard}>
         {IS_MOBILE ? (
           <View style={$.statsGridMob}>
             <Stat icon="🎮" val={`${us.totalGames}`} label="총 게임" />
@@ -137,15 +137,15 @@ export function ProfilePage({ onBack, onEdit, onStartGame, onAchievements, showN
       </Animated.View>
 
       {/* 최근 전적 */}
-      <Animated.View entering={D(2)} style={$.cardImportant}>
-        <Text style={$.cardTitle}>{'최근 전적'}</Text>
+      <Animated.View entering={D(2)} style={IS_MOBILE ? $.cardMob : $.cardImportant}>
+        <Text style={IS_MOBILE ? $.cardTitleMob : $.cardTitle}>{'최근 전적'}</Text>
         {recentGames.length === 0 ? (
-          <View style={$.emptyCta}>
-            <Text style={{ fontSize: 80, marginBottom: 12, opacity: 0.7 }}>{'🃏'}</Text>
-            <Text style={$.emptyCtaMsg}>{'첫 게임을 시작해보세요!'}</Text>
+          <View style={IS_MOBILE ? $.emptyCtaMob : $.emptyCta}>
+            <Text style={{ fontSize: IS_MOBILE ? 48 : 80, marginBottom: IS_MOBILE ? 6 : 12, opacity: 0.7 }}>{'🃏'}</Text>
+            <Text style={IS_MOBILE ? $.emptyCtaMsgMob : $.emptyCtaMsg}>{'첫 게임을 시작해보세요!'}</Text>
             <Animated.View style={pulseStyle}>
-              <TouchableOpacity style={$.ctaBtn} onPress={onStartGame} activeOpacity={0.8}>
-                <Text style={$.ctaBtnText}>{'▶  첫 게임 시작하기'}</Text>
+              <TouchableOpacity style={IS_MOBILE ? $.ctaBtnMob : $.ctaBtn} onPress={onStartGame} activeOpacity={0.8}>
+                <Text style={IS_MOBILE ? $.ctaBtnTextMob : $.ctaBtnText}>{'▶  첫 게임 시작하기'}</Text>
               </TouchableOpacity>
             </Animated.View>
           </View>
@@ -172,8 +172,8 @@ export function ProfilePage({ onBack, onEdit, onStartGame, onAchievements, showN
       </Animated.View>
 
       {/* RP 변화 */}
-      <Animated.View entering={D(3)} style={$.card}>
-        <Text style={$.cardTitle}>{'RP 변화'}</Text>
+      <Animated.View entering={D(3)} style={IS_MOBILE ? $.cardMob : $.card}>
+        <Text style={IS_MOBILE ? $.cardTitleMob : $.cardTitle}>{'RP 변화'}</Text>
         {graphData.length < 2 ? (
           <View style={$.graphEmpty}>
             {/* 더미 점선 배경 */}
@@ -201,7 +201,7 @@ export function ProfilePage({ onBack, onEdit, onStartGame, onAchievements, showN
       </Animated.View>
 
       {/* 업적 */}
-      <Animated.View entering={D(4)} style={$.card}>
+      <Animated.View entering={D(4)} style={IS_MOBILE ? $.cardMob : $.card}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <Text style={$.cardTitle}>{'업적'}</Text>
           <Text style={{ color: C.accent, fontSize: 12, fontWeight: '700' }}>{unlockedCount}{' / '}{achievements.length}</Text>
@@ -217,21 +217,21 @@ export function ProfilePage({ onBack, onEdit, onStartGame, onAchievements, showN
         <TouchableOpacity onPress={onAchievements}><Text style={$.achMore}>{'더보기 ›'}</Text></TouchableOpacity>
       </Animated.View>
 
-      {/* 시즌 + 파트너 (한 줄) */}
-      <Animated.View entering={D(5)} style={$.card}>
-        <Text style={$.cardTitle}>{'시즌 보상'}</Text>
+      {/* 시즌 + 파트너 */}
+      <Animated.View entering={D(5)} style={IS_MOBILE ? $.cardMob : $.card}>
+        <Text style={IS_MOBILE ? $.cardTitleMob : $.cardTitle}>{'시즌 보상'}</Text>
         <Text style={$.subText}>{seasonInfo ? `${seasonInfo.seasonName} · ${seasonInfo.myRating} RP · #${seasonInfo.myRank} · 남은 ${seasonInfo.remainingDays}일` : '시즌 종료 시 티어에 따라 보상이 지급됩니다'}</Text>
       </Animated.View>
-      <Animated.View entering={D(6)} style={$.card}>
-        <Text style={$.cardTitle}>{'파트너 케미'}</Text>
+      <Animated.View entering={D(6)} style={IS_MOBILE ? $.cardMob : $.card}>
+        <Text style={IS_MOBILE ? $.cardTitleMob : $.cardTitle}>{'파트너 케미'}</Text>
         <Text style={$.subText}>{'데이터 수집 중 — 더 많은 게임을 플레이해주세요'}</Text>
       </Animated.View>
     </>
   );
 
   const Sidebar = () => (
-    <Animated.View entering={D(2)} style={$.sideCard}>
-      <Text style={$.cardTitle}>{'리더보드'}</Text>
+    <Animated.View entering={D(2)} style={IS_MOBILE ? $.sideCardMob : $.sideCard}>
+      <Text style={IS_MOBILE ? $.cardTitleMob : $.cardTitle}>{'리더보드'}</Text>
       <View style={$.lbTabs}>
         {(['all', 'friends', 'weekly'] as const).map(t => (
           <TouchableOpacity key={t} style={[$.lbTab, lbTab === t && $.lbTabActive]} onPress={() => setLbTab(t)} accessibilityRole="button">
@@ -270,33 +270,70 @@ export function ProfilePage({ onBack, onEdit, onStartGame, onAchievements, showN
     <SafeAreaView style={$.root}>
       <BackgroundWatermark />
       <ScrollView style={{ flex: 1, zIndex: 5 }} contentContainerStyle={IS_MOBILE ? $.scrollMob : $.scrollPC}>
-        {/* 1. 프로필 헤더 (풀 와이드) */}
-        <Animated.View entering={D(0)} style={$.headerCard}>
-          <TouchableOpacity style={$.backBtn} onPress={onBack} accessibilityLabel="뒤로가기"><Text style={$.backT}>{'←'}</Text></TouchableOpacity>
-          <TouchableOpacity style={$.editBtn} onPress={onEdit} accessibilityLabel="프로필 편집"><Text style={$.editT}>{'✏️'}</Text></TouchableOpacity>
-          <View style={$.headerCenter}>
-            <View style={[$.avatar, { borderColor: frame.border, shadowColor: frame.shadow }]}>
-              <Text style={$.avatarEmoji}>{avatarEmoji}</Text>
-              <View style={[$.lvBadge, { backgroundColor: myTier.color }]}><Text style={$.lvT}>{level}</Text></View>
-            </View>
-            <Text style={$.nick}>{name}</Text>
-            {activeTitle ? (
-              <TouchableOpacity onPress={() => setShowTitlePicker(true)}><Text style={$.titleT}>{activeTitle.icon} {activeTitle.name}</Text></TouchableOpacity>
-            ) : (
-              <TouchableOpacity onPress={() => setShowTitlePicker(true)}><Text style={$.titleE}>{'칭호를 선택해보세요 ›'}</Text></TouchableOpacity>
-            )}
-            <View style={[$.tierChip, { borderColor: myTier.color, backgroundColor: `${myTier.color}18` }]}>
-              <Text style={[$.tierChipT, { color: myTier.color }]}>{myTier.icon} {myTier.name}</Text>
-            </View>
-          </View>
-          {/* XP 바 (강화) */}
-          <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: xpPct }}>
-            <Text style={$.xpCenter}>{us.xp}{' / '}{isMax ? '∞' : myTier.max}{' RP'}</Text>
-            <View style={$.xpTrack}>
-              <Animated.View style={[$.xpFill, xpAnimStyle]} />
-              {!isMax && <Text style={$.xpNextIcon}>{nextTier.icon}</Text>}
-            </View>
-          </View>
+        {/* 1. 프로필 헤더 */}
+        <Animated.View entering={D(0)} style={IS_MOBILE ? $.headerCardMob : $.headerCard}>
+          {IS_MOBILE ? (
+            /* 모바일: 가로 레이아웃 (아바타 좌 | 정보 우) */
+            <>
+              <View style={$.mobHeaderRow}>
+                <TouchableOpacity style={$.backBtnMob} onPress={onBack} accessibilityLabel="뒤로가기"><Text style={$.backT}>{'←'}</Text></TouchableOpacity>
+                <View style={[$.avatarMob, { borderColor: frame.border, shadowColor: frame.shadow }]}>
+                  <Text style={$.avatarEmojiMob}>{avatarEmoji}</Text>
+                  <View style={[$.lvBadgeMob, { backgroundColor: myTier.color }]}><Text style={$.lvT}>{level}</Text></View>
+                </View>
+                <View style={$.mobHeaderInfo}>
+                  <Text style={$.nickMob} numberOfLines={1}>{name}</Text>
+                  {activeTitle ? (
+                    <TouchableOpacity onPress={() => setShowTitlePicker(true)}><Text style={$.titleTMob}>{activeTitle.icon} {activeTitle.name}</Text></TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity onPress={() => setShowTitlePicker(true)}><Text style={$.titleE}>{'칭호를 선택해보세요 ›'}</Text></TouchableOpacity>
+                  )}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                    <View style={[$.tierChipMob, { borderColor: myTier.color, backgroundColor: `${myTier.color}18` }]}>
+                      <Text style={[$.tierChipTMob, { color: myTier.color }]}>{myTier.icon} {myTier.name}</Text>
+                    </View>
+                  </View>
+                </View>
+                <TouchableOpacity style={$.editBtnMob} onPress={onEdit} accessibilityLabel="프로필 편집"><Text style={$.editT}>{'✏️'}</Text></TouchableOpacity>
+              </View>
+              {/* XP 바 */}
+              <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: xpPct }} style={{ marginTop: 8 }}>
+                <Text style={$.xpCenterMob}>{us.xp}{' / '}{isMax ? '∞' : myTier.max}{' RP'}</Text>
+                <View style={$.xpTrackMob}>
+                  <Animated.View style={[$.xpFill, xpAnimStyle]} />
+                  {!isMax && <Text style={$.xpNextIcon}>{nextTier.icon}</Text>}
+                </View>
+              </View>
+            </>
+          ) : (
+            /* PC: 기존 세로 레이아웃 */
+            <>
+              <TouchableOpacity style={$.backBtn} onPress={onBack} accessibilityLabel="뒤로가기"><Text style={$.backT}>{'←'}</Text></TouchableOpacity>
+              <TouchableOpacity style={$.editBtn} onPress={onEdit} accessibilityLabel="프로필 편집"><Text style={$.editT}>{'✏️'}</Text></TouchableOpacity>
+              <View style={$.headerCenter}>
+                <View style={[$.avatar, { borderColor: frame.border, shadowColor: frame.shadow }]}>
+                  <Text style={$.avatarEmoji}>{avatarEmoji}</Text>
+                  <View style={[$.lvBadge, { backgroundColor: myTier.color }]}><Text style={$.lvT}>{level}</Text></View>
+                </View>
+                <Text style={$.nick}>{name}</Text>
+                {activeTitle ? (
+                  <TouchableOpacity onPress={() => setShowTitlePicker(true)}><Text style={$.titleT}>{activeTitle.icon} {activeTitle.name}</Text></TouchableOpacity>
+                ) : (
+                  <TouchableOpacity onPress={() => setShowTitlePicker(true)}><Text style={$.titleE}>{'칭호를 선택해보세요 ›'}</Text></TouchableOpacity>
+                )}
+                <View style={[$.tierChip, { borderColor: myTier.color, backgroundColor: `${myTier.color}18` }]}>
+                  <Text style={[$.tierChipT, { color: myTier.color }]}>{myTier.icon} {myTier.name}</Text>
+                </View>
+              </View>
+              <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: xpPct }}>
+                <Text style={$.xpCenter}>{us.xp}{' / '}{isMax ? '∞' : myTier.max}{' RP'}</Text>
+                <View style={$.xpTrack}>
+                  <Animated.View style={[$.xpFill, xpAnimStyle]} />
+                  {!isMax && <Text style={$.xpNextIcon}>{nextTier.icon}</Text>}
+                </View>
+              </View>
+            </>
+          )}
         </Animated.View>
 
         {/* 2~8. 반응형 */}
@@ -308,7 +345,6 @@ export function ProfilePage({ onBack, onEdit, onStartGame, onAchievements, showN
         ) : (
           <>
             <MainContent />
-            {/* 모바일/태블릿: 리더보드 아코디언 */}
             <Sidebar />
           </>
         )}
@@ -353,10 +389,10 @@ export function ProfilePage({ onBack, onEdit, onStartGame, onAchievements, showN
 // ── 스타일 ──────────────────────────────────────────────────
 const $ = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-  scrollMob: { paddingHorizontal: 12, paddingBottom: 20, maxWidth: 600, alignSelf: 'center', width: '100%' },
+  scrollMob: { paddingHorizontal: 8, paddingBottom: 16, maxWidth: 600, alignSelf: 'center', width: '100%' },
   scrollPC: { paddingHorizontal: 24, paddingBottom: 20, maxWidth: 1200, alignSelf: 'center', width: '100%' },
 
-  // 헤더
+  // 헤더 (PC)
   headerCard: { backgroundColor: C.cardImportant, borderRadius: 16, padding: 20, marginBottom: 20, borderWidth: 1, borderColor: C.border, position: 'relative' },
   headerCenter: { alignItems: 'center', marginBottom: 12 },
   backBtn: { position: 'absolute', top: 14, left: 14, zIndex: 10, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
@@ -373,34 +409,62 @@ const $ = StyleSheet.create({
   tierChip: { borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 3, marginBottom: 8 },
   tierChipT: { fontSize: 12, fontWeight: '800' },
 
-  // XP 바 (강화)
+  // 헤더 (모바일) — 가로 레이아웃
+  headerCardMob: { backgroundColor: C.cardImportant, borderRadius: 12, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: C.border },
+  mobHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  backBtnMob: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
+  editBtnMob: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
+  avatarMob: { width: 52, height: 52, borderRadius: 26, borderWidth: 2.5, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
+  avatarEmojiMob: { fontSize: 26 },
+  lvBadgeMob: { position: 'absolute', bottom: -2, right: -2, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(0,0,0,0.5)' },
+  mobHeaderInfo: { flex: 1 },
+  nickMob: { color: C.text, fontSize: 16, fontWeight: '900' },
+  titleTMob: { color: C.accent, fontSize: 11, fontWeight: '700' },
+  tierChipMob: { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+  tierChipTMob: { fontSize: 11, fontWeight: '800' },
+
+  // XP 바 (PC)
   xpCenter: { color: C.sub, fontSize: 12, fontWeight: '800', textAlign: 'center', marginBottom: 4 },
   xpTrack: { height: 10, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 5, overflow: 'hidden', position: 'relative' },
   xpFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 5, backgroundColor: C.mint },
   xpNextIcon: { position: 'absolute', right: 4, top: -1, fontSize: 10 },
+  // XP 바 (모바일)
+  xpCenterMob: { color: C.sub, fontSize: 11, fontWeight: '800', textAlign: 'center', marginBottom: 2 },
+  xpTrackMob: { height: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden', position: 'relative' },
 
   // 전적 요약
   statsCard: { backgroundColor: C.cardImportant, borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: C.border },
+  statsCardMob: { backgroundColor: C.cardImportant, borderRadius: 10, padding: 8, marginBottom: 10, borderWidth: 1, borderColor: C.border },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around' },
   statsGridMob: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around' },
   statItem: { alignItems: 'center', paddingVertical: 6, minWidth: 80 },
-  statItemMob: { alignItems: 'center', paddingVertical: 6, width: '33%' as any },
+  statItemMob: { alignItems: 'center', paddingVertical: 3, width: '33%' as any },
   statIcon: { fontSize: 16, marginBottom: 2 },
+  statIconMob: { fontSize: 13, marginBottom: 1 },
   statVal: { color: C.text, fontSize: 24, fontWeight: '900' },
+  statValMob: { color: C.text, fontSize: 18, fontWeight: '900' },
   statLabel: { color: C.sub, fontSize: 11, fontWeight: '600', marginTop: 2 },
+  statLabelMob: { color: C.sub, fontSize: 9, fontWeight: '600', marginTop: 1 },
   statsHint: { color: C.dim, fontSize: 11, fontWeight: '600', textAlign: 'center', marginTop: 8 },
 
   // 카드
   card: { backgroundColor: C.card, borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: C.border },
+  cardMob: { backgroundColor: C.card, borderRadius: 10, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: C.border },
   cardImportant: { backgroundColor: C.cardImportant, borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: C.border },
   cardTitle: { color: C.text, fontSize: 15, fontWeight: '800', marginBottom: 10 },
+  cardTitleMob: { color: C.text, fontSize: 13, fontWeight: '800', marginBottom: 6 },
   subText: { color: C.sub, fontSize: 12, fontWeight: '600' },
 
-  // CTA
+  // CTA (PC)
   emptyCta: { alignItems: 'center', paddingVertical: 24 },
   emptyCtaMsg: { color: C.sub, fontSize: 15, fontWeight: '600', marginBottom: 18 },
   ctaBtn: { backgroundColor: C.accent, borderRadius: 14, paddingHorizontal: 32, paddingVertical: 14, shadowColor: C.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6 },
   ctaBtnText: { color: '#fff', fontSize: 16, fontWeight: '900', textAlign: 'center' },
+  // CTA (모바일)
+  emptyCtaMob: { alignItems: 'center', paddingVertical: 12 },
+  emptyCtaMsgMob: { color: C.sub, fontSize: 13, fontWeight: '600', marginBottom: 10 },
+  ctaBtnMob: { backgroundColor: C.accent, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10, shadowColor: C.accent, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 },
+  ctaBtnTextMob: { color: '#fff', fontSize: 14, fontWeight: '900', textAlign: 'center' },
 
   // 도트
   dotsRow: { flexDirection: 'row', gap: 6, marginBottom: 10, justifyContent: 'center' },
@@ -426,6 +490,7 @@ const $ = StyleSheet.create({
 
   // 리더보드
   sideCard: { backgroundColor: C.card, borderRadius: 14, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: C.border },
+  sideCardMob: { backgroundColor: C.card, borderRadius: 10, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: C.border },
   lbTabs: { flexDirection: 'row', gap: 4, marginBottom: 10 },
   lbTab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.04)', position: 'relative' },
   lbTabActive: { backgroundColor: 'rgba(255,255,255,0.1)' },

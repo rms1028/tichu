@@ -593,8 +593,11 @@ function handleDragonGive(
 
   if (activeOpponents.length === 0) {
     // Edge #6: 상대 모두 나감 → 먼저 나간 상대의 wonTricks에
-    const firstFinishedOpponent = room.finishOrder.find(s => opponents.includes(s))!;
-    room.wonTricks[firstFinishedOpponent]!.push(...trickCards);
+    const firstFinishedOpponent = room.finishOrder.find(s => opponents.includes(s));
+    if (firstFinishedOpponent !== undefined) {
+      if (!room.wonTricks[firstFinishedOpponent]) room.wonTricks[firstFinishedOpponent] = [];
+      room.wonTricks[firstFinishedOpponent].push(...trickCards);
+    }
     return startNewTrick(room, winningSeat, events);
   }
 
@@ -622,7 +625,8 @@ export function dragonGive(room: GameRoom, seat: number, targetSeat: number): En
     return { ok: false, error: 'must_give_to_opponent', events: [] };
   }
 
-  room.wonTricks[targetSeat]!.push(...room.dragonGivePending.trickCards);
+  if (!room.wonTricks[targetSeat]) room.wonTricks[targetSeat] = [];
+  room.wonTricks[targetSeat].push(...room.dragonGivePending.trickCards);
 
   if (room.dragonGivePending.timeoutHandle) {
     clearTimeout(room.dragonGivePending.timeoutHandle);
@@ -725,8 +729,9 @@ function endRound(room: GameRoom): GameEvent[] {
   room.phase = 'ROUND_END';
   events.push({ type: 'phase_changed', phase: 'ROUND_END' });
 
-  const fourth = room.finishOrder[3]!;
-  const lastPlayerHand = room.hands[fourth] ?? [];
+  // C4: finishOrder가 4명 미만일 수 있는 경우 안전 처리
+  const fourth = room.finishOrder[3];
+  const lastPlayerHand = fourth !== undefined ? (room.hands[fourth] ?? []) : [];
 
   const result = calculateRoundScore({
     wonTricks: room.wonTricks as Record<number, Card[]>,

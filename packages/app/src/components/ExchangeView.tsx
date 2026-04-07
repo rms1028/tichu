@@ -124,28 +124,38 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
     const isActive = activeTarget === target;
     const card = assignments[target];
 
+    const tichuColor = decl === 'large' ? '#e74c3c' : '#f39c12';
+
     return (
       <TouchableOpacity
         key={target}
-        style={[S.playerSlot, isActive && S.playerSlotActive]}
+        style={[
+          S.playerSlot,
+          isActive && S.playerSlotActive,
+          decl && S.playerSlotTichu,
+          decl && { borderColor: tichuColor, shadowColor: tichuColor },
+        ]}
         onPress={() => handleTargetPress(target)}
         activeOpacity={0.7}
       >
+        {decl && (
+          <View style={[S.tichuBanner, { backgroundColor: tichuColor }]}>
+            <Text style={S.tichuBannerText}>
+              {decl === 'large' ? '🔥 라지 티츄' : '⭐ 스몰 티츄'}
+            </Text>
+          </View>
+        )}
         <View style={[
           S.avatarLg,
-          { borderColor: isTeam1 ? '#3B82F6' : '#EF4444' },
+          { borderColor: decl ? tichuColor : (isTeam1 ? '#3B82F6' : '#EF4444') },
           isActive && S.avatarActive,
+          decl && { shadowColor: tichuColor, shadowOpacity: 0.8, shadowRadius: 12, elevation: 8 },
         ]}>
           <Text style={S.avatarLgEmoji}>{avatars[seat]}</Text>
         </View>
-        <Text style={[S.playerNick, isActive && S.playerNickActive]} numberOfLines={1}>
+        <Text style={[S.playerNick, isActive && S.playerNickActive, decl && { color: tichuColor }]} numberOfLines={1}>
           {label} {p.nickname}
         </Text>
-        {decl ? (
-          <View style={[S.tichuTag, decl === 'large' && S.tichuTagLarge]}>
-            <Text style={S.tichuTagText}>{decl === 'large' ? '🔥라지' : '⭐스몰'}</Text>
-          </View>
-        ) : null}
         {/* 카드 슬롯 */}
         <View style={S.cardSlotWrap}>
           {card ? (
@@ -319,6 +329,26 @@ const S = StyleSheet.create({
     borderColor: '#F59E0B',
     backgroundColor: 'rgba(245,158,11,0.1)',
   },
+  playerSlotTichu: {
+    borderWidth: 2,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  tichuBanner: {
+    borderRadius: 8,
+    paddingHorizontal: mob(8, 12),
+    paddingVertical: mob(2, 3),
+    marginBottom: mob(2, 4),
+  },
+  tichuBannerText: {
+    color: '#fff',
+    fontSize: mob(10, 13),
+    fontWeight: '900',
+    textAlign: 'center',
+  },
   avatarLg: {
     width: mob(38, 50),
     height: mob(38, 50),
@@ -375,10 +405,7 @@ const S = StyleSheet.create({
     fontWeight: '300',
   },
 
-  // 티츄 태그
-  tichuTag: { backgroundColor: 'rgba(243,156,18,0.25)', borderRadius: 6, paddingHorizontal: mob(4, 8), paddingVertical: 1, borderWidth: 1, borderColor: 'rgba(243,156,18,0.5)' },
-  tichuTagLarge: { backgroundColor: 'rgba(231,76,60,0.25)', borderColor: 'rgba(231,76,60,0.5)' },
-  tichuTagText: { color: '#fff', fontSize: mob(8, 11), fontWeight: '800' },
+  // 티츄 버튼/배지
   tichuBtn: { backgroundColor: 'rgba(243,156,18,0.15)', borderWidth: 1.5, borderColor: 'rgba(243,156,18,0.5)', borderRadius: 10, paddingHorizontal: mob(12, 18), paddingVertical: mob(6, 8) },
   tichuBtnText: { color: '#F59E0B', fontSize: mob(13, 16), fontWeight: '800' },
   tichuBadge: { backgroundColor: 'rgba(243,156,18,0.2)', borderWidth: 1, borderColor: '#f39c12', borderRadius: 8, paddingHorizontal: mob(10, 14), paddingVertical: mob(3, 5) },

@@ -238,7 +238,11 @@ function AppInner() {
     );
   }
 
-  // 결과 화면
+  // 결과 화면 — gameOver가 null이면 로비로 복귀
+  if (screen === 'result' && !gameOver) {
+    setScreen('lobby');
+    return null;
+  }
   if (screen === 'result' && gameOver) {
     const myTeam = mySeat === 0 || mySeat === 2 ? 'team1' : 'team2';
     const isWin = gameOver.winner === myTeam;

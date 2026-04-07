@@ -44,6 +44,10 @@ import {
 } from './ranking.js';
 import { prisma } from './db.js';
 import { verifyIdToken } from './firebase-admin.js';
+import {
+  registerPushToken, removePushToken,
+  notifyFriendRequest, notifyFriendInvite,
+} from './notification.js';
 
 // ── 입력 검증 헬퍼 ──────────────────────────────────────────
 
@@ -93,18 +97,41 @@ setInterval(() => {
 // ── 방 관리 ──────────────────────────────────────────────────
 
 const rooms = new Map<string, GameRoom>();
+const MAX_TOTAL_ROOMS = 500;
+const MAX_ROOMS_PER_USER = 3;
+const ROOM_LIST_SOCKET_ROOM = '__lobby__';
+
+// 유저별 활성 방 수 추적
+const userRoomCount = new Map<string, number>();
+
+function incrementUserRoomCount(playerId: string): void {
+  userRoomCount.set(playerId, (userRoomCount.get(playerId) ?? 0) + 1);
+}
+function decrementUserRoomCount(playerId: string): void {
+  const count = (userRoomCount.get(playerId) ?? 1) - 1;
+  if (count <= 0) userRoomCount.delete(playerId);
+  else userRoomCount.set(playerId, count);
+}
 
 export function getRooms(): Map<string, GameRoom> {
   return rooms;
 }
 
-export function getOrCreateRoom(roomId: string): GameRoom {
-  let room = rooms.get(roomId);
-  if (!room) {
-    room = createGameRoom(roomId);
-    rooms.set(roomId, room);
-  }
-  return room;
+/** 방 목록을 보고 있는 소켓에게만 rooms_updated 발송 */
+function notifyLobby(io: Server): void {
+  io.to(ROOM_LIST_SOCKET_ROOM).emit('rooms_updated');
+}
+
+/** HTML 특수문자 이스케이프 (XSS 방지) */
+function sanitize(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** 방 ID 생성 (충돌 방지: crypto random) */
+function generateRoomId(): string {
+  const ts = Date.now().toString(36);
+  const rand = Array.from({ length: 8 }, () => Math.random().toString(36).charAt(2)).join('');
+  return `custom_${ts}_${rand}`;
 }
 
 // ── 정보 가시성 필터링 (섹션 5.6) ────────────────────────────
@@ -363,14 +390,22 @@ export function registerSocketHandlers(io: Server): void {
       } catch (err) { console.error('[claim_season_reward]', err); }
     });
 
-    // ── 커스텀 방 목록 ─────────────────────────────────────
-    socket.on('list_rooms', () => {
+    // ── 커스텀 방 목록 (로비 구독 + 페이지네이션) ─────────────
+    socket.on('list_rooms', (data?: { limit?: number; offset?: number }) => {
+      // 로비 소켓 룸에 참가 (rooms_updated를 여기만 수신)
+      socket.join(ROOM_LIST_SOCKET_ROOM);
+
+      const limit = Math.min(data?.limit ?? 50, 100);
+      const offset = data?.offset ?? 0;
       const roomList: { roomId: string; roomName: string; playerCount: number; hasPassword: boolean }[] = [];
+      let skipped = 0;
       for (const [id, room] of rooms) {
         if (!room.settings.isCustom) continue;
         if (room.phase !== 'WAITING_FOR_PLAYERS') continue;
         const playerCount = [0, 1, 2, 3].filter(s => room.players[s] !== null).length;
         if (playerCount >= 4) continue;
+        if (skipped < offset) { skipped++; continue; }
+        if (roomList.length >= limit) break;
         roomList.push({
           roomId: id,
           roomName: room.settings.roomName ?? id,
@@ -379,6 +414,11 @@ export function registerSocketHandlers(io: Server): void {
         });
       }
       socket.emit('room_list', { rooms: roomList });
+    });
+
+    // 로비에서 나갈 때 구독 해제
+    socket.on('leave_lobby', () => {
+      socket.leave(ROOM_LIST_SOCKET_ROOM);
     });
 
     // ── 커스텀 방 생성 ──────────────────────────────────────
@@ -393,22 +433,38 @@ export function registerSocketHandlers(io: Server): void {
       if (data.password !== undefined && data.password !== null && !isValidPassword(data.password)) {
         socket.emit('error', { message: 'password_too_long' }); return;
       }
-      const roomId = `custom_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-      const room = getOrCreateRoom(roomId);
+
+      // 전체 방 수 제한
+      if (rooms.size >= MAX_TOTAL_ROOMS) {
+        socket.emit('error', { message: 'too_many_rooms' }); return;
+      }
+      // 유저당 방 수 제한
+      if ((userRoomCount.get(data.playerId) ?? 0) >= MAX_ROOMS_PER_USER) {
+        socket.emit('error', { message: 'too_many_rooms_per_user' }); return;
+      }
+      // 이미 다른 방에 있으면 거부
+      if (playerRoomId) {
+        socket.emit('error', { message: 'already_in_room' }); return;
+      }
+
+      const roomId = generateRoomId();
+      const room = createGameRoom(roomId);
+      rooms.set(roomId, room);
       room.settings.isCustom = true;
-      room.settings.roomName = data.roomName || '티츄 방';
+      room.settings.roomName = sanitize(data.roomName || '티츄 방');
       if (data.password) room.settings.password = data.password;
       room.hostPlayerId = data.playerId;
 
       // 방장 seat 0으로 입장
       room.players[0] = {
         playerId: data.playerId,
-        nickname: data.nickname,
+        nickname: sanitize(data.nickname),
         socketId: socket.id,
         connected: true,
         isBot: false,
       };
 
+      incrementUserRoomCount(data.playerId);
       playerRoomId = roomId;
       playerSeat = 0;
       socket.join(roomId);
@@ -422,8 +478,8 @@ export function registerSocketHandlers(io: Server): void {
       socket.emit('room_joined', { seat: 0, roomId, players: playersInfo, hostPlayerId: room.hostPlayerId });
       playerOnline({ playerId: data.playerId, nickname: data.nickname, socketId: socket.id, status: 'ingame', roomId });
 
-      // 전체에게 방 목록 갱신 알림
-      io.emit('rooms_updated');
+      // 로비 유저에게만 방 목록 갱신 알림
+      notifyLobby(io);
     });
 
     // ── join_room ──────────────────────────────────────────
@@ -435,7 +491,13 @@ export function registerSocketHandlers(io: Server): void {
       if (typeof data.roomId !== 'string' || data.roomId.length === 0 || data.roomId.length > 60) {
         socket.emit('error', { message: 'invalid_input' }); return;
       }
-      const room = getOrCreateRoom(data.roomId);
+      const room = rooms.get(data.roomId);
+      if (!room) { socket.emit('error', { message: 'room_not_found' }); return; }
+
+      // 이미 다른 방에 있으면 거부
+      if (playerRoomId && playerRoomId !== data.roomId) {
+        socket.emit('error', { message: 'already_in_room' }); return;
+      }
 
       // 비밀번호 체크
       if (room.settings.password && room.settings.password !== data.password) {
@@ -462,15 +524,18 @@ export function registerSocketHandlers(io: Server): void {
 
       room.players[seat] = {
         playerId: data.playerId,
-        nickname: data.nickname,
+        nickname: sanitize(data.nickname),
         socketId: socket.id,
         connected: true,
         isBot: false,
       };
 
+      incrementUserRoomCount(data.playerId);
       playerRoomId = data.roomId;
       playerSeat = seat;
       socket.join(data.roomId);
+      // 게임 방에 들어가면 로비 구독 해제
+      socket.leave(ROOM_LIST_SOCKET_ROOM);
 
       // 현재 플레이어 목록 구성
       const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
@@ -495,6 +560,7 @@ export function registerSocketHandlers(io: Server): void {
       if (filledSeats.length === 4 && room.phase === 'WAITING_FOR_PLAYERS' && !room.settings.isCustom) {
         const events = startRound(room);
         broadcastEvents(io, room, events);
+        notifyLobby(io);
         scheduleBotLargeTichu(io, room);
         startLargeTichuTimer(io, room);
       }
@@ -533,6 +599,7 @@ export function registerSocketHandlers(io: Server): void {
       }
       const events = startRound(room);
       broadcastEvents(io, room, events);
+      notifyLobby(io);
       scheduleBotLargeTichu(io, room);
       startLargeTichuTimer(io, room);
     });
@@ -575,6 +642,7 @@ export function registerSocketHandlers(io: Server): void {
         if (filledSeats.length === 4) {
           const events = startRound(room);
           broadcastEvents(io, room, events);
+          notifyLobby(io);
           scheduleBotLargeTichu(io, room);
           startLargeTichuTimer(io, room);
         }
@@ -777,6 +845,8 @@ export function registerSocketHandlers(io: Server): void {
             player.connected = false;
             player.disconnectedAt = Date.now();
             io.to(savedRoomId).emit('player_disconnected', { seat: savedSeat });
+            // M5: 기존 타이머 취소 후 새 타이머
+            if (player.botReplaceTimer) clearTimeout(player.botReplaceTimer);
             const capturedRoomId = savedRoomId;
             const capturedSeat = savedSeat;
             player.botReplaceTimer = setTimeout(() => {
@@ -786,9 +856,14 @@ export function registerSocketHandlers(io: Server): void {
         }
       }
 
+      // 유저 방 카운트 감소
+      if (room && savedSeat >= 0) {
+        const pid = room.players[savedSeat]?.playerId ?? room.players[savedSeat]?.originalPlayer?.playerId;
+        if (pid) decrementUserRoomCount(pid);
+      }
       playerRoomId = null;
       playerSeat = -1;
-      io.emit('rooms_updated');
+      notifyLobby(io);
     });
 
     // ── rejoin_room ────────────────────────────────────────
@@ -835,6 +910,10 @@ export function registerSocketHandlers(io: Server): void {
       player.connected = true;
       player.disconnectedAt = undefined;
 
+      // 이전 소켓 룸 정리 후 새 룸 참가 (C2: 중복 수신 방지)
+      for (const r of socket.rooms) {
+        if (r !== socket.id) socket.leave(r);
+      }
       playerRoomId = data.roomId;
       playerSeat = seat;
       socket.join(data.roomId);
@@ -1022,11 +1101,17 @@ export function registerSocketHandlers(io: Server): void {
       for (let s = 0; s < 4; s++) counts[s] = room.hands[s]!.length;
       io.to(room.roomId).emit('hand_counts', { counts });
 
-      // 폭탄 낸 다음 사람에게 턴 이전
+      // 폭탄 낸 다음 사람에게 턴 이전 (M3: 2인 시나리오 안전 처리)
       const active = getActivePlayers(room);
       let nextSeat = (playerSeat + 1) % 4;
-      while (!active.includes(nextSeat) && nextSeat !== playerSeat) {
+      let loopCount = 0;
+      while (!active.includes(nextSeat) && loopCount < 4) {
         nextSeat = (nextSeat + 1) % 4;
+        loopCount++;
+      }
+      // 2인만 남은 경우 자기 자신으로 돌아오면 상대방에게 턴
+      if (nextSeat === playerSeat && active.length > 1) {
+        nextSeat = active.find(s => s !== playerSeat) ?? playerSeat;
       }
       room.currentTurn = nextSeat;
       handlePostPlay(io, room);
@@ -1123,6 +1208,10 @@ export function registerSocketHandlers(io: Server): void {
         if (target) {
           io.to(target.socketId).emit('friend_request_received', { fromId: data.fromId, fromNickname: data.fromNickname });
         }
+        // 오프라인이면 푸시 알림
+        if (!target) {
+          notifyFriendRequest(data.toId, data.fromNickname).catch(err => console.error('[push] friend_request error:', err));
+        }
         // 자동 수락된 경우 양쪽에 친구 목록 갱신
         if (result.autoAccepted) {
           await emitFriendList(socket, data.fromId);
@@ -1192,6 +1281,29 @@ export function registerSocketHandlers(io: Server): void {
       const target = getOnlinePlayer(data.toId);
       if (target) {
         io.to(target.socketId).emit('friend_invite_received', { fromNickname: data.fromNickname, roomId: data.roomId });
+      }
+      // 오프라인이면 푸시 알림
+      if (!target) {
+        notifyFriendInvite(data.toId, data.fromNickname, data.roomId).catch(err => console.error('[push] friend_invite error:', err));
+      }
+    });
+
+    // ── 푸시 토큰 등록 ────────────────────────────────────────
+    socket.on('register_push_token', async (data: { userId: string; token: string; platform: string }) => {
+      if (!data.userId || !data.token || !data.platform) return;
+      try {
+        await registerPushToken(data.userId, data.token, data.platform);
+      } catch (err) {
+        console.error('[register_push_token] error:', err);
+      }
+    });
+
+    socket.on('unregister_push_token', async (data: { token: string }) => {
+      if (!data.token) return;
+      try {
+        await removePushToken(data.token);
+      } catch (err) {
+        console.error('[unregister_push_token] error:', err);
       }
     });
 
@@ -1340,10 +1452,12 @@ export function registerSocketHandlers(io: Server): void {
               io.to(savedRoomId2).emit('player_left', { seat: savedSeat2 });
               broadcastSeats(io, r);
             }
-            io.emit('rooms_updated');
+            notifyLobby(io);
           }, 30_000);
         } else if (room.phase !== 'GAME_OVER' && !player.isBot) {
           // 게임 진행 중이면 10초 후 봇 대체 예약
+          // C3: 기존 타이머 취소
+          if (player.botReplaceTimer) clearTimeout(player.botReplaceTimer);
           const savedRoomId = playerRoomId;
           const savedSeat = playerSeat;
           player.botReplaceTimer = setTimeout(() => {
@@ -1489,6 +1603,10 @@ export function registerSocketHandlers(io: Server): void {
       clearTimeout((room as any)._bombWindowTimer);
       delete (room as any)._bombWindowTimer;
     }
+    if ((room as any)._botDragonTimer) {
+      clearTimeout((room as any)._botDragonTimer);
+      delete (room as any)._botDragonTimer;
+    }
     room.bombWindow = null;
     for (let s = 0; s < 4; s++) {
       const p = room.players[s];
@@ -1503,10 +1621,25 @@ export function registerSocketHandlers(io: Server): void {
   if (!(globalThis as any).__roomCleanupTimer) {
     (globalThis as any).__roomCleanupTimer = setInterval(() => {
       const now = Date.now();
+      let deleted = 0;
       for (const [id, room] of rooms) {
         if (room.phase === 'GAME_OVER') {
           cleanupRoom(room);
           rooms.delete(id);
+          deleted++;
+          continue;
+        }
+        // WAITING 상태 방 30분 자동 만료 (좀비 방 방지)
+        if (room.phase === 'WAITING_FOR_PLAYERS' && now - room.createdAt > 30 * 60_000) {
+          // 연결된 플레이어에게 알림
+          io.to(id).emit('room_closed', { reason: 'room_expired' });
+          for (let s = 0; s < 4; s++) {
+            const p = room.players[s];
+            if (p?.playerId) decrementUserRoomCount(p.playerId);
+          }
+          cleanupRoom(room);
+          rooms.delete(id);
+          deleted++;
           continue;
         }
         // 모든 플레이어 끊긴 지 5분 지난 방 삭제
@@ -1519,11 +1652,17 @@ export function registerSocketHandlers(io: Server): void {
             .map(s => room.players[s]?.disconnectedAt ?? 0)
             .reduce((a, b) => Math.max(a, b), 0);
           if (lastDisconnect > 0 && now - lastDisconnect > 300_000) {
+            for (let s = 0; s < 4; s++) {
+              const p = room.players[s];
+              if (p?.playerId) decrementUserRoomCount(p.playerId);
+            }
             cleanupRoom(room);
             rooms.delete(id);
+            deleted++;
           }
         }
       }
+      if (deleted > 0) notifyLobby(io);
     }, 60_000);
   }
 }
@@ -1534,8 +1673,9 @@ function formAndStartMatch(io: Server): void {
   const players = pullPlayers(4);
   if (players.length === 0) return;
 
-  const roomId = `match_${Date.now().toString(36)}`;
-  const room = getOrCreateRoom(roomId);
+  const roomId = `match_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const room = createGameRoom(roomId);
+  rooms.set(roomId, room);
 
   // 실제 플레이어 배치
   let seat = 0;
@@ -1905,7 +2045,7 @@ function handlePostPlay(io: Server, room: GameRoom): void {
     }
     room.bombWindow = null;
     // DB에 게임 결과 기록 + 보상 전송
-    recordGameResults(io, room);
+    recordGameResults(io, room).catch(err => console.error('[recordGameResults] error:', err));
     return;
   }
 
@@ -1963,7 +2103,7 @@ function startDragonGiveTimer(io: Server, room: GameRoom): void {
 
   // 봇이면 빠르게 결정
   if (player?.isBot) {
-    setTimeout(() => {
+    const botDragonTimer = setTimeout(() => {
       if (!room.dragonGivePending) return;
       const opponents = [0, 1, 2, 3].filter(
         s => s !== seat && (s + 2) % 4 !== seat
@@ -1975,6 +2115,8 @@ function startDragonGiveTimer(io: Server, room: GameRoom): void {
         handlePostPlay(io, room);
       }
     }, 1500 + Math.random() * 1000);
+    // 메인 타임아웃에서 정리될 수 있도록 참조 저장
+    (room as any)._botDragonTimer = botDragonTimer;
   }
 }
 

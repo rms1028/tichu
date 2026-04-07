@@ -72,7 +72,7 @@ export async function getOrCreateSeasonRanking(seasonId: string, userId: string)
   if (existing) return existing;
 
   return prisma.seasonRanking.create({
-    data: { seasonId, userId, ratingPoints: 1000 },
+    data: { seasonId, userId, ratingPoints: 1000, peakRating: 1000 },
   });
 }
 

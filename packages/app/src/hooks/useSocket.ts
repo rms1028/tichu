@@ -4,6 +4,7 @@ import type { Card, Rank, PlayedHand, GamePhase } from '@tichu/shared';
 import { useGameStore, loadSession } from '../stores/gameStore';
 import { SFX, TTS, cancelAllSounds, unmuteSounds } from '../utils/sound';
 import { haptics } from '../utils/haptics';
+import { registerForPushNotifications, setupNotificationChannel, configureForegroundHandler, addNotificationResponseListener } from '../utils/notifications';
 
 const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL ?? 'http://localhost:3001';
 
@@ -18,6 +19,16 @@ export function useSocket() {
   const store = useGameStore();
 
   useEffect(() => {
+    // 푸시 알림 초기화
+    setupNotificationChannel();
+    configureForegroundHandler();
+    const removeNotifListener = addNotificationResponseListener((data) => {
+      if (data.type === 'friend_invite' && data.roomId) {
+        // 알림 탭 시 해당 방으로 이동은 상위 컴포넌트에서 처리
+        useGameStore.setState({ pendingInviteRoomId: data.roomId as string });
+      }
+    });
+
     const socket = io(SERVER_URL, {
       transports: ['websocket', 'polling'],
       autoConnect: true,
@@ -30,6 +41,9 @@ export function useSocket() {
     });
 
     socketRef.current = socket;
+
+    // ── 음소거 해제 타이머 ──────────────────────────────────
+    let pendingUnmuteTimer: ReturnType<typeof setTimeout> | null = null;
 
     // ── 재접속 재시도 상태 ──────────────────────────────────
     let serverRestarting = false;
@@ -121,7 +135,11 @@ export function useSocket() {
     socket.on('game_state_sync', (state: any) => {
       store.syncGameState(state);
       // 재접속 직후 소리 억제 (your_turn 등이 바로 오므로) → 1초 후 해제
-      setTimeout(() => unmuteSounds(), 1000);
+      // 로비로 나간 뒤 호출되지 않도록 isInGame() 체크
+      const syncTimer = setTimeout(() => {
+        if (isInGame()) unmuteSounds();
+      }, 1000);
+      pendingUnmuteTimer = syncTimer;
     });
 
     // ── 페이즈 변경 ────────────────────────────────────────
@@ -327,8 +345,10 @@ export function useSocket() {
       finishOrder?: number[];
       tichuDeclarations?: Record<number, 'large' | 'small' | null>;
     }) => {
+      // H1: isInGame 체크를 state 업데이트 전에 수행 (onRoundResult가 phase를 변경하므로)
+      const wasInGame = isInGame();
       store.onRoundResult(data.team1, data.team2, data.scores, data.details, data.finishOrder, data.tichuDeclarations);
-      if (!isInGame()) return;
+      if (!wasInGame) return;
       try { SFX.roundEnd(); } catch {}
       try {
         const { mySeat } = useGameStore.getState();
@@ -341,8 +361,10 @@ export function useSocket() {
     });
 
     socket.on('game_over', (data: { winner: string; scores: { team1: number; team2: number } }) => {
+      // H1: isInGame 체크를 state 업데이트 전에 수행
+      const wasInGame = isInGame();
       store.onGameOver(data.winner, data.scores);
-      if (!isInGame()) return;
+      if (!wasInGame) return;
       try {
         const { mySeat } = useGameStore.getState();
         const myTeam = (mySeat === 0 || mySeat === 2) ? 'team1' : 'team2';
@@ -375,6 +397,12 @@ export function useSocket() {
       ownedAvatars?: string; ownedCardBacks?: string; equippedAvatar?: string; equippedCardBack?: string;
     }) => {
       useGameStore.setState({ dbUserId: data.userId });
+      // 푸시 토큰 등록
+      registerForPushNotifications().then(result => {
+        if (result) {
+          socket.emit('register_push_token', { userId: data.userId, token: result.token, platform: result.platform });
+        }
+      });
       // userStore를 서버 DB 데이터로 동기화
       const us = require('../stores/userStore').useUserStore.getState();
       us.setNickname(data.nickname);
@@ -514,11 +542,15 @@ export function useSocket() {
     // ── 에러 ───────────────────────────────────────────────
     socket.on('invalid_play', (data: { reason: string }) => {
       console.warn('Invalid play:', data.reason);
+      // race condition으로 인한 phase 불일치 에러는 유저에게 표시하지 않음
+      if (data.reason === 'wrong_phase') return;
       store.onError(data.reason);
     });
 
     return () => {
       if (rejoinRetryTimer) clearTimeout(rejoinRetryTimer);
+      if (pendingUnmuteTimer) clearTimeout(pendingUnmuteTimer);
+      removeNotifListener?.();
       socket.disconnect();
       socketRef.current = null;
     };
@@ -552,6 +584,10 @@ export function useSocket() {
     socketRef.current?.emit('list_rooms');
   }, []);
 
+  const leaveLobby = useCallback(() => {
+    socketRef.current?.emit('leave_lobby');
+  }, []);
+
   const declareTichu = useCallback((type: 'large' | 'small') => {
     socketRef.current?.emit('declare_tichu', { type });
   }, []);
@@ -574,10 +610,14 @@ export function useSocket() {
   }, []);
 
   const playCardsAction = useCallback((cards: Card[], phoenixAs?: Rank, wish?: Rank) => {
+    const { phase } = useGameStore.getState();
+    if (phase !== 'TRICK_PLAY') return;
     socketRef.current?.emit('play_cards', { cards, phoenixAs, wish });
   }, []);
 
   const passTurn = useCallback(() => {
+    const { phase } = useGameStore.getState();
+    if (phase !== 'TRICK_PLAY') return;
     socketRef.current?.emit('pass_turn', {});
   }, []);
 
@@ -708,6 +748,8 @@ export function useSocket() {
   const leaveRoom = useCallback(() => {
     socketRef.current?.emit('leave_room');
     cancelAllSounds();
+    // pendingUnmuteTimer는 useEffect 클로저 내부이므로 여기서 직접 접근 불가
+    // 대신 cancelAllSounds()가 muted=true로 설정하고, unmuteSounds는 isInGame() 체크로 보호
     store.reset();
   }, []);
 
@@ -741,6 +783,7 @@ export function useSocket() {
     friendInvite,
     createCustomRoom,
     listRooms,
+    leaveLobby,
     startGame,
     addBotToSeat,
     removeBot,

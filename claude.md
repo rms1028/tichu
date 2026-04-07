@@ -100,7 +100,7 @@ npx expo run:android               # Android 빌드
 
 #### 참새 (Mahjong/1)
 - 값 1, 싱글 또는 1 포함 스트레이트에 사용
-- 교환 완료 후 최종 보유자가 라운드 첫 리드 (참새 포함 조합 필수)
+- 교환 완료 후 최종 보유자가 라운드 첫 리드 (참새 포함 의무 없음, 자유 리드)
 - 낼 때 소원(Wish) 선언 가능 (2~A 중 택1, 선택사항)
 - **소원 강제 (팔로우 시):** 소원 숫자의 **실제 일반 카드**를 보유한 플레이어는 현재 바닥 족보에 맞게 해당 숫자 포함 합법 조합이 있으면 반드시 제출. 봉황이 조합 구성을 보조하여 합법 플레이를 만들 수 있으면 그것도 강제. 단, 폭탄으로만 가능하면 면제.
   - **봉황의 소원 강제 기준:** 봉황은 소원 숫자를 "보유"한 것으로 치지 않는다. 전제조건은 핸드에 소원 숫자의 실제 일반 카드가 있는 것.
@@ -113,7 +113,7 @@ npx expo run:android               # Android 빌드
 #### 개 (Dog)
 - 어떤 족보에도 불포함. **리드 시에만** 단독 사용
 - 리드권을 파트너에게 이전. 파트너 나갔으면 **파트너 seat 기준 시계방향** 다음 활성 플레이어에게.
-- 라운드 첫 리드에서 사용 불가 (참새 포함 조합 필수)
+- 라운드 첫 리드에서도 사용 가능 (개 포함 모든 카드 허용)
 - 소원 활성 + 소원 숫자 보유 시 리드 불가
 - 0점, 폭탄으로 제압 불가 (트릭 미성립)
 - **개만 남은 경우:** 팔로우 시 패스만 가능. 이후 리드권을 얻으면 개 리드로 나갈 수 있음. 리드권 못 얻으면 4등, 개(0점)는 상대팀 양도.
@@ -182,11 +182,11 @@ npx expo run:android               # Android 빌드
 - 타임아웃(30초) → 서버 랜덤 교환
 
 ### 3.3. 트릭 진행
-1. 참새 보유자 첫 리드 (참새 포함 필수). 첫 리드에서 개 불가.
+1. 참새 보유자 첫 리드 (자유 리드 — 참새 포함 의무 없음, 개 포함 모든 카드 허용).
 2. 후속: 같은 타입+장수+더 높은 값, 또는 패스
 3. 패스는 트릭 내 영구 탈락 아님 (다음 차례 재참여 가능)
 4. **트릭 종료:** 마지막 제출자 제외 전 활성 플레이어 연속 패스. 제출자 나갔으면 활성 전원 패스.
-5. **폭탄 인터럽트:** 카드 제출 후 BOMB_WINDOW(2초). 상세는 섹션 4.3.
+5. **폭탄 인터럽트:** 카드 제출 후 BOMB_WINDOW(3초). 상세는 섹션 4.3.
 6. 2인만 남고 1인 패스 → 즉시 종료
 7. 남은 2인 같은 팀 → 원투 피니시 확정, 즉시 라운드 종료
 
@@ -233,14 +233,14 @@ LEAD → FOLLOWING → (PLAY/PASS 반복) → [BOMB_WINDOW] → TRICK_WON → [D
 
 **폭탄 윈도우 흐름:**
 ```
-카드 제출 → BOMB_WINDOW (2초) → 폭탄 없으면 정상 진행
-                                → 폭탄 제출 → 새 BOMB_WINDOW (2초)
+카드 제출 → BOMB_WINDOW (3초) → 폭탄 없으면 정상 진행
+                                → 폭탄 제출 → 새 BOMB_WINDOW (3초)
                                 → 동시 복수 폭탄 → 가장 강한 것만 적용
 ```
 
 **규칙:**
-1. 모든 카드 제출 직후 BOMB_WINDOW(2초) 진입
-2. 대상: 방금 낸 플레이어 제외 전 활성 플레이어 (패스한 자 포함, **팀 무관**)
+1. 모든 카드 제출 직후 BOMB_WINDOW(3초) 진입
+2. 대상: 전 활성 플레이어 (패스한 자 포함, 방금 낸 플레이어 포함, **팀 무관**)
 3. 현재 바닥보다 강한 폭탄만 제출 가능
 4. 동시 제출 → 최강 폭탄만 적용, 나머지 핸드 복귀
 5. 폭탄 적용 시 새 BOMB_WINDOW (재인터럽트 가능)
@@ -253,9 +253,9 @@ LEAD → FOLLOWING → (PLAY/PASS 반복) → [BOMB_WINDOW] → TRICK_WON → [D
 interface BombWindow {
   windowId: number;
   startedAt: number;
-  duration: number;               // 2000ms
+  duration: number;               // 3000ms
   currentTopPlay: PlayedHand;
-  pendingBombs: { seat: number; bomb: PlayedHand }[];
+  pendingBombs: { seat: number; bomb: PlayedHand; cards: Card[] }[];
   excludedSeat: number;           // 방금 카드 낸 플레이어
   outPlayerSeat?: number;         // 제출 후 나간 플레이어
 }
@@ -277,7 +277,7 @@ finishOrder에 2명 이상 && 1등+2등 같은 팀 → 트릭 종료 후 ROUND_E
 
 ### 4.7. 턴 타임아웃 자동 처리
 
-- **리드:** 패스 불가 → 자동 플레이. 첫 리드→참새 싱글(소원 없음). 소원 활성+소원 숫자 보유→소원 숫자 싱글. 일반 리드→가장 낮은 싱글.
+- **리드:** 패스 불가 → 자동 플레이. 소원 활성+소원 숫자 보유→소원 숫자 싱글. 그 외→가장 낮은 싱글.
 - **팔로우:** 자동 패스.
 
 ---
@@ -337,7 +337,7 @@ interface RoomSettings {
   exchangeTimeLimit: number;        // 30000ms
   dragonGiveTimeLimit: number;      // 15000ms
   wishSelectTimeLimit: number;      // 10000ms
-  bombWindowDuration: number;       // 2000ms
+  bombWindowDuration: number;       // 3000ms
   targetScore: number;              // 1000
   allowSpectators: boolean;
   botDifficulty: 'easy' | 'medium' | 'hard';
@@ -348,7 +348,7 @@ interface RoomSettings {
 
 ```
 1.  기본 검증: phase=TRICK_PLAY? / bombWindow 없음? / currentTurn 일치? / 카드 보유?
-2.  첫 리드 검증: 라운드 첫 리드 → 참새 포함? (개 거부)
+2.  첫 리드 검증: 없음 (자유 리드 — 참새 포함 의무 없음, 개 허용)
 3.  소원+개 리드 검증: 소원 활성 + 소원 숫자 보유 + 개 → 거부
 4.  족보 검증: validateHand(cards) → null이면 거부
 5.  바닥 비교: canBeat(tableCards, playedHand) → false면 거부
@@ -365,7 +365,7 @@ interface RoomSettings {
 ### 5.4. submit_bomb 파이프라인
 
 ```
-1. 검증: phase=TRICK_PLAY? / bombWindow 활성? / excludedSeat 아닌가? / 카드 보유?
+1. 검증: phase=TRICK_PLAY? / bombWindow 활성? / 카드 보유?
 2. 폭탄 검증: validateHand → 폭탄 타입?
 3. canBeat(bombWindow.currentTopPlay, bomb)?
 4. 핸드 임시 제거 + pendingBombs 추가
@@ -537,7 +537,7 @@ BOMB_WINDOW용. 핸드에서 currentTable보다 강한 모든 폭탄 반환.
 | 12 | 용 마지막 카드 | 나감 + DRAGON_GIVE (타임아웃→랜덤 상대) |
 | 13 | 봉황 싱글, 직전=A(14) | 값=14.5, 용/폭탄으로만 제압 |
 | 14 | 봉황 마지막 카드 | 나감. -25점 트릭 획득. 4등 시 1등에게 양도. |
-| 15 | 첫 리드에서 개 | 서버 거부 |
+| 15 | 첫 리드에서 개 | 허용 (자유 리드) |
 | 16 | 참새 교환 후 | 받은 플레이어가 첫 리드 |
 | 17 | 소원+소원숫자보유+개 리드 | 서버 거부 |
 

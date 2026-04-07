@@ -21,6 +21,7 @@ function sfxTimeout(fn: () => void, ms: number) {
 /** 보류 중인 모든 효과음 타이머 취소 + TTS 중단 + 음소거 */
 export function cancelAllSounds() {
   muted = true;
+  cancelGeneration++;
   for (const id of pendingTimers) clearTimeout(id);
   pendingTimers.length = 0;
   try {
@@ -29,6 +30,9 @@ export function cancelAllSounds() {
     }
   } catch {}
 }
+
+/** cancelAllSounds 호출마다 증가 — 보류 중 콜백에서 stale 여부 판단 */
+let cancelGeneration = 0;
 
 /** 음소거 해제 (게임 입장 시 호출) */
 export function unmuteSounds() {
@@ -266,7 +270,8 @@ function speak(text: string, style: TtsStyle = 'normal') {
     window.speechSynthesis.cancel();
     // iOS에서 cancel() 직후 speak()하면 무시되는 버그 → 딜레이
     if (isIOS) {
-      setTimeout(doSpeak, 50);
+      const gen = cancelGeneration;
+      sfxTimeout(() => { if (cancelGeneration === gen && !muted) doSpeak(); }, 50);
     } else {
       doSpeak();
     }

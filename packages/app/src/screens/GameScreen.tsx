@@ -236,28 +236,34 @@ export function GameScreen({
   if (phase === 'WAITING_FOR_PLAYERS') {
     const joined = [0, 1, 2, 3].filter(s => players[s] !== null).length;
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.center}>
-          <Text style={styles.waitTitle}>대기 중</Text>
-          <Text style={styles.waitText}>{joined}/4 참가</Text>
-          {joined < 4 && (
-            <TouchableOpacity style={styles.addBotsBtn} onPress={onAddBots}>
-              <Text style={styles.addBotsText}>봇으로 채우기</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </SafeAreaView>
+      <View style={styles.outerBg}>
+        <BackgroundWatermark ingame />
+        <SafeAreaView style={styles.container}>
+          <View style={styles.center}>
+            <Text style={styles.waitTitle}>대기 중</Text>
+            <Text style={styles.waitText}>{joined}/4 참가</Text>
+            {joined < 4 && (
+              <TouchableOpacity style={styles.addBotsBtn} onPress={onAddBots}>
+                <Text style={styles.addBotsText}>봇으로 채우기</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </SafeAreaView>
+      </View>
     );
   }
   // 딜링 중 (빠른 전환 시 버벅임 방지)
   if (phase === 'DEALING_8' || phase === 'DEALING_6') {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.center}>
-          <Text style={styles.waitTitle}>{'🃏'}</Text>
-          <Text style={styles.waitText}>{phase === 'DEALING_8' ? '카드 배분 중...' : '추가 카드 배분 중...'}</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.outerBg}>
+        <BackgroundWatermark ingame />
+        <SafeAreaView style={styles.container}>
+          <View style={styles.center}>
+            <Text style={styles.waitTitle}>{'🃏'}</Text>
+            <Text style={styles.waitText}>{phase === 'DEALING_8' ? '카드 배분 중...' : '추가 카드 배분 중...'}</Text>
+          </View>
+        </SafeAreaView>
+      </View>
     );
   }
   // 게임 종료
@@ -266,6 +272,8 @@ export function GameScreen({
     const winnerColor = '#FFD700';
     const loserColor = COLORS.textDim;
     return (
+      <View style={styles.outerBg}>
+      <BackgroundWatermark ingame />
       <SafeAreaView style={styles.container}>
         <View style={styles.resultContainer}>
           <Text style={styles.gameOverBanner}>게임 종료!</Text>
@@ -324,6 +332,7 @@ export function GameScreen({
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+      </View>
     );
   }
   // 라운드 결과 표시
@@ -331,6 +340,8 @@ export function GameScreen({
     const fo = roundResult.finishOrder ?? finishOrder;
     const decls = roundResult.tichuDeclarations ?? tichuDeclarations;
     return (
+      <View style={styles.outerBg}>
+      <BackgroundWatermark ingame />
       <SafeAreaView style={styles.container}>
         <View style={styles.resultContainer}>
           <Text style={styles.roundTitle}>라운드 결과</Text>
@@ -401,14 +412,18 @@ export function GameScreen({
           </View>
         </View>
       </SafeAreaView>
+      </View>
     );
   }
   // 교환 페이즈
   if (phase === 'PASSING') {
     return (
-      <SafeAreaView style={styles.container}>
-        <ExchangeView onExchange={onExchange} onDeclareTichu={onDeclareTichu} />
-      </SafeAreaView>
+      <View style={styles.outerBg}>
+        <BackgroundWatermark ingame />
+        <SafeAreaView style={styles.container}>
+          <ExchangeView onExchange={onExchange} onDeclareTichu={onDeclareTichu} />
+        </SafeAreaView>
+      </View>
     );
   }
   // 플레이어별 색상
@@ -618,13 +633,13 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
     overflow: 'hidden',
-    ...(isMobile ? {} : { maxWidth: 1100, width: '100%', alignSelf: 'center' as const }),
+    ...(isMobile ? {} : { maxWidth: 900, width: '100%', alignSelf: 'center' as const }),
   },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: mob(4, 16),
+    paddingHorizontal: mob(4, 8),
     paddingTop: mob(1, 2),
     paddingBottom: mob(0, 1),
   },
@@ -641,11 +656,11 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
   sideOpponent: {
-    width: mob(56, 100),
+    width: mob(56, 72),
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'visible' as const,
-    paddingHorizontal: mob(2, 10),
+    paddingHorizontal: mob(2, 4),
   },
   tableCenter: {
     flex: 1,
@@ -661,7 +676,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   bottomArea: {
-    paddingBottom: mob(2, 16),
+    paddingBottom: mob(2, 8),
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.06)',
     shadowColor: '#000',
@@ -892,10 +907,22 @@ const styles = StyleSheet.create({
     fontSize: FONT.sm,
   },
   turnAndActions: {
-    alignItems: 'center',
+    alignItems: 'stretch',
     paddingHorizontal: 8,
     paddingVertical: mob(1, 2),
     position: 'relative',
+  },
+  timerAndButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  actionRow: {
+    flexShrink: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   topActionRow: {
     flexDirection: 'row',
@@ -916,18 +943,6 @@ const styles = StyleSheet.create({
     color: '#F59E0B',
     fontSize: 13,
     fontWeight: '800',
-  },
-  timerAndButtonsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
   },
   // 하단 티츄 인디케이터 (작게)
   tichuIndicator: {

@@ -35,7 +35,22 @@ export function LargeTichuModal({ onDeclare, onPass }: LargeTichuModalProps) {
     }
   }, [remaining, phase, responded]);
 
-  if (phase !== 'LARGE_TICHU_WINDOW' || responded) return null;
+  if (phase !== 'LARGE_TICHU_WINDOW') return null;
+
+  // 응답 완료 후 다른 플레이어 대기 중 표시
+  if (responded) {
+    return (
+      <View style={S.overlay} pointerEvents="box-none">
+        <View style={S.backdrop} pointerEvents="auto">
+          <View style={S.modal}>
+            <Text style={S.icon}>{'⏳'}</Text>
+            <Text style={S.title}>{'대기 중...'}</Text>
+            <Text style={S.desc}>{'다른 플레이어의 응답을 기다리고 있습니다'}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   const sorted = sortHand(myHand);
   const urgent = remaining <= 5;
