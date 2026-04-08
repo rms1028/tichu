@@ -1403,6 +1403,13 @@ export function registerSocketHandlers(io: Server): void {
       // 매칭 큐 + 온라인 목록에서 제거
       removeFromQueue(socket.id);
       broadcastQueueUpdate(io);
+
+      // 매칭 시스템에서 설정된 데이터 동기화 (getRoom()과 동일 로직)
+      if (!playerRoomId && (socket as any)._playerRoomId) {
+        playerRoomId = (socket as any)._playerRoomId;
+        playerSeat = (socket as any)._playerSeat;
+      }
+
       // playerId 찾아서 offline 처리
       const room2 = playerRoomId ? rooms.get(playerRoomId) : null;
       const pid = room2?.players[playerSeat]?.playerId;
@@ -2237,23 +2244,21 @@ async function recordGameResults(io: Server, room: GameRoom): Promise<void> {
 }
 
 function broadcastEvents(io: Server, room: GameRoom, events: GameEvent[]): void {
+  let hasCardsDealt = false;
+
   for (const event of events) {
     switch (event.type) {
       case 'cards_dealt':
-        // 각 플레이어에게 자기 카드만 전송 (연결된 플레이어만)
-        for (let s = 0; s < 4; s++) {
-          const player = room.players[s];
+        // seat별 이벤트: 해당 seat에게만 자기 카드 전송
+        {
+          const targetSeat = event.seat as number;
+          const player = room.players[targetSeat];
           if (player?.socketId && player.connected) {
             io.to(player.socketId).emit('cards_dealt', {
-              cards: room.hands[s],
+              cards: room.hands[targetSeat],
             });
           }
-        }
-        // 전체에 핸드 카운트 브로드캐스트
-        {
-          const counts: Record<number, number> = {};
-          for (let s = 0; s < 4; s++) counts[s] = room.hands[s]!.length;
-          io.to(room.roomId).emit('hand_counts', { counts });
+          hasCardsDealt = true;
         }
         break;
 
@@ -2309,5 +2314,12 @@ function broadcastEvents(io: Server, room: GameRoom, events: GameEvent[]): void 
         io.to(room.roomId).emit(event.type, event);
         break;
     }
+  }
+
+  // cards_dealt 이벤트가 있었으면 핸드 카운트 한 번만 브로드캐스트
+  if (hasCardsDealt) {
+    const counts: Record<number, number> = {};
+    for (let s = 0; s < 4; s++) counts[s] = room.hands[s]!.length;
+    io.to(room.roomId).emit('hand_counts', { counts });
   }
 }

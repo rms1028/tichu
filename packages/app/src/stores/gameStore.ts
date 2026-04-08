@@ -304,8 +304,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   onCardDealt: (cards) => {
     // 재접속 직후 지연된 cards_dealt가 game_state_sync 핸드를 덮어쓰는 것 방지
     // 단, 카드 수가 다르면 새 딜링이므로 항상 반영
+    // 또한 DEALING 페이즈에서는 guard를 무시 (새 라운드 시작)
     const currentHand = get().myHand;
-    if (Date.now() - lastSyncAt < SYNC_GUARD_MS && currentHand.length === cards.length) {
+    const phase = get().phase;
+    const isDealingPhase = phase === 'DEALING_8' || phase === 'DEALING_6';
+    if (!isDealingPhase && Date.now() - lastSyncAt < SYNC_GUARD_MS && currentHand.length === cards.length) {
       console.log('[onCardDealt] ignoring duplicate cards_dealt (within sync guard window, same count)');
       return;
     }

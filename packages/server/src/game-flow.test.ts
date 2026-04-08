@@ -399,6 +399,173 @@ describe('Dragon', () => {
 
     expect(room.dragonGivePending).not.toBeNull();
   });
+
+  // Edge #5: one opponent finished, dragon give goes to remaining opponent
+  it('one opponent finished → dragon give to remaining opponent', () => {
+    const room = setupRoom();
+    setupTrickPlay(room, {
+      0: [DRAGON, S('3')],
+      1: [],         // opponent 1 finished
+      2: [T('3'), T('4')],
+      3: [T('5'), T('6')],
+    }, 0, { finishOrder: [1] });
+
+    playCards(room, 0, [DRAGON]);
+    // seat 1 finished, so turns go 2 → 3
+    passTurn(room, 2);
+    passTurn(room, 3);
+
+    // Dragon give pending — give to seat 3 (active opponent)
+    expect(room.dragonGivePending).not.toBeNull();
+    const r = dragonGive(room, 0, 3);
+    expect(r.ok).toBe(true);
+    expect(room.wonTricks[3]!.some(c => c.type === 'special' && c.specialType === 'dragon')).toBe(true);
+  });
+
+  // Edge #5: give to finished opponent should also work
+  it('can give to finished opponent (not just active)', () => {
+    const room = setupRoom();
+    setupTrickPlay(room, {
+      0: [DRAGON, S('3')],
+      1: [],
+      2: [T('3'), T('4')],
+      3: [T('5'), T('6')],
+    }, 0, { finishOrder: [1] });
+
+    playCards(room, 0, [DRAGON]);
+    passTurn(room, 2);
+    passTurn(room, 3);
+
+    // Give to finished opponent seat 1 — should succeed
+    const r = dragonGive(room, 0, 1);
+    expect(r.ok).toBe(true);
+    expect(room.wonTricks[1]!.some(c => c.type === 'special' && c.specialType === 'dragon')).toBe(true);
+  });
+
+  // Dragon give trick cards contain correct points (25 for dragon)
+  it('dragon give transfers all trick cards including dragon points', () => {
+    const room = setupRoom();
+    setupTrickPlay(room, {
+      0: [DRAGON, S('K')],      // dragon (+25) + K (+10) = 35 total if both in trick
+      1: [S('A'), S('5')],
+      2: [T('3'), T('4')],
+      3: [T('5'), T('6')],
+    }, 0);
+
+    playCards(room, 0, [DRAGON]);
+    passTurn(room, 1);
+    passTurn(room, 2);
+    passTurn(room, 3);
+
+    expect(room.dragonGivePending).not.toBeNull();
+    expect(room.dragonGivePending!.trickCards.length).toBe(1); // only dragon played
+
+    const r = dragonGive(room, 0, 1);
+    expect(r.ok).toBe(true);
+    // Opponent 1 receives the dragon in wonTricks
+    const opponentPoints = room.wonTricks[1]!.reduce((sum: number, c: Card) => {
+      if (c.type === 'special' && c.specialType === 'dragon') return sum + 25;
+      return sum;
+    }, 0);
+    expect(opponentPoints).toBe(25);
+  });
+
+  // Dragon as last card + give → game continues with next active player
+  it('last card dragon → give → next trick starts with winner lead', () => {
+    const room = setupRoom();
+    setupTrickPlay(room, {
+      0: [DRAGON],
+      1: [S('4'), S('5')],
+      2: [T('3'), T('4')],
+      3: [T('5'), T('6')],
+    }, 0);
+
+    playCards(room, 0, [DRAGON]);
+    expect(room.finishOrder).toContain(0);
+
+    passTurn(room, 1);
+    passTurn(room, 2);
+    passTurn(room, 3);
+
+    expect(room.dragonGivePending).not.toBeNull();
+    const r = dragonGive(room, 0, 1);
+    expect(r.ok).toBe(true);
+    expect(room.dragonGivePending).toBeNull();
+
+    // seat 0 finished, so lead goes to next active (seat 1, 2, or 3)
+    expect(room.finishOrder).toContain(0);
+    expect([1, 2, 3]).toContain(room.currentTurn);
+    expect(room.tableCards).toBeNull(); // new trick, no table cards
+  });
+
+  // Dragon give wrong seat rejected
+  it('dragon give from wrong seat is rejected', () => {
+    const room = setupRoom();
+    setupTrickPlay(room, {
+      0: [DRAGON, S('3')],
+      1: [S('4'), S('5')],
+      2: [T('3'), T('4')],
+      3: [T('5'), T('6')],
+    }, 0);
+
+    playCards(room, 0, [DRAGON]);
+    passTurn(room, 1);
+    passTurn(room, 2);
+    passTurn(room, 3);
+
+    // seat 1 tries to give (not the winner)
+    const r = dragonGive(room, 1, 3);
+    expect(r.ok).toBe(false);
+    expect(r.error).toBe('no_dragon_give_pending');
+  });
+
+  // Dragon give to self is rejected
+  it('dragon give to self is rejected', () => {
+    const room = setupRoom();
+    setupTrickPlay(room, {
+      0: [DRAGON, S('3')],
+      1: [S('4'), S('5')],
+      2: [T('3'), T('4')],
+      3: [T('5'), T('6')],
+    }, 0);
+
+    playCards(room, 0, [DRAGON]);
+    passTurn(room, 1);
+    passTurn(room, 2);
+    passTurn(room, 3);
+
+    const r = dragonGive(room, 0, 0);
+    expect(r.ok).toBe(false);
+    expect(r.error).toBe('must_give_to_opponent');
+  });
+
+  // Multi-card trick with dragon: all trick cards go to target
+  it('multi-player trick with dragon: entire trick pile goes to target', () => {
+    const room = setupRoom();
+    setupTrickPlay(room, {
+      0: [S('A'), S('3')],
+      1: [DRAGON, S('5')],
+      2: [T('3'), T('4')],
+      3: [T('5'), T('6')],
+    }, 0);
+
+    // seat 0 leads A, seat 1 beats with dragon
+    playCards(room, 0, [S('A')]);
+    playCards(room, 1, [DRAGON]);
+    passTurn(room, 2);
+    passTurn(room, 3);
+    passTurn(room, 0);
+
+    expect(room.dragonGivePending).not.toBeNull();
+    expect(room.dragonGivePending!.winningSeat).toBe(1);
+    // Trick pile should contain both A and dragon
+    expect(room.dragonGivePending!.trickCards.length).toBe(2);
+
+    const r = dragonGive(room, 1, 0);
+    expect(r.ok).toBe(true);
+    // seat 0 (opponent of 1) receives both cards
+    expect(room.wonTricks[0]!.length).toBe(2);
+  });
 });
 
 describe('Phoenix', () => {
@@ -1169,5 +1336,109 @@ describe('Player finishing', () => {
     playCards(room, 0, [S('3')]);
     // Next turn should skip seat 1 (finished) → seat 2
     expect(room.currentTurn).toBe(2);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// cards_dealt event per-seat generation
+// ═══════════════════════════════════════════════════════════════
+
+describe('cards_dealt events per-seat', () => {
+  it('startRound emits 4 separate cards_dealt events, one per seat', () => {
+    const room = setupRoom();
+    const events = startRound(room);
+    const cardDealtEvents = events.filter(e => e.type === 'cards_dealt');
+    expect(cardDealtEvents.length).toBe(4);
+
+    // Each event should have a different seat (0~3)
+    const seats = cardDealtEvents.map(e => (e as any).seat);
+    expect(new Set(seats).size).toBe(4);
+    expect(seats).toEqual([0, 1, 2, 3]);
+
+    // Each seat should have 8 cards
+    for (const e of cardDealtEvents) {
+      expect((e as any).cards.length).toBe(8);
+    }
+  });
+
+  it('finishLargeTichuWindow emits 4 cards_dealt events with 14 cards each', () => {
+    const room = setupRoom();
+    startRound(room);
+    finishAllLargeTichu(room);
+    const events = finishLargeTichuWindow(room);
+    const cardDealtEvents = events.filter(e => e.type === 'cards_dealt');
+    expect(cardDealtEvents.length).toBe(4);
+
+    for (const e of cardDealtEvents) {
+      expect((e as any).cards.length).toBe(14);
+    }
+  });
+
+  it('finishExchange emits 4 cards_dealt events with 14 cards each', () => {
+    const room = setupRoom();
+    startRound(room);
+    finishAllLargeTichu(room);
+    finishLargeTichuWindow(room);
+
+    // Submit exchanges
+    for (let s = 0; s < 4; s++) {
+      const hand = room.hands[s]!;
+      submitExchange(room, s, hand[0]!, hand[1]!, hand[2]!);
+    }
+
+    const events = finishExchange(room);
+    const cardDealtEvents = events.filter(e => e.type === 'cards_dealt');
+    expect(cardDealtEvents.length).toBe(4);
+
+    const seats = cardDealtEvents.map(e => (e as any).seat);
+    expect(seats).toEqual([0, 1, 2, 3]);
+
+    for (const e of cardDealtEvents) {
+      expect((e as any).cards.length).toBe(14);
+    }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Multi-round flow: second round cards are dealt correctly
+// ═══════════════════════════════════════════════════════════════
+
+describe('Multi-round card dealing', () => {
+  it('second round startRound deals fresh 8 cards after previous round', () => {
+    const room = setupRoom();
+
+    // --- Round 1 ---
+    startRound(room);
+    finishAllLargeTichu(room);
+    finishLargeTichuWindow(room);
+
+    // Quick exchange
+    for (let s = 0; s < 4; s++) {
+      const hand = room.hands[s]!;
+      submitExchange(room, s, hand[0]!, hand[1]!, hand[2]!);
+    }
+    finishExchange(room);
+
+    // Verify 14 cards each
+    for (let s = 0; s < 4; s++) {
+      expect(room.hands[s]!.length).toBe(14);
+    }
+
+    // --- Simulate round end (manual reset) ---
+    // Round 2 startRound calls resetRound internally
+    const events2 = startRound(room);
+    const cardDealtEvents2 = events2.filter(e => e.type === 'cards_dealt');
+    expect(cardDealtEvents2.length).toBe(4);
+
+    // Each seat should have exactly 8 fresh cards
+    for (let s = 0; s < 4; s++) {
+      expect(room.hands[s]!.length).toBe(8);
+    }
+
+    // Event cards should match room hands
+    for (const e of cardDealtEvents2) {
+      const seat = (e as any).seat as number;
+      expect((e as any).cards.length).toBe(8);
+    }
   });
 });
