@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView } from 'react-native';
 import type { Card } from '@tichu/shared';
 import { useGameStore } from '../stores/gameStore';
 import { sortHand } from '../hooks/useGame';
@@ -100,9 +100,9 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
   };
 
   const handleConfirm = () => {
-    if (!allAssigned) return;
-    onExchange(assignments.left!, assignments.partner!, assignments.right!);
+    if (!allAssigned || submitted) return;
     setSubmitted(true);
+    onExchange(assignments.left!, assignments.partner!, assignments.right!);
   };
 
   const handleReset = () => {
@@ -198,7 +198,12 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
   };
 
   return (
-    <View style={S.root}>
+    <ScrollView
+      style={S.scrollRoot}
+      contentContainerStyle={S.root}
+      showsVerticalScrollIndicator={false}
+      bounces={false}
+    >
       {/* 타이틀 + 타이머 */}
       <View style={S.titleRow}>
         <Text style={S.title}>카드 교환</Text>
@@ -287,16 +292,20 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
 const S = StyleSheet.create({
-  root: {
+  scrollRoot: {
     flex: 1,
+  },
+  root: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: mob(4, 24),
+    paddingVertical: mob(8, 16),
     gap: mob(6, 10),
   },
   titleRow: {

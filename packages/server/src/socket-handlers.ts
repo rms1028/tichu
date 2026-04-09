@@ -6,17 +6,17 @@ import {
 } from '@tichu/shared';
 import type { GameRoom, PlayerInfo } from './game-room.js';
 import {
-  createGameRoom, getActivePlayers, getTeamForSeat, getPartnerSeat, clearTimers,
+  createGameRoom, emptyTrick, getActivePlayers, getTeamForSeat, getPartnerSeat, clearTimers,
 } from './game-room.js';
 import {
   startRound, finishLargeTichuWindow, finishExchange,
   declareTichu, passLargeTichu, submitExchange,
   allExchangesComplete, allLargeTichuResponded,
   playCards, passTurn, dragonGive, handleTurnTimeout,
-  resolveTrickWon,
+  resolveTrickWon, checkOneTwoFinish,
 } from './game-engine.js';
 import type { GameEvent } from './game-engine.js';
-import { startBombWindow, submitBomb, resolveBombWindow, afterBombWindowResolved } from './bomb-window.js';
+import { submitBomb } from './bomb-window.js';
 import { decideBotAction, decideBotBomb, decideBotTichu, decideBotExchange } from './bot.js';
 import {
   addToQueue, removeFromQueue, getQueuePosition, getQueueSize,
@@ -810,32 +810,38 @@ export function registerSocketHandlers(io: Server): void {
         }
 
         if (room.phase === 'WAITING_FOR_PLAYERS') {
-          // 대기 중: 방장이 나가면 방 삭제, 일반 플레이어는 슬롯 비움
+          // 대기 중: 슬롯 비움
+          room.players[savedSeat] = null;
+
           const isHost = room.hostPlayerId
             ? player?.playerId === room.hostPlayerId
             : savedSeat === 0;
 
           if (isHost) {
-            // 방장 퇴장 → 방 파괴: 남은 플레이어에게 알리고 방 삭제
-            io.to(savedRoomId).emit('room_closed', { reason: 'host_left' });
-            // 남은 소켓들을 방에서 제거
-            for (let s = 0; s < 4; s++) {
-              const p = room.players[s];
-              if (p?.socketId && s !== savedSeat) {
-                const sock = io.sockets.sockets.get(p.socketId);
-                if (sock) {
-                  sock.leave(savedRoomId);
-                  (sock as any)._playerRoomId = null;
-                  (sock as any)._playerSeat = -1;
+            // 방장 퇴장 → 남은 인간에게 위임, 없으면 방 삭제
+            const transferred = transferHost(io, room, savedSeat);
+            if (!transferred) {
+              // 인간 없음 → 방 파괴
+              io.to(savedRoomId).emit('room_closed', { reason: 'all_players_left' });
+              for (let s = 0; s < 4; s++) {
+                const p = room.players[s];
+                if (p?.socketId && s !== savedSeat) {
+                  const sock = io.sockets.sockets.get(p.socketId);
+                  if (sock) {
+                    sock.leave(savedRoomId);
+                    (sock as any)._playerRoomId = null;
+                    (sock as any)._playerSeat = -1;
+                  }
                 }
               }
+              cleanupRoom(room);
+              rooms.delete(savedRoomId);
+              console.log(`[leave_room] host left, no humans → room ${savedRoomId} destroyed`);
+            } else {
+              io.to(savedRoomId).emit('player_left', { seat: savedSeat });
+              broadcastSeats(io, room);
             }
-            cleanupRoom(room);
-            rooms.delete(savedRoomId);
-            console.log(`[leave_room] host left → room ${savedRoomId} destroyed`);
           } else {
-            // 일반 플레이어 퇴장 → 슬롯 비움
-            room.players[savedSeat] = null;
             io.to(savedRoomId).emit('player_left', { seat: savedSeat });
             broadcastSeats(io, room);
           }
@@ -852,6 +858,8 @@ export function registerSocketHandlers(io: Server): void {
             player.botReplaceTimer = setTimeout(() => {
               replaceWithBot(io, capturedRoomId, capturedSeat);
             }, 10_000);
+            // 커스텀 방: 모든 인간이 나갔으면 방 삭제
+            if (room.settings.isCustom) checkAndDestroyEmptyRoom(io, room);
           }
         }
       }
@@ -921,6 +929,16 @@ export function registerSocketHandlers(io: Server): void {
       // 스냅샷 전송
       socket.emit('game_state_sync', buildClientState(room, seat));
       io.to(data.roomId).emit('player_reconnected', { seat });
+
+      // 용 양도 대기 중이면 타이머 재시작
+      if (room.dragonGivePending && room.dragonGivePending.winningSeat === seat && !player.isBot) {
+        if (room.dragonGivePending.timeoutHandle) {
+          clearTimeout(room.dragonGivePending.timeoutHandle);
+          room.dragonGivePending.timeoutHandle = null;
+        }
+        socket.emit('dragon_give_required', { seat });
+        startDragonGiveTimer(io, room);
+      }
 
       // 현재 턴 정보 재전송
       if (room.phase === 'TRICK_PLAY' && !room.bombWindow) {
@@ -1092,6 +1110,38 @@ export function registerSocketHandlers(io: Server): void {
       if (room.hands[playerSeat]!.length === 0 && !room.finishOrder.includes(playerSeat)) {
         room.finishOrder.push(playerSeat);
         io.to(room.roomId).emit('player_finished', { seat: playerSeat, rank: room.finishOrder.length });
+
+        // 원투 피니시 체크
+        const otfEvents = checkOneTwoFinish(room);
+        if (otfEvents) {
+          io.to(room.roomId).emit('bomb_played', { seat: playerSeat, bomb: hand });
+          broadcastEvents(io, room, otfEvents);
+          handlePostPlay(io, room);
+          return;
+        }
+
+        // 3인 나감 → 라운드 종료
+        if (room.finishOrder.length >= 3) {
+          const lastActive = getActivePlayers(room);
+          if (lastActive.length > 0) {
+            room.finishOrder.push(lastActive[0]!);
+            io.to(room.roomId).emit('player_finished', { seat: lastActive[0]!, rank: 4 });
+          }
+          io.to(room.roomId).emit('bomb_played', { seat: playerSeat, bomb: hand });
+          const roundEvents = resolveTrickWon(room);
+          broadcastEvents(io, room, roundEvents);
+          handlePostPlay(io, room);
+          return;
+        }
+      }
+
+      // 소원 해제 체크
+      if (room.wish !== null) {
+        const wishValue = ({ '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 } as Record<string, number>)[room.wish];
+        if (wishValue && data.cards.some((c: Card) => c.type === 'normal' && c.value === wishValue)) {
+          room.wish = null;
+          io.to(room.roomId).emit('wish_fulfilled');
+        }
       }
 
       // 브로드캐스트
@@ -1426,7 +1476,7 @@ export function registerSocketHandlers(io: Server): void {
         io.to(playerRoomId).emit('player_disconnected', { seat: playerSeat });
 
         if (room.phase === 'WAITING_FOR_PLAYERS') {
-          // 대기 중 끊김: 30초 후에도 재접속 안 하면 슬롯 비움 (방장이면 방 파괴)
+          // 대기 중 끊김: 30초 후에도 재접속 안 하면 슬롯 비움 (방장이면 위임)
           const savedRoomId2 = playerRoomId;
           const savedSeat2 = playerSeat;
           player.botReplaceTimer = setTimeout(() => {
@@ -1435,27 +1485,25 @@ export function registerSocketHandlers(io: Server): void {
             const p = r.players[savedSeat2];
             if (!p || p.connected) return; // 이미 재접속함
 
+            // 슬롯 비움
+            r.players[savedSeat2] = null;
+
             const isHost = r.hostPlayerId
               ? p.playerId === r.hostPlayerId
               : savedSeat2 === 0;
             if (isHost) {
-              io.to(savedRoomId2).emit('room_closed', { reason: 'host_left' });
-              for (let s = 0; s < 4; s++) {
-                const sp = r.players[s];
-                if (sp?.socketId && s !== savedSeat2) {
-                  const sock = io.sockets.sockets.get(sp.socketId);
-                  if (sock) {
-                    sock.leave(savedRoomId2);
-                    (sock as any)._playerRoomId = null;
-                    (sock as any)._playerSeat = -1;
-                  }
-                }
+              const transferred = transferHost(io, r, savedSeat2);
+              if (!transferred) {
+                // 인간 없음 → 방 파괴
+                io.to(savedRoomId2).emit('room_closed', { reason: 'all_players_left' });
+                cleanupRoom(r);
+                rooms.delete(savedRoomId2);
+                console.log(`[disconnect] host timeout, no humans → room ${savedRoomId2} destroyed`);
+              } else {
+                io.to(savedRoomId2).emit('player_left', { seat: savedSeat2 });
+                broadcastSeats(io, r);
               }
-              cleanupRoom(r);
-              rooms.delete(savedRoomId2);
-              console.log(`[disconnect] host timeout → room ${savedRoomId2} destroyed`);
             } else {
-              r.players[savedSeat2] = null;
               io.to(savedRoomId2).emit('player_left', { seat: savedSeat2 });
               broadcastSeats(io, r);
             }
@@ -1485,15 +1533,7 @@ export function registerSocketHandlers(io: Server): void {
     }
   });
 
-  // ── 좌석 브로드캐스트 헬퍼 ──────────────────────────────
-  function broadcastSeats(io: Server, room: GameRoom): void {
-    const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
-    for (let s = 0; s < 4; s++) {
-      const p = room.players[s];
-      playersInfo[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
-    }
-    io.to(room.roomId).emit('seats_updated', { players: playersInfo, hostPlayerId: room.hostPlayerId });
-  }
+  // broadcastSeats is now a module-level function
 
   // ── 끊긴 플레이어 → 봇 대체 ──────────────────────────────────
 
@@ -1604,25 +1644,7 @@ export function registerSocketHandlers(io: Server): void {
   }
 
   // ── 방 삭제 전 모든 타이머 정리 ─────────────────────────────
-  function cleanupRoom(room: GameRoom): void {
-    clearTimers(room);
-    if ((room as any)._bombWindowTimer) {
-      clearTimeout((room as any)._bombWindowTimer);
-      delete (room as any)._bombWindowTimer;
-    }
-    if ((room as any)._botDragonTimer) {
-      clearTimeout((room as any)._botDragonTimer);
-      delete (room as any)._botDragonTimer;
-    }
-    room.bombWindow = null;
-    for (let s = 0; s < 4; s++) {
-      const p = room.players[s];
-      if (p?.botReplaceTimer) {
-        clearTimeout(p.botReplaceTimer);
-        p.botReplaceTimer = undefined;
-      }
-    }
-  }
+  // cleanupRoom, broadcastSeats, transferHost, etc. are now module-level functions
 
   // ── 방 정리 타이머 (60초마다, 끝난 방 삭제) ─────────────────
   if (!(globalThis as any).__roomCleanupTimer) {
@@ -1631,9 +1653,12 @@ export function registerSocketHandlers(io: Server): void {
       let deleted = 0;
       for (const [id, room] of rooms) {
         if (room.phase === 'GAME_OVER') {
-          cleanupRoom(room);
-          rooms.delete(id);
-          deleted++;
+          // 커스텀 방은 returnCustomRoomToWaiting이 처리 (10초 타이머)
+          if (!room.settings.isCustom) {
+            cleanupRoom(room);
+            rooms.delete(id);
+            deleted++;
+          }
           continue;
         }
         // WAITING 상태 방 30분 자동 만료 (좀비 방 방지)
@@ -1911,112 +1936,112 @@ function scheduleBotAction(io: Server, room: GameRoom, seat: number, turnId: num
   }, delay);
 }
 
-// ── BOMB_WINDOW 관리 (섹션 4.3) ────────────────────────────────
+// (bombWindow 3초 딜레이 시스템 제거됨 — 폭탄은 즉시 인터럽트로 처리)
 
-function startBombWindowPhase(io: Server, room: GameRoom): void {
-  const lastPlay = room.currentTrick.lastPlayedSeat;
-  const topPlay = room.tableCards;
-  if (!topPlay) { handlePostPlay(io, room); return; }
+// ── 모듈 레벨 헬퍼 함수 ─────────────────────────────────────
 
-  // 항상 2초 딜레이 (폭탄 유무와 무관하게 공정성 유지)
-  const events = startBombWindow(room, lastPlay, topPlay);
-  broadcastEvents(io, room, events);
-
-  const windowId = room.bombWindow!.windowId;
-
-  // 이전 폭탄 타이머 정리
+function cleanupRoom(room: GameRoom): void {
+  clearTimers(room);
   if ((room as any)._bombWindowTimer) {
     clearTimeout((room as any)._bombWindowTimer);
+    delete (room as any)._bombWindowTimer;
   }
-
-  // 2 second timer to resolve
-  const timerId = setTimeout(() => {
-    if (!room.bombWindow || room.bombWindow.windowId !== windowId) return;
-
-    const hadBombs = room.bombWindow.pendingBombs.length > 0;
-    const resolveEvents = resolveBombWindow(room);
-    broadcastEvents(io, room, resolveEvents);
-
-    if (room.bombWindow && room.bombWindow.windowId !== windowId) {
-      // New bomb window (bomb on bomb)
-      startBombWindowResolveTimer(io, room);
-      scheduleBotBombWindow(io, room);
-    } else if (hadBombs) {
-      // 폭탄이 있었을 때만 턴 재설정
-      const afterEvents = afterBombWindowResolved(room);
-      broadcastEvents(io, room, afterEvents);
-
-      if (afterEvents.length === 0 && room.phase === 'TRICK_PLAY') {
-        const trickEvents = resolveTrickWon(room);
-        broadcastEvents(io, room, trickEvents);
-      }
-      handlePostPlay(io, room);
-    } else {
-      // 폭탄 없음 — playCards에서 이미 advanceTurn 완료, 그대로 진행
-      handlePostPlay(io, room);
+  if ((room as any)._botDragonTimer) {
+    clearTimeout((room as any)._botDragonTimer);
+    delete (room as any)._botDragonTimer;
+  }
+  room.bombWindow = null;
+  for (let s = 0; s < 4; s++) {
+    const p = room.players[s];
+    if (p?.botReplaceTimer) {
+      clearTimeout(p.botReplaceTimer);
+      p.botReplaceTimer = undefined;
     }
-  }, room.settings.bombWindowDuration);
-
-  (room as any)._bombWindowTimer = timerId;
-
-  // Bot bomb decisions
-  scheduleBotBombWindow(io, room);
+  }
 }
 
-function startBombWindowResolveTimer(io: Server, room: GameRoom): void {
-  if (!room.bombWindow) return;
-  const windowId = room.bombWindow.windowId;
-
-  if ((room as any)._bombWindowTimer) {
-    clearTimeout((room as any)._bombWindowTimer);
+function broadcastSeats(io: Server, room: GameRoom): void {
+  const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
+  for (let s = 0; s < 4; s++) {
+    const p = room.players[s];
+    playersInfo[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
   }
-
-  const timerId = setTimeout(() => {
-    if (!room.bombWindow || room.bombWindow.windowId !== windowId) return;
-
-    const resolveEvents = resolveBombWindow(room);
-    broadcastEvents(io, room, resolveEvents);
-
-    if (room.bombWindow && room.bombWindow.windowId !== windowId) {
-      startBombWindowResolveTimer(io, room);
-      scheduleBotBombWindow(io, room);
-    } else {
-      // 폭탄 해소 완료 — 턴 정리
-      const afterEvents = afterBombWindowResolved(room);
-      broadcastEvents(io, room, afterEvents);
-
-      if (afterEvents.length === 0 && room.phase === 'TRICK_PLAY') {
-        const trickEvents = resolveTrickWon(room);
-        broadcastEvents(io, room, trickEvents);
-      }
-      handlePostPlay(io, room);
-    }
-  }, room.settings.bombWindowDuration);
-
-  (room as any)._bombWindowTimer = timerId;
+  io.to(room.roomId).emit('seats_updated', { players: playersInfo, hostPlayerId: room.hostPlayerId });
 }
 
-function scheduleBotBombWindow(io: Server, room: GameRoom): void {
-  if (!room.bombWindow) return;
-  const windowId = room.bombWindow.windowId;
+function transferHost(io: Server, room: GameRoom, leavingSeat: number): boolean {
+  const candidates = [0, 1, 2, 3].filter(s =>
+    s !== leavingSeat && room.players[s] !== null && !room.players[s]!.isBot && room.players[s]!.connected,
+  );
+  if (candidates.length === 0) return false;
+  room.hostPlayerId = room.players[candidates[0]!]!.playerId;
+  io.to(room.roomId).emit('host_changed', { hostPlayerId: room.hostPlayerId, seat: candidates[0] });
+  console.log(`[transferHost] new host: seat=${candidates[0]}, pid=${room.hostPlayerId}`);
+  return true;
+}
 
-  setTimeout(() => {
-    if (!room.bombWindow || room.bombWindow.windowId !== windowId) return;
+function checkAndDestroyEmptyRoom(io: Server, room: GameRoom): boolean {
+  const hasHuman = [0, 1, 2, 3].some(s => {
+    const p = room.players[s];
+    return p !== null && p !== undefined && !p.isBot && p.connected;
+  });
+  if (hasHuman) return false;
+  io.to(room.roomId).emit('room_closed', { reason: 'all_players_left' });
+  cleanupRoom(room);
+  rooms.delete(room.roomId);
+  console.log(`[checkEmpty] all humans left → room ${room.roomId} destroyed`);
+  notifyLobby(io);
+  return true;
+}
 
-    for (let s = 0; s < 4; s++) {
-      const player = room.players[s];
-      if (!player?.isBot) continue;
-      if (s === room.bombWindow.excludedSeat) continue;
+function returnCustomRoomToWaiting(io: Server, room: GameRoom): void {
+  cleanupRoom(room);
 
-      const decision = decideBotBomb(room, s);
-      if (decision.action === 'bomb' && decision.cards) {
-        const result = submitBomb(room, s, decision.cards);
-        if (result.ok) {
-          broadcastEvents(io, room, result.events);
-        }
-      }
+  for (let s = 0; s < 4; s++) {
+    const p = room.players[s];
+    if (p?.isBot) {
+      room.players[s] = null;
     }
-  }, 800 + Math.random() * 700);
+  }
+
+  const humanSeats = [0, 1, 2, 3].filter(s => room.players[s] !== null && !room.players[s]!.isBot);
+  if (humanSeats.length === 0) {
+    rooms.delete(room.roomId);
+    console.log(`[returnToWaiting] no humans left → room ${room.roomId} destroyed`);
+    notifyLobby(io);
+    return;
+  }
+
+  const hostStillHere = humanSeats.some(s => room.players[s]?.playerId === room.hostPlayerId);
+  if (!hostStillHere) {
+    room.hostPlayerId = room.players[humanSeats[0]!]!.playerId;
+  }
+
+  room.phase = 'WAITING_FOR_PLAYERS';
+  room.scores = { team1: 0, team2: 0 };
+  room.roundNumber = 0;
+  room.hands = { 0: [], 1: [], 2: [], 3: [] };
+  room.pendingExchanges = { 0: null, 1: null, 2: null, 3: null };
+  room.currentTrick = emptyTrick();
+  room.tableCards = null;
+  room.wonTricks = { 0: [], 1: [], 2: [], 3: [] };
+  room.wish = null;
+  room.tichuDeclarations = { 0: null, 1: null, 2: null, 3: null };
+  room.largeTichuResponses = { 0: false, 1: false, 2: false, 3: false };
+  room.finishOrder = [];
+  room.currentTurn = -1;
+  room.roundScores = { team1: 0, team2: 0 };
+  room.roundHistory = [];
+  room.dragonGivePending = null;
+  room.bombWindow = null;
+  room.bombWindowIdCounter = 0;
+  room.isFirstLead = true;
+  room.hasPlayedCards = { 0: false, 1: false, 2: false, 3: false };
+
+  io.to(room.roomId).emit('return_to_waiting', { hostPlayerId: room.hostPlayerId });
+  broadcastSeats(io, room);
+  notifyLobby(io);
+  console.log(`[returnToWaiting] custom room ${room.roomId} returned to waiting (${humanSeats.length} humans)`);
 }
 
 function handlePostPlay(io: Server, room: GameRoom): void {
@@ -2053,6 +2078,14 @@ function handlePostPlay(io: Server, room: GameRoom): void {
     room.bombWindow = null;
     // DB에 게임 결과 기록 + 보상 전송
     recordGameResults(io, room).catch(err => console.error('[recordGameResults] error:', err));
+
+    // 커스텀 방: 10초 후 대기 상태로 복귀
+    if (room.settings.isCustom) {
+      setTimeout(() => {
+        if (!rooms.has(room.roomId)) return;
+        returnCustomRoomToWaiting(io, room);
+      }, 10_000);
+    }
     return;
   }
 
@@ -2063,14 +2096,8 @@ function handlePostPlay(io: Server, room: GameRoom): void {
     return;
   }
 
-  // 정상 진행 → 턴 알림 + 타이머
+  // 정상 진행 → 타이머 시작 (턴 알림은 broadcastEvents에서 이미 전송됨)
   if (room.phase === 'TRICK_PLAY' && !room.bombWindow) {
-    // 클라이언트에 턴 변경 알림
-    io.to(room.roomId).emit('turn_changed', { seat: room.currentTurn, turnDuration: room.settings.turnTimeLimit });
-    const turnPlayer = room.players[room.currentTurn];
-    if (turnPlayer?.socketId) {
-      io.to(turnPlayer.socketId).emit('your_turn', { seat: room.currentTurn, turnDuration: room.settings.turnTimeLimit });
-    }
     startTurnTimer(io, room);
   }
   } catch (err) { console.error('[handlePostPlay] ERROR:', err); }

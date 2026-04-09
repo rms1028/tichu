@@ -6,13 +6,8 @@ import Animated, {
   useAnimatedStyle,
   withSequence,
   withTiming,
-  withSpring,
   withRepeat,
   Easing,
-  FadeIn,
-  FadeOut,
-  SlideInUp,
-  ZoomIn,
 } from 'react-native-reanimated';
 import { useGameStore } from '../stores/gameStore';
 import { useTeamInfo } from '../hooks/useGame';
@@ -26,9 +21,7 @@ import { DragonGiveModal } from '../components/DragonGiveModal';
 import { LargeTichuModal } from '../components/LargeTichuModal';
 import { ExchangeView } from '../components/ExchangeView';
 
-import { BombTimer } from '../components/BombTimer';
 import { GameEventOverlay } from '../components/GameEventOverlay';
-import { ScreenShake } from '../components/ParticleEffect';
 import { EmoteButton, EmoteBubble } from '../components/EmotePanel';
 import { BackgroundWatermark } from '../components/BackgroundWatermark';
 import { CircleTimer } from '../components/CircleTimer';
@@ -216,8 +209,9 @@ export function GameScreen({
   }));
   // 5초 이하 긴박감 (내 턴)
   const urgencyPulse = useSharedValue(0);
+  const isUrgent = isMyTurn && remainingSec > 0 && remainingSec <= 5;
   useEffect(() => {
-    if (isMyTurn && remainingSec > 0 && remainingSec <= 5) {
+    if (isUrgent) {
       urgencyPulse.value = withRepeat(
         withSequence(
           withTiming(1, { duration: 250 }),
@@ -227,7 +221,7 @@ export function GameScreen({
     } else {
       urgencyPulse.value = withTiming(0, { duration: 200 });
     }
-  }, [isMyTurn, remainingSec <= 5]);
+  }, [isUrgent]);
   const urgencyStyle = useAnimatedStyle(() => ({
     borderTopColor: `rgba(239,68,68,${urgencyPulse.value * 0.6})`,
     borderTopWidth: urgencyPulse.value > 0.01 ? 2 : 1,
@@ -436,8 +430,6 @@ export function GameScreen({
     <View style={styles.outerBg}>
       <BackgroundWatermark ingame />
     <SafeAreaView style={styles.container}>
-      {/* 폭탄 타이머 (우상단) */}
-      <BombTimer />
       {/* 게임 이벤트 오버레이 (폭탄/티츄 등) */}
       <GameEventOverlay />
       {/* Top bar */}

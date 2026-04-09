@@ -152,8 +152,8 @@ export function PlayerHand() {
 
     return (
       <View style={styles.twoRowWrap}>
-        {renderSingleRow(topRow, calcOverlap(topRow.length))}
-        {renderSingleRow(botRow, calcOverlap(botRow.length))}
+        <View key="row-top">{renderSingleRow(topRow, calcOverlap(topRow.length))}</View>
+        <View key="row-bot">{renderSingleRow(botRow, calcOverlap(botRow.length))}</View>
       </View>
     );
   }

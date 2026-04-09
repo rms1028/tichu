@@ -81,6 +81,7 @@ export interface GameState {
   // 용 양도 대기
   dragonGiveRequired: boolean;
   dragonGiveSeat: number;
+  dragonGiveCompleted: { fromSeat: number; targetSeat: number } | null;
 
   // 턴 타이머
   turnStartedAt: number;
@@ -197,6 +198,7 @@ const INITIAL_STATE = {
   exchangeReceived: null as { fromLeft: Card; fromPartner: Card; fromRight: Card } | null,
   dragonGiveRequired: false,
   dragonGiveSeat: -1,
+  dragonGiveCompleted: null as { fromSeat: number; targetSeat: number } | null,
   turnStartedAt: 0,
   turnDuration: 30000,
   selectedCards: [] as Card[],
@@ -307,8 +309,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     // 또한 DEALING 페이즈에서는 guard를 무시 (새 라운드 시작)
     const currentHand = get().myHand;
     const phase = get().phase;
-    const isDealingPhase = phase === 'DEALING_8' || phase === 'DEALING_6';
-    if (!isDealingPhase && Date.now() - lastSyncAt < SYNC_GUARD_MS && currentHand.length === cards.length) {
+    const isHandUpdatePhase = phase === 'DEALING_8' || phase === 'DEALING_6' || phase === 'PASSING';
+    if (!isHandUpdatePhase && Date.now() - lastSyncAt < SYNC_GUARD_MS && currentHand.length === cards.length) {
       console.log('[onCardDealt] ignoring duplicate cards_dealt (within sync guard window, same count)');
       return;
     }
@@ -433,6 +435,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     dragonGiveRequired: seat === state.mySeat,
     dragonGiveSeat: seat,
   })),
+
+  onDragonGiveCompleted: (fromSeat: number, targetSeat: number) => set({
+    dragonGiveCompleted: { fromSeat, targetSeat },
+  }),
 
   onRoundResult: (team1, team2, scores, details, finishOrder, tichuDeclarations) => set({
     roundResult: { team1, team2, details, finishOrder, tichuDeclarations },

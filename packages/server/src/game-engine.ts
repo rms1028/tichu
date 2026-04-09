@@ -37,6 +37,7 @@ export type GameEvent =
   | { type: 'wish_active'; wish: Rank }
   | { type: 'wish_fulfilled' }
   | { type: 'dragon_give_required'; seat: number }
+  | { type: 'dragon_give_completed'; fromSeat: number; targetSeat: number }
   | { type: 'bomb_window_start'; windowId: number }
   | { type: 'bomb_window_end' }
   | { type: 'bomb_played'; seat: number; bomb: PlayedHand }
@@ -494,6 +495,9 @@ export function passTurn(room: GameRoom, seat: number): EngineResult {
   if (room.currentTurn !== seat) {
     return { ok: false, error: 'not_your_turn', events: [] };
   }
+  if (room.finishOrder.includes(seat)) {
+    return { ok: false, error: 'already_finished', events: [] };
+  }
   // 리드 시 패스 불가 (개만 남은 경우 제외)
   if (room.tableCards === null) {
     return { ok: false, error: 'cannot_pass_on_lead', events: [] };
@@ -633,6 +637,8 @@ export function dragonGive(room: GameRoom, seat: number, targetSeat: number): En
   }
   room.dragonGivePending = null;
 
+  events.push({ type: 'dragon_give_completed', fromSeat: seat, targetSeat });
+
   const newTrickEvents = startNewTrick(room, seat, events);
   return { ok: true, events: newTrickEvents };
 }
@@ -680,7 +686,7 @@ function startNewTrick(room: GameRoom, winningSeat: number, events: GameEvent[])
 
 // ── 원투 피니시 조기 감지 (섹션 4.6) ─────────────────────────
 
-function checkOneTwoFinish(room: GameRoom): GameEvent[] | null {
+export function checkOneTwoFinish(room: GameRoom): GameEvent[] | null {
   if (room.finishOrder.length < 2) return null;
   const first = room.finishOrder[0]!;
   const second = room.finishOrder[1]!;
@@ -800,6 +806,24 @@ export function handleTurnTimeout(room: GameRoom): EngineResult {
     const result = passTurn(room, seat);
     if (result.ok) {
       result.events.unshift({ type: 'auto_action', seat, action: 'pass' });
+      return result;
+    }
+    // 패스 거부(소원 강제 등) → 소원 충족 카드 자동 제출
+    if (room.wish !== null) {
+      const wr = mustFulfillWish(room.hands[seat]!, room.tableCards, room.wish, false);
+      if (wr.mustPlay && wr.validPlaysWithWish.length > 0) {
+        // 가장 적은 장수의 조합을 선택 (가능하면 싱글 > 페어 > ...)
+        const sorted = [...wr.validPlaysWithWish].sort((a, b) => a.cards.length - b.cards.length);
+        for (const play of sorted) {
+          const phoenixAs = play.cards.some(isPhoenix) && play.cards.length > 1
+            ? inferPhoenixAs(play.cards) : undefined;
+          const autoResult = playCards(room, seat, play.cards, phoenixAs);
+          if (autoResult.ok) {
+            autoResult.events.unshift({ type: 'auto_action', seat, action: 'play', cards: play.cards });
+            return autoResult;
+          }
+        }
+      }
     }
     return result;
   }

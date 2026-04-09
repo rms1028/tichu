@@ -57,6 +57,24 @@ export function GameEventOverlay() {
     }
   }, [tichuDeclarations]);
 
+  // 용 양도 완료 감지
+  const dragonGiveCompleted = useGameStore((s) => s.dragonGiveCompleted);
+  useEffect(() => {
+    if (!dragonGiveCompleted) return;
+    const { fromSeat, targetSeat } = dragonGiveCompleted;
+    const players = useGameStore.getState().players;
+    const fromName = players[fromSeat]?.nickname ?? '?';
+    const toName = players[targetSeat]?.nickname ?? '?';
+    showEvent({
+      emoji: '🐉',
+      title: '용 트릭 양도',
+      subtitle: `${fromName} → ${toName}`,
+      color: '#E74C3C',
+      particleType: 'bomb',
+    });
+    useGameStore.setState({ dragonGiveCompleted: null });
+  }, [dragonGiveCompleted]);
+
   // 원투 피니시 감지
   useEffect(() => {
     if (roundResult?.details?.oneTwoFinish && finishOrder.length >= 2) {

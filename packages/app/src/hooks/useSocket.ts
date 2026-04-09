@@ -136,6 +136,7 @@ export function useSocket() {
       store.syncGameState(state);
       // 재접속 직후 소리 억제 (your_turn 등이 바로 오므로) → 1초 후 해제
       // 로비로 나간 뒤 호출되지 않도록 isInGame() 체크
+      if (pendingUnmuteTimer) clearTimeout(pendingUnmuteTimer);
       const syncTimer = setTimeout(() => {
         if (isInGame()) unmuteSounds();
       }, 1000);
@@ -240,15 +241,6 @@ export function useSocket() {
       } catch {}
     });
 
-    // ── 폭탄 윈도우 ───────────────────────────────────────
-    socket.on('bomb_window_start', (data: { remainingMs: number; canSubmitBomb: boolean }) => {
-      store.onBombWindowStart(data.remainingMs, data.canSubmitBomb);
-    });
-
-    socket.on('bomb_window_end', () => {
-      store.onBombWindowEnd();
-    });
-
     // ── 폭탄 플레이 ───────────────────────────────────────────
     socket.on('bomb_played', (data: { seat: number; bomb: PlayedHand }) => {
       const state = useGameStore.getState();
@@ -278,9 +270,29 @@ export function useSocket() {
 
     // ── 연결 상태 변경 ────────────────────────────────────────
     socket.on('room_closed', () => {
-      console.log('[room_closed] host left, room destroyed');
+      console.log('[room_closed] room destroyed');
       cancelAllSounds();
       store.reset();
+    });
+
+    // ── 커스텀 방: 게임 종료 후 대기 상태 복귀 ──────────────────
+    socket.on('return_to_waiting', (data: { hostPlayerId?: string }) => {
+      console.log('[return_to_waiting] back to lobby');
+      cancelAllSounds();
+      const { roomId, mySeat, playerId, nickname } = useGameStore.getState();
+      // 게임 상태 초기화하되 방/좌석 정보는 유지
+      store.reset();
+      if (roomId) store.setRoomInfo(roomId, mySeat);
+      store.setPlayerInfo(playerId, nickname);
+      useGameStore.setState({
+        phase: 'WAITING_FOR_PLAYERS' as any,
+        hostPlayerId: data.hostPlayerId ?? null,
+      });
+    });
+
+    // ── 방장 변경 ────────────────────────────────────────────
+    socket.on('host_changed', (data: { hostPlayerId: string }) => {
+      useGameStore.setState({ hostPlayerId: data.hostPlayerId });
     });
 
     socket.on('player_left', (data: { seat: number }) => {
@@ -335,6 +347,10 @@ export function useSocket() {
     socket.on('dragon_give_required', (data: { seat: number }) => {
       console.log('[dragon_give_required] seat=', data.seat, 'mySeat=', useGameStore.getState().mySeat);
       store.onDragonGiveRequired(data.seat);
+    });
+
+    socket.on('dragon_give_completed', (data: { fromSeat: number; targetSeat: number }) => {
+      store.onDragonGiveCompleted(data.fromSeat, data.targetSeat);
     });
 
     // ── 라운드/게임 결과 ───────────────────────────────────
@@ -452,6 +468,26 @@ export function useSocket() {
     });
     socket.on('blocked_list', (data: { blockedIds: string[] }) => {
       useGameStore.setState({ blockedIds: data.blockedIds });
+    });
+
+    // ── 에러/확인 이벤트 ──────────────────────────────────────
+    socket.on('nickname_error', (data: { error: string }) => {
+      useGameStore.setState({ toastMsg: '닉네임 변경 실패: ' + data.error });
+    });
+    socket.on('shop_error', (data: { error: string }) => {
+      useGameStore.setState({ toastMsg: '상점 오류: ' + data.error });
+    });
+    socket.on('shop_equipped', (data: { itemId: string }) => {
+      useGameStore.setState({ toastMsg: '아이템이 장착되었습니다' });
+    });
+    socket.on('season_reward_error', (data: { error: string }) => {
+      useGameStore.setState({ toastMsg: '보상 수령 실패: ' + data.error });
+    });
+    socket.on('friend_error', (data: { error: string }) => {
+      useGameStore.setState({ toastMsg: '친구 기능 오류: ' + data.error });
+    });
+    socket.on('teams_shuffled', () => {
+      useGameStore.setState({ toastMsg: '팀이 셔플되었습니다' });
     });
 
     // ── 랭킹 + 시즌 ──────────────────────────────────────
@@ -598,20 +634,17 @@ export function useSocket() {
 
   const exchangeCards = useCallback((left: Card, partner: Card, right: Card) => {
     socketRef.current?.emit('exchange_cards', { left, partner, right });
-    // 보낸 카드를 핸드에서 즉시 제거 (서버 cards_dealt 오기 전 UI 반영)
-    const { myHand } = useGameStore.getState();
-    const given = [left, partner, right];
-    const updated = myHand.filter(c => !given.some(g => {
-      if (c.type === 'special' && g.type === 'special') return c.specialType === g.specialType;
-      if (c.type === 'normal' && g.type === 'normal') return c.suit === g.suit && c.rank === g.rank;
-      return false;
-    }));
-    useGameStore.setState({ myHand: updated });
   }, []);
 
+  const lastPlayTime = useRef(0);
   const playCardsAction = useCallback((cards: Card[], phoenixAs?: Rank, wish?: Rank) => {
-    const { phase } = useGameStore.getState();
+    const { phase, isMyTurn } = useGameStore.getState();
     if (phase !== 'TRICK_PLAY') return;
+    if (!isMyTurn) return;
+    // 중복 제출 방지: 500ms 내 재호출 무시
+    const now = Date.now();
+    if (now - lastPlayTime.current < 500) return;
+    lastPlayTime.current = now;
     socketRef.current?.emit('play_cards', { cards, phoenixAs, wish });
   }, []);
 

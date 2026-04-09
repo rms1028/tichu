@@ -104,6 +104,9 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu, onSubmitBomb }: Acti
     return undefined;
   };
 
+  const [playLock, setPlayLock] = useState(false);
+  useEffect(() => { if (!isMyTurn) setPlayLock(false); }, [isMyTurn]);
+
   const handlePlay = () => {
     // 턴 외 폭탄 → submit_bomb
     if (canBombOutOfTurn) {
@@ -111,17 +114,19 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu, onSubmitBomb }: Acti
       clearSelection();
       return;
     }
-    if (!canPlay) return;
+    if (!canPlay || playLock) return;
     if (hasMahjong) {
       setShowWishPicker(true);
       return;
     }
+    setPlayLock(true);
     onPlay(selectedCards, getPhoenixAs());
     clearSelection();
   };
 
   const handleWishSelect = (wish?: Rank) => {
     setShowWishPicker(false);
+    setPlayLock(true);
     onPlay(selectedCards, getPhoenixAs(), wish);
     clearSelection();
   };
