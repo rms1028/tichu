@@ -19,7 +19,7 @@ interface Props {
   onMoveSeat?: (targetSeat: number) => void;
   onShuffleTeams?: () => void;
   onStartGame?: () => void;
-  onAddBotToSeat?: (seat: number) => void;
+  onAddBotToSeat?: (seat: number, difficulty?: 'easy' | 'medium' | 'hard') => void;
   onRemoveBot?: (seat: number) => void;
 }
 
@@ -29,6 +29,7 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
   const [elapsed, setElapsed] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  const [botDifficulty, setBotDifficulty] = useState<'easy' | 'medium' | 'hard'>('hard');
 
   // 서버에서 받은 실제 플레이어 정보 구독
   const players = useGameStore((s) => s.players);
@@ -125,7 +126,8 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
     if (!slot) return;
 
     if (slot.name === null) {
-      // 빈 자리 → 내가 이동 (모든 플레이어 가능)
+      // 빈 자리 → 방장은 봇 추가, 일반 플레이어는 이동
+      if (isHost && onAddBotToSeat) { onAddBotToSeat(idx, botDifficulty); return; }
       if (onMoveSeat) onMoveSeat(idx);
     } else if (slot.isBot && isHost) {
       // 봇 자리 → 봇 제거 (방장만)
@@ -242,9 +244,32 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
                 <Text style={S.shuffleBtnText}>{'🔀 셔플'}</Text>
               </TouchableOpacity>
               {filledCount < 4 && (
-                <TouchableOpacity style={S.botFillBtn} onPress={onAddBots} activeOpacity={0.7}>
-                  <Text style={S.botFillText}>{'🤖 봇 채우기'}</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 8, overflow: 'hidden' }}>
+                    {(['easy', 'medium', 'hard'] as const).map((d) => (
+                      <TouchableOpacity
+                        key={d}
+                        onPress={() => setBotDifficulty(d)}
+                        style={{
+                          paddingHorizontal: 10, paddingVertical: 6,
+                          backgroundColor: botDifficulty === d ? (d === 'easy' ? '#22c55e' : d === 'medium' ? '#f59e0b' : '#ef4444') : 'transparent',
+                        }}
+                      >
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: botDifficulty === d ? '700' : '400' }}>
+                          {d === 'easy' ? '쉬움' : d === 'medium' ? '보통' : '어려움'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity style={S.botFillBtn} onPress={() => {
+                    // 빈 자리에 선택한 난이도로 봇 추가
+                    for (let s = 0; s < 4; s++) {
+                      if (!players[s] && onAddBotToSeat) onAddBotToSeat(s, botDifficulty);
+                    }
+                  }} activeOpacity={0.7}>
+                    <Text style={S.botFillText}>{'🤖 봇 채우기'}</Text>
+                  </TouchableOpacity>
+                </View>
               )}
               <TouchableOpacity
                 style={[S.startGameBtn, !canStart && S.startGameBtnDisabled]}

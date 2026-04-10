@@ -608,8 +608,8 @@ export function useSocket() {
     socketRef.current?.emit('join_room', { roomId, playerId, nickname, password });
   }, []);
 
-  const addBotToSeat = useCallback((seat: number) => {
-    socketRef.current?.emit('add_bot_to_seat', { seat });
+  const addBotToSeat = useCallback((seat: number, difficulty?: 'easy' | 'medium' | 'hard') => {
+    socketRef.current?.emit('add_bot_to_seat', { seat, difficulty });
   }, []);
 
   const removeBot = useCallback((seat: number) => {

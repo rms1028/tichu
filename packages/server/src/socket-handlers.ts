@@ -607,7 +607,7 @@ export function registerSocketHandlers(io: Server): void {
     });
 
     // ── add_bots (빈 자리를 봇으로 채움) ────────────────────
-    socket.on('add_bots', () => {
+    socket.on('add_bots', (data?: { difficulty?: 'easy' | 'medium' | 'hard' }) => {
       const room = getRoom();
       if (!room) return;
       if (room.phase !== 'WAITING_FOR_PLAYERS') {
@@ -620,13 +620,16 @@ export function registerSocketHandlers(io: Server): void {
         return;
       }
 
+      const diff = data?.difficulty ?? room.settings.botDifficulty ?? 'hard';
+      room.settings.botDifficulty = diff;
+      const diffLabel = diff === 'easy' ? '쉬움' : diff === 'medium' ? '보통' : '어려움';
       const botNames = ['봇 A', '봇 B', '봇 C'];
       let botIdx = 0;
       for (let s = 0; s < 4; s++) {
         if (room.players[s] === null) {
           room.players[s] = {
             playerId: `bot_${s}_${Date.now()}`,
-            nickname: botNames[botIdx++] ?? `봇-${s}`,
+            nickname: `${botNames[botIdx++] ?? `봇-${s}`}(${diffLabel})`,
             socketId: '',
             connected: true,
             isBot: true,
@@ -652,7 +655,7 @@ export function registerSocketHandlers(io: Server): void {
     });
 
     // ── add_bot_to_seat (특정 자리에 봇 추가 — 방장만) ─────
-    socket.on('add_bot_to_seat', (data: { seat: number }) => {
+    socket.on('add_bot_to_seat', (data: { seat: number; difficulty?: 'easy' | 'medium' | 'hard' }) => {
       if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
       if (!isValidSeat(data.seat)) { socket.emit('error', { message: 'invalid_seat' }); return; }
       const room = getRoom();
@@ -662,10 +665,13 @@ export function registerSocketHandlers(io: Server): void {
       const s = data.seat;
       if (room.players[s] !== null) return;
 
+      const diff = data.difficulty ?? room.settings.botDifficulty ?? 'hard';
+      room.settings.botDifficulty = diff;
+      const diffLabel = diff === 'easy' ? '쉬움' : diff === 'medium' ? '보통' : '어려움';
       const botNames = ['봇 A', '봇 B', '봇 C', '봇 D'];
       room.players[s] = {
         playerId: `bot_${s}_${Date.now()}`,
-        nickname: botNames[s]!,
+        nickname: `${botNames[s]!}(${diffLabel})`,
         socketId: '',
         connected: true,
         isBot: true,
@@ -1742,7 +1748,8 @@ function formAndStartMatch(io: Server): void {
     seat++;
   }
 
-  // 빈 좌석 봇으로 채우기
+  // 빈 좌석 봇으로 채우기 (자동매칭은 hard)
+  room.settings.botDifficulty = 'hard';
   const botNames = ['Bot-A', 'Bot-B', 'Bot-C'];
   let botIdx = 0;
   for (let s = seat; s < 4; s++) {
