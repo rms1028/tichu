@@ -117,6 +117,10 @@ export function getRooms(): Map<string, GameRoom> {
   return rooms;
 }
 
+export function getRoomCount(): number {
+  return rooms.size;
+}
+
 /** 방 목록을 보고 있는 소켓에게만 rooms_updated 발송 */
 function notifyLobby(io: Server): void {
   io.to(ROOM_LIST_SOCKET_ROOM).emit('rooms_updated');

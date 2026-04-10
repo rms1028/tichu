@@ -7,15 +7,22 @@ process.on('unhandledRejection', (err) => {
 
 import http from 'node:http';
 import { Server } from 'socket.io';
-import { registerSocketHandlers } from './socket-handlers.js';
+import { registerSocketHandlers, getRoomCount } from './socket-handlers.js';
 import { startScheduler, stopScheduler } from './scheduler.js';
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
+const START_TIME = Date.now();
 
 const httpServer = http.createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok', timestamp: Date.now() }));
+    res.end(JSON.stringify({
+      status: 'ok',
+      timestamp: Date.now(),
+      startedAt: START_TIME,
+      uptime: Math.floor((Date.now() - START_TIME) / 1000),
+      rooms: getRoomCount(),
+    }));
     return;
   }
   res.writeHead(404);
