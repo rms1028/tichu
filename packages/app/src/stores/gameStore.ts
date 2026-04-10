@@ -75,6 +75,9 @@ export interface GameState {
   // 폭탄 윈도우
   bombWindow: { remainingMs: number; canSubmitBomb: boolean } | null;
 
+  // 개 리드 후 화면 표시용 (1.5초간 개 카드 표시)
+  dogLeadDisplay: PlayedHand | null;
+
   // 교환 결과
   exchangeReceived: { fromLeft: Card; fromPartner: Card; fromRight: Card } | null;
 
@@ -196,6 +199,7 @@ const INITIAL_STATE = {
   canDeclareTichu: false,
   players: { 0: null, 1: null, 2: null, 3: null } as Record<number, PlayerPublic | null>,
   bombWindow: null as { remainingMs: number; canSubmitBomb: boolean } | null,
+  dogLeadDisplay: null as PlayedHand | null,
   exchangeReceived: null as { fromLeft: Card; fromPartner: Card; fromRight: Card } | null,
   dragonGiveRequired: false,
   dragonGiveSeat: -1,

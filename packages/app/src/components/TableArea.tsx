@@ -17,7 +17,9 @@ import { mob, isMobile } from '../utils/responsive';
 import { COLORS, FONT } from '../utils/theme';
 
 export function TableArea() {
-  const tableCards = useGameStore((s) => s.tableCards);
+  const rawTableCards = useGameStore((s) => s.tableCards);
+  const dogLeadDisplay = useGameStore((s) => s.dogLeadDisplay);
+  const tableCards = rawTableCards ?? dogLeadDisplay; // 개 리드 시 1.5초간 표시
   const wish = useGameStore((s) => s.wish);
   const lastPlay = useGameStore((s) => s.lastPlayEvent);
   const players = useGameStore((s) => s.players);
