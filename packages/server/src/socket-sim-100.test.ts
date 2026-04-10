@@ -11,8 +11,8 @@ import {
   isNormalCard, isMahjong, isDog, isDragon, isPhoenix,
 } from '@tichu/shared';
 
-const SERVER_PORT = 3098; // 다른 포트 사용
-const SERVER_URL = `http://localhost:${SERVER_PORT}`;
+let SERVER_PORT = 0;
+let SERVER_URL = '';
 
 // ── Helpers ─────────────────────────────────────────────────────
 
@@ -289,7 +289,12 @@ async function startServer(): Promise<void> {
   httpServer = http.createServer();
   ioServer = new SocketIOServer(httpServer, { cors: { origin: '*' }, pingInterval: 25_000, pingTimeout: 60_000 });
   registerSocketHandlers(ioServer);
-  await new Promise<void>(r => httpServer.listen(SERVER_PORT, () => r()));
+  await new Promise<void>(r => httpServer.listen(0, () => {
+    const addr = httpServer.address();
+    SERVER_PORT = typeof addr === 'object' && addr ? addr.port : 0;
+    SERVER_URL = `http://localhost:${SERVER_PORT}`;
+    r();
+  }));
 }
 
 async function stopServer(): Promise<void> {

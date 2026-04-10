@@ -155,10 +155,8 @@ export async function playBgm(track: BgmTrack) {
   try {
     await targetAudio.play();
     fadeIn(targetAudio, bgmVolume);
-    console.log(`[BGM] playing: ${track}`);
   } catch (err) {
     // 브라우저 자동 재생 차단 — 첫 인터랙션 후 재시도됨
-    console.log(`[BGM] autoplay blocked for ${track}, waiting for user interaction`);
     pendingTrack = track;
   }
 }

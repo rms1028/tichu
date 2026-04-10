@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test-shared:
+    name: Shared - Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - run: npm test -w packages/shared
+
+  test-server:
+    name: Server - Test
+    runs-on: ubuntu-latest
+    needs: test-shared
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - run: cd packages/server && npx prisma generate
+      - name: Run tests (excluding socket simulations)
+        run: >
+          npx vitest run
+          --exclude 'src/socket-sim.test.ts'
+          --exclude 'src/socket-sim-100.test.ts'
+        working-directory: packages/server
+
+  typecheck-app:
+    name: App - Typecheck
+    runs-on: ubuntu-latest
+    needs: test-shared
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - run: cd packages/app && npx tsc --noEmit
+
+  build:
+    name: Server - Build
+    runs-on: ubuntu-latest
+    needs: [test-server, typecheck-app]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - run: cd packages/server && npx prisma generate
+      - run: npm run build -w packages/server

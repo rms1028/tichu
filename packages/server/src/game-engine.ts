@@ -507,7 +507,6 @@ export function passTurn(room: GameRoom, seat: number): EngineResult {
   if (room.wish !== null) {
     const isLead = room.tableCards === null;
     const wishResult = mustFulfillWish(room.hands[seat]!, room.tableCards, room.wish, isLead);
-    console.log(`[passTurn] wish=${room.wish}, seat=${seat}, mustPlay=${wishResult.mustPlay}, validPlays=${wishResult.validPlaysWithWish.length}, isLead=${isLead}`);
     if (wishResult.mustPlay && wishResult.validPlaysWithWish.length > 0) {
       return { ok: false, error: 'must_fulfill_wish', events: [] };
     }
@@ -611,7 +610,6 @@ function handleDragonGive(
     trickCards,
     timeoutHandle: null,
   };
-  console.log(`[dragon] dragonGivePending set, winningSeat=${winningSeat}, trickCards=${trickCards.length}`);
   events.push({ type: 'dragon_give_required', seat: winningSeat });
 
   return events;
@@ -750,9 +748,6 @@ function endRound(room: GameRoom): GameEvent[] {
   room.roundScores = { team1: result.team1, team2: result.team2 };
   room.scores.team1 += result.team1;
   room.scores.team2 += result.team2;
-  console.log(`[scoring] round: team1=${result.team1}, team2=${result.team2} (card: ${result.details.team1CardPoints}:${result.details.team2CardPoints}, tichu: ${JSON.stringify(result.details.tichuBonuses)}, 1-2: ${result.details.oneTwoFinish})`);
-  console.log(`[scoring] total: team1=${room.scores.team1}, team2=${room.scores.team2}`);
-
   events.push({
     type: 'round_result',
     team1: result.team1,

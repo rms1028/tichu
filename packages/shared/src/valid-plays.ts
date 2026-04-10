@@ -1,4 +1,4 @@
-import type { Card, PlayedHand, Rank } from './types.js';
+import type { Card, NormalCard, PlayedHand, Rank } from './types.js';
 import { isNormalCard, isPhoenix, isDragon, isDog, isMahjong, isBomb } from './types.js';
 import { RANK_VALUES, ALL_RANKS, MAHJONG_VALUE, DRAGON_VALUE } from './constants.js';
 import { validateHand } from './validate-hand.js';
@@ -206,7 +206,7 @@ function generateFullHouses(
         if (phoenix && pairGroup.length >= 1) {
           for (const tri of triples) {
             for (const c of pairGroup) {
-              const rank = (c as any).rank as Rank;
+              const rank = (c as NormalCard).rank;
               const cards = [...tri, c, phoenix];
               const ph = validateHand(cards, rank);
               if (ph && canBeat(currentTable, ph)) addResult(ph);
@@ -218,7 +218,7 @@ function generateFullHouses(
 
     // 봉황이 트리플에 합류 (2장 + 봉황 = 트리플)
     if (phoenix && triGroup.length >= 2) {
-      const rank = (triGroup[0] as any).rank as Rank;
+      const rank = (triGroup[0] as NormalCard).rank;
       const pairs = pickN(triGroup, 2);
       for (const pair of pairs) {
         for (const [pairVal, pairGroup] of entries) {
@@ -401,17 +401,18 @@ function generateSFBombs(
   for (const [suit, group] of bySuit) {
     if (group.length < 5) continue;
 
-    const values = group
+    // 값 기준 정렬된 카드 배열 사용
+    const sorted = group
       .filter(isNormalCard)
-      .map(c => c.value)
-      .sort((a, b) => a - b);
+      .slice()
+      .sort((a, b) => a.value - b.value);
 
     // 연속 구간 찾기
-    for (let i = 0; i < values.length; i++) {
-      const seqCards: Card[] = [group[i]!];
-      for (let j = i + 1; j < values.length; j++) {
-        if (values[j]! - values[j - 1]! === 1) {
-          seqCards.push(group[j]!);
+    for (let i = 0; i < sorted.length; i++) {
+      const seqCards: Card[] = [sorted[i]!];
+      for (let j = i + 1; j < sorted.length; j++) {
+        if (sorted[j]!.value - sorted[j - 1]!.value === 1) {
+          seqCards.push(sorted[j]!);
           if (seqCards.length >= 5) {
             const ph = validateHand([...seqCards]);
             if (ph && isBomb(ph) && canBeat(currentTable, ph)) addResult(ph);

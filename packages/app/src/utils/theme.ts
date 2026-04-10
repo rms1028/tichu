@@ -17,6 +17,9 @@ export const COLORS = {
   team2: '#EF4444',
   bomb: '#9b59b6',
   tichu: '#e74c3c',
+  primary: '#2ecc71',
+  textSecondary: '#a0c4a0',
+  gold: '#FFD700',
 };
 
 export const FONT = {

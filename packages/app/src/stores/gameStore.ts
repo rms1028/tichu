@@ -170,6 +170,7 @@ export interface GameState {
   onBombWindowStart: (remainingMs: number, canSubmitBomb: boolean) => void;
   onBombWindowEnd: () => void;
   onDragonGiveRequired: (seat: number) => void;
+  onDragonGiveCompleted: (fromSeat: number, targetSeat: number) => void;
   onRoundResult: (team1: number, team2: number, scores: { team1: number; team2: number }, details?: { team1CardPoints: number; team2CardPoints: number; tichuBonuses: Record<number, number>; oneTwoFinish: boolean }, finishOrder?: number[], tichuDeclarations?: Record<number, 'large' | 'small' | null>) => void;
   onGameOver: (winner: string, scores: { team1: number; team2: number }) => void;
   onError: (msg: string) => void;
@@ -311,7 +312,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     const phase = get().phase;
     const isHandUpdatePhase = phase === 'DEALING_8' || phase === 'DEALING_6' || phase === 'PASSING';
     if (!isHandUpdatePhase && Date.now() - lastSyncAt < SYNC_GUARD_MS && currentHand.length === cards.length) {
-      console.log('[onCardDealt] ignoring duplicate cards_dealt (within sync guard window, same count)');
       return;
     }
     set({ myHand: cards });

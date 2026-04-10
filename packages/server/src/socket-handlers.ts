@@ -245,10 +245,8 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── 게스트 로그인 (DB 유저 생성/조회) ──────────────────
     socket.on('guest_login', async (data: { guestId: string; nickname: string }) => {
-      console.log('[guest_login] attempt:', data.guestId, data.nickname);
       try {
         const user = await findOrCreateGuestUser(data.guestId, data.nickname);
-        console.log('[guest_login] success:', user.id);
         dbUserId = user.id;
         socket.emit('login_success', {
           userId: user.id,
@@ -403,7 +401,7 @@ export function registerSocketHandlers(io: Server): void {
         if (!room.settings.isCustom) continue;
         if (room.phase !== 'WAITING_FOR_PLAYERS') continue;
         const playerCount = [0, 1, 2, 3].filter(s => room.players[s] !== null).length;
-        if (playerCount >= 4) continue;
+        if (playerCount === 0 || playerCount >= 4) continue;
         if (skipped < offset) { skipped++; continue; }
         if (roomList.length >= limit) break;
         roomList.push({
@@ -800,7 +798,6 @@ export function registerSocketHandlers(io: Server): void {
       const savedSeat = playerSeat;
 
       socket.leave(savedRoomId);
-      console.log(`[leave_room] seat=${savedSeat} left room ${savedRoomId}`);
 
       if (room && savedSeat >= 0) {
         const player = room.players[savedSeat];
@@ -836,14 +833,21 @@ export function registerSocketHandlers(io: Server): void {
               }
               cleanupRoom(room);
               rooms.delete(savedRoomId);
-              console.log(`[leave_room] host left, no humans → room ${savedRoomId} destroyed`);
             } else {
               io.to(savedRoomId).emit('player_left', { seat: savedSeat });
               broadcastSeats(io, room);
             }
           } else {
             io.to(savedRoomId).emit('player_left', { seat: savedSeat });
-            broadcastSeats(io, room);
+            // 남은 플레이어가 없으면 방 삭제
+            const remaining = [0, 1, 2, 3].filter(s => room.players[s] !== null && !room.players[s]!.isBot);
+            if (remaining.length === 0) {
+              io.to(savedRoomId).emit('room_closed', { reason: 'all_players_left' });
+              cleanupRoom(room);
+              rooms.delete(savedRoomId);
+            } else {
+              broadcastSeats(io, room);
+            }
           }
         } else {
           // 게임 진행 중: 연결 끊김과 동일하게 처리
@@ -903,7 +907,6 @@ export function registerSocketHandlers(io: Server): void {
 
       // 봇 대체된 상태라면 → 사람으로 복원
       if (player.isBot && player.originalPlayer) {
-        console.log(`[rejoin] seat=${seat} restoring human player ${player.originalPlayer.playerId}`);
         player.playerId = player.originalPlayer.playerId;
         player.nickname = player.originalPlayer.nickname;
         player.isBot = false;
@@ -978,12 +981,9 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── exchange_cards ─────────────────────────────────────
     socket.on('exchange_cards', (data: { left: Card; partner: Card; right: Card }) => {
-      console.log(`[exchange_cards] seat=${playerSeat}`, JSON.stringify(data));
       const room = getRoom();
-      if (!room) { console.log('[exchange_cards] no room'); return; }
-      console.log(`[exchange_cards] phase=${room.phase}, pending=${JSON.stringify(Object.keys(room.pendingExchanges).filter(s => room.pendingExchanges[Number(s)] !== null))}`);
+      if (!room) return;
       const result = submitExchange(room, playerSeat, data.left, data.partner, data.right);
-      console.log(`[exchange_cards] result ok=${result.ok}, error=${result.error}`);
       if (!result.ok) { socket.emit('invalid_play', { reason: result.error }); return; }
       broadcastEvents(io, room, result.events);
 
@@ -1498,7 +1498,6 @@ export function registerSocketHandlers(io: Server): void {
                 io.to(savedRoomId2).emit('room_closed', { reason: 'all_players_left' });
                 cleanupRoom(r);
                 rooms.delete(savedRoomId2);
-                console.log(`[disconnect] host timeout, no humans → room ${savedRoomId2} destroyed`);
               } else {
                 io.to(savedRoomId2).emit('player_left', { seat: savedSeat2 });
                 broadcastSeats(io, r);
@@ -1547,7 +1546,6 @@ export function registerSocketHandlers(io: Server): void {
     // 게임이 이미 끝났으면 대체 불필요
     if (room.phase === 'WAITING_FOR_PLAYERS' || room.phase === 'GAME_OVER') return;
 
-    console.log(`[botReplace] seat=${seat} replacing ${player.nickname} with bot`);
 
     // 탈주 기록 DB 업데이트
     prisma.user.updateMany({
@@ -1864,7 +1862,6 @@ function startExchangeTimer(io: Server, room: GameRoom): void {
 function startTurnTimer(io: Server, room: GameRoom): void {
   if (room.phase !== 'TRICK_PLAY') return;
   if (room.bombWindow) return;
-  console.log(`[turn] seat=${room.currentTurn}, isBot=${room.players[room.currentTurn]?.isBot}, isFirstLead=${room.isFirstLead}`);
 
   room.turnTimer.turnId++;
   room.turnTimer.startedAt = Date.now();
@@ -1902,10 +1899,8 @@ function scheduleBotAction(io: Server, room: GameRoom, seat: number, turnId: num
     let result;
 
     if (decision.action === 'play' && decision.cards) {
-      console.log(`[bot] seat=${seat} play ${decision.cards.length} cards, phoenixAs=${decision.phoenixAs}`);
       result = playCards(room, seat, decision.cards, decision.phoenixAs, decision.wish);
     } else if (decision.action === 'pass' && room.tableCards !== null) {
-      console.log(`[bot] seat=${seat} pass`);
       result = passTurn(room, seat);
     } else {
       console.warn(`[bot] seat=${seat} tried to pass on lead, falling back to timeout`);
@@ -1976,7 +1971,6 @@ function transferHost(io: Server, room: GameRoom, leavingSeat: number): boolean 
   if (candidates.length === 0) return false;
   room.hostPlayerId = room.players[candidates[0]!]!.playerId;
   io.to(room.roomId).emit('host_changed', { hostPlayerId: room.hostPlayerId, seat: candidates[0] });
-  console.log(`[transferHost] new host: seat=${candidates[0]}, pid=${room.hostPlayerId}`);
   return true;
 }
 
@@ -1989,7 +1983,6 @@ function checkAndDestroyEmptyRoom(io: Server, room: GameRoom): boolean {
   io.to(room.roomId).emit('room_closed', { reason: 'all_players_left' });
   cleanupRoom(room);
   rooms.delete(room.roomId);
-  console.log(`[checkEmpty] all humans left → room ${room.roomId} destroyed`);
   notifyLobby(io);
   return true;
 }
@@ -2007,7 +2000,6 @@ function returnCustomRoomToWaiting(io: Server, room: GameRoom): void {
   const humanSeats = [0, 1, 2, 3].filter(s => room.players[s] !== null && !room.players[s]!.isBot);
   if (humanSeats.length === 0) {
     rooms.delete(room.roomId);
-    console.log(`[returnToWaiting] no humans left → room ${room.roomId} destroyed`);
     notifyLobby(io);
     return;
   }
@@ -2041,12 +2033,10 @@ function returnCustomRoomToWaiting(io: Server, room: GameRoom): void {
   io.to(room.roomId).emit('return_to_waiting', { hostPlayerId: room.hostPlayerId });
   broadcastSeats(io, room);
   notifyLobby(io);
-  console.log(`[returnToWaiting] custom room ${room.roomId} returned to waiting (${humanSeats.length} humans)`);
 }
 
 function handlePostPlay(io: Server, room: GameRoom): void {
   try {
-  console.log(`[postPlay] phase=${room.phase}, currentTurn=${room.currentTurn}, bombWindow=${!!room.bombWindow}, dragonGive=${!!room.dragonGivePending}`);
   // 라운드/게임 종료 체크
   if (room.phase === 'ROUND_END' || room.phase === 'SCORING') {
     clearTurnTimer(room);
@@ -2107,7 +2097,6 @@ function startDragonGiveTimer(io: Server, room: GameRoom): void {
   if (!room.dragonGivePending) return;
 
   const seat = room.dragonGivePending.winningSeat;
-  console.log(`[dragonGiveTimer] started for seat=${seat}`);
 
   // 클라이언트에 용 양도 요청 전송 (broadcastEvents default에서도 보내지만 확실하게 재전송)
   const player = room.players[seat];

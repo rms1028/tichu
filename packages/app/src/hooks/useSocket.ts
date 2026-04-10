@@ -89,7 +89,6 @@ export function useSocket() {
 
     // 서버 재시작 알림 → 재접속 대기 모드
     socket.on('server_restarting', () => {
-      console.log('[server_restarting] server is restarting, will retry rejoin');
       serverRestarting = true;
       rejoinRetryCount = 0;
     });
@@ -101,11 +100,9 @@ export function useSocket() {
 
       if (roomId && rejoinRetryCount <= MAX_REJOIN_RETRIES) {
         const delay = Math.min(1000 * Math.pow(2, rejoinRetryCount - 1), 8000);
-        console.log(`[rejoin_failed] retry ${rejoinRetryCount}/${MAX_REJOIN_RETRIES} in ${delay}ms`);
         if (rejoinRetryTimer) clearTimeout(rejoinRetryTimer);
         rejoinRetryTimer = setTimeout(() => attemptRejoin(), delay);
       } else {
-        console.warn('[rejoin_failed] max retries reached, resetting');
         serverRestarting = false;
         rejoinRetryCount = 0;
         store.reset();
@@ -270,14 +267,12 @@ export function useSocket() {
 
     // ── 연결 상태 변경 ────────────────────────────────────────
     socket.on('room_closed', () => {
-      console.log('[room_closed] room destroyed');
       cancelAllSounds();
       store.reset();
     });
 
     // ── 커스텀 방: 게임 종료 후 대기 상태 복귀 ──────────────────
     socket.on('return_to_waiting', (data: { hostPlayerId?: string }) => {
-      console.log('[return_to_waiting] back to lobby');
       cancelAllSounds();
       const { roomId, mySeat, playerId, nickname } = useGameStore.getState();
       // 게임 상태 초기화하되 방/좌석 정보는 유지
@@ -345,7 +340,6 @@ export function useSocket() {
 
     // ── 용 양도 ────────────────────────────────────────────
     socket.on('dragon_give_required', (data: { seat: number }) => {
-      console.log('[dragon_give_required] seat=', data.seat, 'mySeat=', useGameStore.getState().mySeat);
       store.onDragonGiveRequired(data.seat);
     });
 

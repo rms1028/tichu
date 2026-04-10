@@ -10,6 +10,10 @@ import {
 import type { GameEvent } from './game-engine.js';
 
 // ── BOMB_WINDOW 시작 (섹션 4.3) ──────────────────────────────
+// NOTE: startBombWindow, resolveBombWindow, afterBombWindowResolved는 현재 미사용.
+// 폭탄 인터럽트는 socket-handlers.ts의 submit_bomb에서 즉시 처리 방식으로 구현됨.
+// 향후 3초 윈도우(동시 복수 폭탄 수집 후 최강만 적용) 방식 전환 시 활용 가능.
+// 테스트(bomb-window.test.ts, game-flow.test.ts, e2e.test.ts)에서는 사용 중.
 
 export function startBombWindow(
   room: GameRoom,

@@ -19,8 +19,8 @@ import {
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-const SERVER_PORT = 3099;
-const SERVER_URL = `http://localhost:${SERVER_PORT}`;
+let SERVER_PORT = 0;
+let SERVER_URL = '';
 
 /** Promise that resolves on a specific socket event, rejects on timeout */
 function waitForEvent<T = unknown>(
@@ -403,8 +403,10 @@ async function startTestServer(): Promise<void> {
   registerSocketHandlers(ioServer);
 
   await new Promise<void>((resolve) => {
-    httpServer.listen(SERVER_PORT, () => {
-      console.log(`[test] Server started on port ${SERVER_PORT}`);
+    httpServer.listen(0, () => {
+      const addr = httpServer.address();
+      SERVER_PORT = typeof addr === 'object' && addr ? addr.port : 0;
+      SERVER_URL = `http://localhost:${SERVER_PORT}`;
       resolve();
     });
   });
