@@ -192,6 +192,11 @@ export function useSocket() {
       try { TTS.cardPlayed(data.hand.value, data.hand.type); } catch {}
     });
 
+    socket.on('dog_lead_transfer', (data: { fromSeat: number; toSeat: number }) => {
+      // 개 리드 후 테이블 초기화 (새 리드 상태)
+      useGameStore.setState({ tableCards: null, passedSeats: [], lastPlayEvent: null });
+    });
+
     socket.on('player_passed', (data: { seat: number }) => {
       store.onPlayerPassed(data.seat);
       if (!isInGame()) return;
