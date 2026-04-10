@@ -1909,10 +1909,15 @@ function startTurnTimer(io: Server, room: GameRoom): void {
 
 function scheduleBotAction(io: Server, room: GameRoom, seat: number, turnId: number): void {
   const delay = 1500 + Math.random() * 2000; // 1.5~3.5초 (자연스러운 속도)
+  const roomId = room.roomId;
   setTimeout(() => {
     try {
-    if (room.turnTimer.turnId !== turnId) return;
-    if (room.currentTurn !== seat) return;
+    const r = rooms.get(roomId);
+    if (!r || r.phase === 'GAME_OVER' || r.phase === 'ROUND_END' || r.phase === 'SCORING') return;
+    if (r.turnTimer.turnId !== turnId) return;
+    if (r.currentTurn !== seat) return;
+    // Use live room reference
+    const room = r;
 
     const decision = decideBotAction(room, seat);
     let result;
@@ -2067,12 +2072,14 @@ function handlePostPlay(io: Server, room: GameRoom): void {
 
     if (room.phase === 'SCORING') {
       // 5초 후 다음 라운드 또는 게임 종료
+      const roomId = room.roomId;
       setTimeout(() => {
-        if (room.phase === 'GAME_OVER') return;
-        const events = startRound(room);
-        broadcastEvents(io, room, events);
-        scheduleBotLargeTichu(io, room);
-        startLargeTichuTimer(io, room);
+        const r = rooms.get(roomId);
+        if (!r || r.phase === 'GAME_OVER') return;
+        const events = startRound(r);
+        broadcastEvents(io, r, events);
+        scheduleBotLargeTichu(io, r);
+        startLargeTichuTimer(io, r);
       }, 5000);
     }
     return;

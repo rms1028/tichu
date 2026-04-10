@@ -334,7 +334,10 @@ export function decideBotAction(room: GameRoom, seat: number): BotDecision {
   // ── 초급: 매우 약한 플레이 ──
   if (diff === 'easy') {
     if (isLead) {
-      if (validPlays.length === 0) return { action: 'play', cards: [hand[0]!] };
+      if (validPlays.length === 0) {
+        if (hand.length === 0) return { action: 'pass' };
+        return { action: 'play', cards: [hand[0]!] };
+      }
       // 싱글만 사용, 높은 카드부터 낭비 (최악의 전략)
       const singles = validPlays.filter(p => p.type === 'single');
       if (singles.length > 0) {
@@ -355,6 +358,7 @@ export function decideBotAction(room: GameRoom, seat: number): BotDecision {
 
   if (isLead) {
     if (validPlays.length === 0) {
+      if (hand.length === 0) return { action: 'pass' };
       const lowest = hand.filter(isNormalCard).sort((a, b) => a.value - b.value)[0];
       return { action: 'play', cards: [lowest ?? hand[0]!] };
     }
@@ -595,7 +599,8 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
   // 중급: 현재 로직 그대로 (아래 코드)
   // 고급: 추가 전략이 scored에 반영됨
 
-  // 마지막 1장
+  // 마지막 1장 또는 플레이 없음
+  if (plays.length === 0) return plays[0] ?? { type: 'single', cards: hand.slice(0, 1), value: 0, length: 1 } as PlayedHand;
   if (hand.length === 1) return plays[0]!;
 
   // 한방에 끝낼 수 있는 조합
@@ -610,7 +615,8 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
     // 탑이 아닌 약한 카드부터 (탑으로 나중에 컨트롤)
     if (nonTopSingles.length > 0 && topSingles.length > 0) return nonTopSingles[0]!;
     if (topSingles.length > 0) return topSingles[0]!; // 탑만 남으면 약한 탑부터
-    return singles[0]!;
+    if (singles.length > 0) return singles[0]!;
+    // fallthrough to scored logic
   }
 
   // 마지막 2~3장: 약한 카드 먼저 → 강한 카드로 마무리
@@ -1034,6 +1040,7 @@ function decideBotWish(hand: Card[], room: GameRoom): Rank | undefined {
 // ══════════════════════════════════════════════════════════════
 
 function pickWeakestBomb(plays: PlayedHand[]): PlayedHand {
+  if (plays.length === 0) return { type: 'four_bomb', cards: [], value: 0, length: 0 } as PlayedHand;
   const bombs = plays.filter(isBomb);
   if (bombs.length === 0) return plays[0]!;
   return bombs.sort((a, b) => {
@@ -1044,6 +1051,7 @@ function pickWeakestBomb(plays: PlayedHand[]): PlayedHand {
 }
 
 function pickBestForPartner(hand: Card[]): Card {
+  if (hand.length === 0) return { type: 'special', specialType: 'mahjong' } as Card;
   // 티츄한 파트너에게: 용 > A > 봉황 > K
   const dragon = hand.find(isDragon);
   if (dragon) return dragon;
@@ -1057,6 +1065,7 @@ function pickBestForPartner(hand: Card[]): Card {
 }
 
 function pickGoodForPartner(hand: Card[]): Card {
+  if (hand.length === 0) return { type: 'special', specialType: 'mahjong' } as Card;
   // 일반 상황: A나 봉황을 줌 (용은 내가 쓰기)
   const ace = hand.filter(c => isNormalCard(c) && c.rank === 'A')[0];
   if (ace) return ace;
@@ -1064,11 +1073,11 @@ function pickGoodForPartner(hand: Card[]): Card {
   if (phoenix) return phoenix;
   const king = hand.filter(c => isNormalCard(c) && c.rank === 'K')[0];
   if (king) return king;
-  // 높은 카드
   return hand.filter(isNormalCard).sort((a, b) => cardSortValue(b) - cardSortValue(a))[0] ?? hand[0]!;
 }
 
 function pickWorstForEnemy(hand: Card[]): Card {
+  if (hand.length === 0) return { type: 'special', specialType: 'mahjong' } as Card;
   // 적에게: 점수 없는 가장 약한 카드, 개 우선 (적에게 쓸모없음)
   const dog = hand.find(isDog);
   if (dog) return dog;
