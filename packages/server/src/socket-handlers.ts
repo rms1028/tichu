@@ -1600,7 +1600,7 @@ export function registerSocketHandlers(io: Server): void {
       }, 1500 + Math.random() * 1000);
     }
 
-    // 교환 페이즈: 아직 교환 안 했으면 봇으로 처리
+    // 교환 페이즈: 아직 교환 안 했으면 봇으로 처리 (딜레이로 유저 스몰 티츄 대기)
     if (room.phase === 'PASSING' && room.pendingExchanges[seat] === null) {
       setTimeout(() => {
         if (room.phase !== 'PASSING') return;
@@ -1616,7 +1616,7 @@ export function registerSocketHandlers(io: Server): void {
           broadcastEvents(io, room, events);
           startTurnTimer(io, room);
         }
-      }, 1000 + Math.random() * 1500);
+      }, 3000 + Math.random() * 2000);
     }
 
     // 트릭 플레이: 현재 이 봇의 턴이면 봇 액션 스케줄
@@ -1807,6 +1807,7 @@ function scheduleBotLargeTichu(io: Server, room: GameRoom): void {
 }
 
 function scheduleBotExchange(io: Server, room: GameRoom): void {
+  // 3~5초 딜레이: 유저가 스몰 티츄를 선언할 시간 확보
   setTimeout(() => {
     if (room.phase !== 'PASSING') return;
     for (let s = 0; s < 4; s++) {
@@ -1826,7 +1827,7 @@ function scheduleBotExchange(io: Server, room: GameRoom): void {
       broadcastEvents(io, room, events);
       startTurnTimer(io, room);
     }
-  }, 1000 + Math.random() * 1500);
+  }, 3000 + Math.random() * 2000);
 }
 
 function startLargeTichuTimer(io: Server, room: GameRoom): void {

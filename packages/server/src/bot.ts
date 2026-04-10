@@ -546,12 +546,19 @@ export function decideBotExchange(room: GameRoom, seat: number): { left: Card; p
       if (g.length >= 2) g.cards.forEach(c => usedInCombo.add(cardId(c)));
     }
 
-    // 파트너에게: 티츄면 최강, 아니면 고립 싱글 중 가장 좋은 것
+    // 파트너에게: 티츄 선언 시 최강 카드, 아니면 조합에 안 쓰이는 높은 카드
     const forPartner = partnerTichu
       ? pickBestForPartner(hand)
       : (() => {
-          // 조합에 안 쓰이는 카드 중 높은 것
+          // 조합에 안 쓰이는 카드 중 높은 것 → 항상 좋은 카드 주기
           const free = hand.filter(c => !usedInCombo.has(cardId(c)));
+          // 프리 카드 중 A/K/봉황 우선, 없으면 가장 높은 카드
+          const freeAce = free.find(c => isNormalCard(c) && c.rank === 'A');
+          if (freeAce) return freeAce;
+          const freePhoenix = free.find(isPhoenix);
+          if (freePhoenix) return freePhoenix;
+          const freeKing = free.find(c => isNormalCard(c) && c.rank === 'K');
+          if (freeKing) return freeKing;
           const good = free.filter(isNormalCard).sort((a, b) => cardSortValue(b) - cardSortValue(a));
           return good[0] ?? pickGoodForPartner(hand);
         })();
