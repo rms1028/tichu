@@ -1631,7 +1631,15 @@ export function registerSocketHandlers(io: Server): void {
         const opponents = [0, 1, 2, 3].filter(
           s => s !== seat && (s + 2) % 4 !== seat
         );
-        const target = opponents[Math.floor(Math.random() * opponents.length)]!;
+        const active = getActivePlayers(room);
+        const activeOpps = opponents.filter(s => active.includes(s));
+        // 스마트 양도: 카드 가장 많은 상대에게 (나갈 가능성 낮음 → 점수 묻힘)
+        let target: number;
+        if (activeOpps.length > 0) {
+          target = activeOpps.sort((a, b) => (room.hands[b]?.length ?? 0) - (room.hands[a]?.length ?? 0))[0]!;
+        } else {
+          target = opponents[0]!;
+        }
         const result = dragonGive(room, seat, target);
         if (result.ok) {
           broadcastEvents(io, room, result.events);
