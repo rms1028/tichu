@@ -34,10 +34,12 @@ export function TableArea() {
 
   // 테이블 카드 변경 시 key를 바꿔서 entering 애니메이션 재실행
   const tableKeyRef = useRef(0);
-  const prevCardsRef = useRef(tableCards);
-  if (tableCards !== prevCardsRef.current) {
+  const prevRawRef = useRef(rawTableCards);
+  const prevDogRef = useRef(dogLeadDisplay);
+  if (rawTableCards !== prevRawRef.current || dogLeadDisplay !== prevDogRef.current) {
     tableKeyRef.current += 1;
-    prevCardsRef.current = tableCards;
+    prevRawRef.current = rawTableCards;
+    prevDogRef.current = dogLeadDisplay;
   }
 
   // 새 트릭 감지 (카드가 null로 바뀔 때 = 수거됨)
@@ -148,7 +150,10 @@ export function TableArea() {
               entering={FadeIn.delay(150).duration(200)}
               style={styles.playInfo}
             >
-              {players[lastPlay.seat]?.nickname ?? '?'} {'\u2192'} {valueLabel(lastPlay.hand.value)}{lastPlay.hand.type !== 'single' || (lastPlay.hand.value >= 2 && lastPlay.hand.value <= 14) ? ` ${handTypeLabel(lastPlay.hand.type)}` : ''}
+              {lastPlay.hand.value === 0 && lastPlay.hand.cards.some((c: any) => c.type === 'special' && c.specialType === 'dog')
+                ? `${players[lastPlay.seat]?.nickname ?? '?'} \u2192 \uD83D\uDC15 \uD30C\uD2B8\uB108\uC5D0\uAC8C \uB9AC\uB4DC \uC774\uC804`
+                : `${players[lastPlay.seat]?.nickname ?? '?'} \u2192 ${valueLabel(lastPlay.hand.value)}${lastPlay.hand.type !== 'single' || (lastPlay.hand.value >= 2 && lastPlay.hand.value <= 14) ? ` ${handTypeLabel(lastPlay.hand.type)}` : ''}`
+              }
             </Animated.Text>
           )}
         </Animated.View>

@@ -193,14 +193,18 @@ export function useSocket() {
     });
 
     socket.on('dog_lead_transfer', (data: { fromSeat: number; toSeat: number }) => {
-      // 개 카드를 잠시 보여준 후 테이블 초기화 (새 리드 상태)
+      // 개 카드를 1.5초간 화면에 표시한 후 초기화
       // tableCards는 즉시 null (유효 플레이 계산용)
-      // dogLeadDisplay로 화면에 1.5초간 표시
-      const currentTable = useGameStore.getState().tableCards;
+      const dogHand: PlayedHand = {
+        type: 'single',
+        cards: [{ type: 'special' as const, specialType: 'dog' as const }],
+        value: 0,
+        length: 1,
+      };
       useGameStore.setState({
         tableCards: null,
         passedSeats: [],
-        dogLeadDisplay: currentTable,
+        dogLeadDisplay: dogHand,
       });
       setTimeout(() => {
         useGameStore.setState({ dogLeadDisplay: null, lastPlayEvent: null });
