@@ -420,9 +420,6 @@ export function decideBotTichu(room: GameRoom, seat: number, type: 'large' | 'sm
   const oppScore = room.scores[myTeam === 'team1' ? 'team2' : 'team1'];
   const desperate = oppScore >= 800 && myScore < oppScore;
 
-  // 고급: 더 정밀한 판단
-  const threshold = diff === 'hard' ? 6 : 7;
-
   if (type === 'large') {
     let score = 0;
     if (hasDragon) score += 3;
@@ -437,7 +434,9 @@ export function decideBotTichu(room: GameRoom, seat: number, type: 'large' | 'sm
       const highCount = hand.filter(c => isNormalCard(c) && c.value >= 10).length;
       if (highCount >= 5) score += 2;
     }
-    return score >= threshold;
+    // 라지 티츄 임계값: hard=8 (신중), medium=7 (보통)
+    const largeThreshold = diff === 'hard' ? 8 : 7;
+    return score >= largeThreshold;
   }
 
   // 스몰: 14장 — 핸드 전체 분석
@@ -470,7 +469,8 @@ export function decideBotTichu(room: GameRoom, seat: number, type: 'large' | 'sm
     if (enemyMinCards <= 5) score -= 2; // 적이 곧 나감 → 위험
   }
 
-  return score >= (diff === 'hard' ? 5 : 6);
+  // 스몰 티츄 임계값: hard=6.5 (신중하게 선언), medium=6
+  return score >= (diff === 'hard' ? 6.5 : 6);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -622,6 +622,16 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
     // 내 티츄: 장수 많은 조합 더 우선
     if (myTichu) score += p.length * 5;
 
+    // ── 중급 이상 전략 ──
+    if (diff === 'medium' || diff === 'hard') {
+      // 고립 싱글 먼저 처리 (조합에 안 쓰이는 카드)
+      if (p.type === 'single' && isNormalCard(p.cards[0]!)) {
+        if (analysis.decomposition.isolatedSingles.includes(p.cards[0]!.value)) score += 12;
+      }
+      // 파트너 나갔으면 개 리드 감점
+      if (!active.includes(partner) && p.cards.some(isDog)) score -= 50;
+    }
+
     // ── 고급 전략 (A~E 통합) ──
     if (diff === 'hard') {
       const situation = assessGameSituation(room, seat);
@@ -656,10 +666,6 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
         score += p.length * 3;
         const pts = sumPoints(p.cards);
         if (pts >= 10 && analysis.topSingles >= 1) score += 15;
-      } else if (situation === 'dominant') {
-        // 안전: 약한 카드부터, 리스크 회피
-        if (p.value <= 8) score += 10;
-        if (p.cards.some(isDragon)) score -= 40; // 양도 리스크 회피
       }
 
       // [D] 파트너 카드 적으면 개로 리드 넘기기
@@ -746,6 +752,13 @@ function pickFollowPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat:
     // 내 티츄: 적극적
     if (myTichu) score += 10;
 
+    // ── 중급 이상 팔로우 전략 ──
+    if (diff === 'medium' || diff === 'hard') {
+      // 고점수 트릭 반드시 가져가기
+      const trickPtsMH = room.currentTrick.plays.reduce((sum, pp) => sum + sumPoints(pp.hand.cards), 0);
+      if (trickPtsMH >= 10) score += 15;
+    }
+
     // ── 고급 팔로우 전략 (A~E) ──
     if (diff === 'hard') {
       const table = room.tableCards;
@@ -773,16 +786,16 @@ function pickFollowPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat:
       if (trickPts >= 10) score += 15;
       if (trickPts >= 20) score += 10; // 고점수 트릭 반드시 가져가기
       if (situation === 'desperate') score += 8;
-      if (situation === 'dominant' && trickPts < 5) score -= 5;
 
       // [#6] 조합 깨기 방지: 이 카드가 더 큰 조합의 일부인지 확인
       if (p.type === 'pair' || p.type === 'triple') {
-        // 이 카드들이 풀하우스/연속페어에 쓰일 수 있는지
         const remainAfter = hand.filter(c => !p.cards.some(pc => cardId(pc) === cardId(c)));
         const decompBefore = decomposeHand(hand);
         const decompAfter = decomposeHand(remainAfter);
-        // 분해 후 트릭 수가 늘어나면 조합 깨는 것 → 감점
-        if (decompAfter.minTricks > decompBefore.minTricks) score -= 15;
+        // 분해 후 트릭 수가 2 이상 늘어나면 큰 감점, 1이면 약한 감점
+        const trickDiff = decompAfter.minTricks - decompBefore.minTricks;
+        if (trickDiff >= 2) score -= 15;
+        else if (trickDiff === 1) score -= 5;
       }
 
       // [#8] 2인 남았을 때: 무조건 이기기 (패스 = 상대에게 리드)
@@ -823,9 +836,11 @@ function shouldPass(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: num
   if (room.currentTrick.lastPlayedSeat === partner) {
     // 파트너 티츄면 무조건 패스
     if (partnerTichu) return true;
-    // 마무리 단계(3장 이하)가 아니면 패스
-    if (hand.length > 3) return true;
-    return false;
+    // 약한 카드로 이길 수 있으면 내기 (카드 빨리 소모)
+    if (weakest.value <= 8) return false;
+    // 남은 카드 적으면 적극적으로 내기
+    if (hand.length <= 5) return false;
+    return true;
   }
 
   // 약한 카드(8 이하)로 이길 수 있으면 항상 내기
@@ -855,11 +870,11 @@ function shouldPass(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: num
     const pos = getPositionInfo(room, seat);
     const situation = assessGameSituation(room, seat);
 
-    // [E] 파트너가 바로 다음 → 기회 양보
-    if (pos.partnerIsNext && room.hands[partner]!.length > 0 && weakest.value >= 10) return true;
+    // [E] 파트너가 바로 다음이고 파트너 카드가 적으면 기회 양보
+    if (pos.partnerIsNext && room.hands[partner]!.length <= 3 && weakest.value >= 12) return true;
 
     // [C] 크게 이기고 있으면 보수적 (불필요한 카드 소모 방지)
-    if (situation === 'dominant' && weakest.value >= 11 && hand.length > 5) return true;
+    if (situation === 'dominant' && weakest.value >= 13 && hand.length > 7) return true;
 
     // [C] 크게 지고 있으면 무조건 공격
     if (situation === 'desperate') return false;

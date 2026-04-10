@@ -183,32 +183,32 @@ function benchmark(label: string, t1: Difficulty, t2: Difficulty, n: number) {
   return { w1, w2, errors, n };
 }
 
-describe('Bot Benchmark (50 games)', () => {
+describe('Bot Benchmark (100 games)', () => {
   it('hard vs hard', () => {
-    const r = benchmark('Hard vs Hard', 'hard', 'hard', 50);
+    const r = benchmark('Hard vs Hard', 'hard', 'hard', 100);
     expect(r.errors).toBeLessThanOrEqual(20);
   }, 300_000);
 
   it('hard vs easy', () => {
-    const r = benchmark('Hard vs Easy', 'hard', 'easy', 50);
+    const r = benchmark('Hard vs Easy', 'hard', 'easy', 100);
     expect(r.errors).toBeLessThanOrEqual(20);
     console.log(`  → Hard 승률: ${Math.round(r.w1/r.n*100)}%`);
   }, 300_000);
 
   it('hard vs medium', () => {
-    const r = benchmark('Hard vs Medium', 'hard', 'medium', 50);
+    const r = benchmark('Hard vs Medium', 'hard', 'medium', 100);
     expect(r.errors).toBeLessThanOrEqual(20);
     console.log(`  → Hard 승률: ${Math.round(r.w1/r.n*100)}%`);
   }, 300_000);
 
   it('medium vs easy', () => {
-    const r = benchmark('Medium vs Easy', 'medium', 'easy', 50);
+    const r = benchmark('Medium vs Easy', 'medium', 'easy', 100);
     expect(r.errors).toBeLessThanOrEqual(20);
     console.log(`  → Medium 승률: ${Math.round(r.w1/r.n*100)}%`);
   }, 300_000);
 
   it('easy vs easy', () => {
-    const r = benchmark('Easy vs Easy', 'easy', 'easy', 50);
+    const r = benchmark('Easy vs Easy', 'easy', 'easy', 100);
     expect(r.errors).toBeLessThanOrEqual(20);
   }, 300_000);
 });
