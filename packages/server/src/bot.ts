@@ -122,18 +122,60 @@ interface HandDecomposition {
   isolatedSingles: number[]; // 고립 싱글의 value 목록 (페어/트리플 불가)
 }
 
-/** 핸드를 최소 트릭으로 분해 (greedy: 큰 조합 우선) */
+/** 핸드를 최소 트릭으로 분해 — 여러 전략 시도 후 최선 선택 */
 function decomposeHand(hand: Card[]): HandDecomposition {
-  // 모든 가능한 리드 플레이를 구한 후, 가장 큰 조합부터 탐욕적으로 할당
+  if (hand.length === 0) return { groups: [], minTricks: 0, isolatedSingles: [] };
+
+  // 고립 싱글 계산 (공통)
+  const byVal = new Map<number, number>();
+  for (const c of hand) { if (isNormalCard(c)) byVal.set(c.value, (byVal.get(c.value) ?? 0) + 1); }
+  const isolatedSingles = [...byVal.entries()].filter(([, cnt]) => cnt === 1).map(([v]) => v);
+
+  // 여러 전략으로 분해 시도 → 최소 트릭 선택
+  const strategies = [
+    () => decomposeGreedy(hand, 'length'),   // 긴 조합 우선
+    () => decomposeGreedy(hand, 'combo'),    // 조합형(스트레이트/풀하우스) 우선
+    () => decomposeGreedy(hand, 'pair'),     // 페어/연속페어 우선
+  ];
+
+  let best: PlayedHand[] | null = null;
+  let bestCount = Infinity;
+
+  for (const strategy of strategies) {
+    const groups = strategy();
+    if (groups.length < bestCount) {
+      bestCount = groups.length;
+      best = groups;
+    }
+  }
+
+  return { groups: best ?? [], minTricks: bestCount, isolatedSingles };
+}
+
+function decomposeGreedy(hand: Card[], priority: 'length' | 'combo' | 'pair'): PlayedHand[] {
   const allPlays = getValidPlays(hand, null, null);
 
-  // 장수 내림차순 정렬 (스트레이트 > 풀하우스 > 연속페어 > 트리플 > 페어 > 싱글)
-  // 같은 장수면 폭탄 아닌 것 우선 (폭탄은 아껴야 함)
   allPlays.sort((a, b) => {
-    if (a.length !== b.length) return b.length - a.length;
     const aB = isBomb(a) ? 1 : 0;
     const bB = isBomb(b) ? 1 : 0;
-    if (aB !== bB) return aB - bB;
+    if (aB !== bB) return aB - bB; // 폭탄 아끼기
+
+    if (priority === 'length') {
+      if (a.length !== b.length) return b.length - a.length;
+    } else if (priority === 'combo') {
+      // 스트레이트 > 풀하우스 > 연속페어 > 트리플 > 페어 > 싱글
+      const typeOrder: Record<string, number> = { straight: 0, fullhouse: 1, steps: 2, triple: 3, pair: 4, single: 5 };
+      const aT = typeOrder[a.type] ?? 6;
+      const bT = typeOrder[b.type] ?? 6;
+      if (aT !== bT) return aT - bT;
+      if (a.length !== b.length) return b.length - a.length;
+    } else { // pair
+      const typeOrder: Record<string, number> = { steps: 0, pair: 1, straight: 2, fullhouse: 3, triple: 4, single: 5 };
+      const aT = typeOrder[a.type] ?? 6;
+      const bT = typeOrder[b.type] ?? 6;
+      if (aT !== bT) return aT - bT;
+      if (a.length !== b.length) return b.length - a.length;
+    }
     return a.value - b.value;
   });
 
@@ -147,19 +189,14 @@ function decomposeHand(hand: Card[]): HandDecomposition {
     groups.push(play);
   }
 
-  // 아직 할당 안 된 카드 → 각각 싱글
+  // 남은 카드 → 싱글
   const remaining = hand.filter(c => !used.has(cardId(c)));
   for (const c of remaining) {
     const single = getValidPlays([c], null, null)[0];
     if (single) groups.push(single);
   }
 
-  // 고립 싱글 = 같은 value 카드가 1장뿐인 일반 카드
-  const byVal = new Map<number, number>();
-  for (const c of hand) { if (isNormalCard(c)) byVal.set(c.value, (byVal.get(c.value) ?? 0) + 1); }
-  const isolatedSingles = [...byVal.entries()].filter(([, cnt]) => cnt === 1).map(([v]) => v);
-
-  return { groups, minTricks: groups.length, isolatedSingles };
+  return groups;
 }
 
 interface HandAnalysis {
@@ -170,6 +207,8 @@ interface HandAnalysis {
   weakSingles: number;
   totalCards: number;
   decomposition: HandDecomposition;
+  controlCount: number;  // 리드를 가져올 수 있는 횟수 (탑싱글 + 폭탄 + 용)
+  playPlan: PlayedHand[]; // 최적 플레이 순서
 }
 
 function analyzeHand(hand: Card[], room: GameRoom): HandAnalysis {
@@ -185,6 +224,14 @@ function analyzeHand(hand: Card[], room: GameRoom): HandAnalysis {
 
   const weakSingles = normals.filter(c => c.value <= 6).length;
 
+  // 컨트롤: 탑 싱글 + 폭탄 + 용 (확실히 리드를 가져올 수 있는 수단)
+  const bombs = decomp.groups.filter(isBomb).length;
+  const hasDragonCard = hand.some(isDragon);
+  const controlCount = topSingles + bombs + (hasDragonCard ? 1 : 0);
+
+  // 최적 플레이 순서 계획
+  const playPlan = planPlayOrder(decomp.groups, hand, room);
+
   return {
     minTricks: decomp.minTricks,
     hasBomb,
@@ -193,7 +240,63 @@ function analyzeHand(hand: Card[], room: GameRoom): HandAnalysis {
     weakSingles,
     totalCards: hand.length,
     decomposition: decomp,
+    controlCount,
+    playPlan,
   };
+}
+
+/**
+ * 분해된 조합들의 최적 플레이 순서 결정.
+ * 원칙: 컨트롤(탑싱글/폭탄/용)로 리드를 가져오고, 리드할 때 약한/긴 조합을 내고,
+ * 마지막에 탑으로 마무리.
+ *
+ * 순서:
+ * 1. 긴 조합(스트레이트/풀하우스/연속페어) — 카드 많이 소모
+ * 2. 페어/트리플 — 중간 소모
+ * 3. 약한 고립 싱글 — 먹히더라도 카드 수 줄임
+ * 4. 봉황 싱글 — 약하므로 일찍
+ * 5. 탑 싱글 (약한 것부터) — 컨트롤 확보
+ * 6. 용 — 양도 리스크, 최후에
+ * 7. 폭탄 — 비상용, 최후에
+ */
+function planPlayOrder(groups: PlayedHand[], hand: Card[], room: GameRoom): PlayedHand[] {
+  const bombs: PlayedHand[] = [];
+  const dragon: PlayedHand[] = [];
+  const topSingles: PlayedHand[] = [];
+  const weakSingles: PlayedHand[] = [];
+  const phoenixSingle: PlayedHand[] = [];
+  const combos: PlayedHand[] = [];
+  const dog: PlayedHand[] = [];
+
+  for (const g of groups) {
+    if (isBomb(g)) { bombs.push(g); continue; }
+    if (g.type === 'single') {
+      if (g.cards.some(isDragon)) { dragon.push(g); continue; }
+      if (g.cards.some(isDog)) { dog.push(g); continue; }
+      if (g.cards.some(isPhoenix)) { phoenixSingle.push(g); continue; }
+      if (isTopSingle(g.cards[0]!, hand, room)) { topSingles.push(g); continue; }
+      weakSingles.push(g);
+      continue;
+    }
+    combos.push(g);
+  }
+
+  // 조합: 긴 것 먼저
+  combos.sort((a, b) => b.length - a.length);
+  // 약한 싱글: 낮은 것 먼저
+  weakSingles.sort((a, b) => a.value - b.value);
+  // 탑 싱글: 낮은 것 먼저 (강한 것은 나중에)
+  topSingles.sort((a, b) => a.value - b.value);
+
+  return [
+    ...combos,        // 1. 긴 조합 먼저 (카드 많이 소모)
+    ...weakSingles,   // 2. 약한 싱글 (먹혀도 카드 수 줄임)
+    ...phoenixSingle, // 3. 봉황 싱글
+    ...dog,           // 4. 개 (파트너에게 리드)
+    ...topSingles,    // 5. 탑 싱글 (컨트롤 — 약한 것부터)
+    ...dragon,        // 6. 용 (양도 리스크 — 최후에)
+    ...bombs,         // 7. 폭탄 (비상용)
+  ];
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -603,6 +706,29 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
   const myTichu = room.tichuDeclarations[seat] !== null;
   const analysis = analyzeHand(hand, room);
 
+  // ── Hard: 플랜 기반 리드 (컨트롤 충분하면 플랜 순서대로) ──
+  if (diff === 'hard' && analysis.playPlan.length > 0) {
+    const plan = analysis.playPlan;
+    // 컨트롤 수 = 리드를 확실히 가져올 수 있는 수단
+    // 비컨트롤 조합 수 = 리드 시 내야 할 조합 (먹힐 수 있음)
+    const nonControlGroups = plan.filter(g =>
+      !isBomb(g) && !g.cards.some(isDragon) &&
+      !(g.type === 'single' && isTopSingle(g.cards[0]!, hand, room))
+    );
+
+    // 컨트롤이 비컨트롤보다 많거나 같으면 → 플랜대로 나가면 핸드를 비울 수 있음
+    if (analysis.controlCount >= nonControlGroups.length) {
+      // 플랜에서 첫 번째 조합 중 plays에 있는 것 선택
+      for (const planned of plan) {
+        const match = plays.find(p =>
+          p.type === planned.type && p.length === planned.length &&
+          p.cards.every(c => planned.cards.some(pc => cardId(c) === cardId(pc)))
+        );
+        if (match) return match;
+      }
+    }
+  }
+
   // 중급: 현재 로직 그대로 (아래 코드)
   // 고급: 추가 전략이 scored에 반영됨
 
@@ -716,6 +842,11 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
       const inDecomp = decomp.groups.some(g =>
         g.type === p.type && g.length === p.length && g.value === p.value
       );
+      // 플랜 순서 반영: 플랜에서 앞쪽(빨리 내야 할 것)에 있으면 가점
+      const planIdx = analysis.playPlan.findIndex(g =>
+        g.type === p.type && g.length === p.length && g.value === p.value
+      );
+      if (planIdx >= 0 && planIdx < 3) score += 10; // 플랜 상위 3개는 우선
       if (inDecomp) score += 8;
 
       // ── [2] 포인트 카드 인식 ──
@@ -856,7 +987,14 @@ function pickFollowPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat:
       const table = room.tableCards;
       const pos = getPositionInfo(room, seat);
       const situation = assessGameSituation(room, seat);
-      const decomp = decomposeHand(hand);
+      const analysisF = analyzeHand(hand, room);
+      const decomp = analysisF.decomposition;
+
+      // 플랜에서 이 조합의 우선순위 → 빨리 내야 할 것이면 가점
+      const planIdx = analysisF.playPlan.findIndex(g =>
+        g.type === p.type && g.length === p.length && g.value === p.value
+      );
+      if (planIdx >= 0 && planIdx < 3) score += 8;
 
       // [1] 최소 차이로 이기는 카드 선호 (카드 가치 절약)
       if (table && p.value - table.value <= 2) score += 15;
