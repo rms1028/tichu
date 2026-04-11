@@ -618,7 +618,8 @@ export function registerSocketHandlers(io: Server): void {
     });
 
     // ── start_game (방장만 시작 가능) ───────────────────────
-    socket.on('start_game', () => {
+    socket.on('start_game', async () => {
+      if (!playerRoomId && loginPromise) await loginPromise;
       const room = getRoom();
       if (!room) return;
       if (room.phase !== 'WAITING_FOR_PLAYERS') return;
@@ -656,7 +657,8 @@ export function registerSocketHandlers(io: Server): void {
     });
 
     // ── add_bots (빈 자리를 봇으로 채움) ────────────────────
-    socket.on('add_bots', (data?: { difficulty?: 'easy' | 'medium' | 'hard' }) => {
+    socket.on('add_bots', async (data?: { difficulty?: 'easy' | 'medium' | 'hard' }) => {
+      if (!playerRoomId && loginPromise) await loginPromise;
       const room = getRoom();
       if (!room) return;
       if (room.phase !== 'WAITING_FOR_PLAYERS') {
@@ -704,9 +706,10 @@ export function registerSocketHandlers(io: Server): void {
     });
 
     // ── add_bot_to_seat (특정 자리에 봇 추가 — 방장만) ─────
-    socket.on('add_bot_to_seat', (data: { seat: number; difficulty?: 'easy' | 'medium' | 'hard' }) => {
+    socket.on('add_bot_to_seat', async (data: { seat: number; difficulty?: 'easy' | 'medium' | 'hard' }) => {
       if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
       if (!isValidSeat(data.seat)) { socket.emit('error', { message: 'invalid_seat' }); return; }
+      if (!playerRoomId && loginPromise) await loginPromise;
       const room = getRoom();
       if (!room) return;
       if (room.phase !== 'WAITING_FOR_PLAYERS') return;
