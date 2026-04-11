@@ -501,6 +501,17 @@ export function useSocket() {
     socket.on('season_reward_error', (data: { error: string }) => {
       useGameStore.setState({ toastMsg: '보상 수령 실패: ' + data.error });
     });
+
+    // ── 출석 보상 응답 ────────────────────────────────────────
+    socket.on('attendance_result', (data: { success: boolean; reward?: number; streak?: number; coins?: number; error?: string }) => {
+      if (data.success && data.coins !== undefined) {
+        const us = require('../stores/userStore').useUserStore.getState();
+        us.addCoins(data.coins - us.coins);
+        if (data.streak !== undefined) {
+          us.syncAttendance(data.streak);
+        }
+      }
+    });
     socket.on('friend_error', (data: { error: string }) => {
       useGameStore.setState({ toastMsg: '친구 기능 오류: ' + data.error });
     });
@@ -513,10 +524,10 @@ export function useSocket() {
       useGameStore.setState({ leaderboard: data.entries });
     });
 
-    socket.on('game_history', (data: { games: { won: boolean; myScore: number; opScore: number; tichu: string | null; tichuSuccess: boolean; rank: number; date: string }[] }) => {
+    socket.on('game_history', (data: { games: { won: boolean; myScore: number; opScore: number; tichu: string | null; tichuSuccess: boolean; rank: number; date: string; xpGained?: number }[] }) => {
       // userStore의 recentGames를 서버 데이터로 업데이트
       const us = require('../stores/userStore').useUserStore.getState();
-      const recentGames = data.games.map(g => ({ won: g.won, myScore: g.myScore, opScore: g.opScore, date: g.date, rp: 0 }));
+      const recentGames = data.games.map(g => ({ won: g.won, myScore: g.myScore, opScore: g.opScore, date: g.date, rp: g.xpGained ?? 0 }));
       us.syncRecentGames(recentGames);
       // 상세 데이터는 gameStore에도 저장
       useGameStore.setState({ gameHistory: data.games });
@@ -796,6 +807,10 @@ export function useSocket() {
     socketRef.current?.emit('change_nickname', { nickname });
   }, []);
 
+  const claimAttendance = useCallback(() => {
+    socketRef.current?.emit('claim_attendance');
+  }, []);
+
   const leaveRoom = useCallback(() => {
     socketRef.current?.emit('leave_room');
     cancelAllSounds();
@@ -846,6 +861,7 @@ export function useSocket() {
     buyShopItem,
     equipShopItem,
     changeNickname,
+    claimAttendance,
     leaveRoom,
     moveSeat,
     shuffleTeams,

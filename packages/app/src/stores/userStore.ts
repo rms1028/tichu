@@ -141,6 +141,7 @@ interface UserState {
   recordGameResult: (won: boolean, tichuDeclared: boolean, tichuSucceeded: boolean) => void;
   checkAttendance: () => boolean; // true if new attendance
   claimAttendance: () => number; // returns coins rewarded
+  syncAttendance: (streak: number) => void;
   updateMissionProgress: (missionId: string, progress: number) => void;
   claimMission: (missionId: string) => number; // returns coins rewarded
   resetDailyMissions: () => void;
@@ -282,6 +283,13 @@ export const useUserStore = create<UserState>((set, get) => ({
     set(ns);
     saveState(ns);
     return reward;
+  },
+
+  syncAttendance: (streak: number) => {
+    const s = get();
+    const ns = { ...s, lastAttendanceDate: today, attendanceStreak: streak };
+    set(ns);
+    saveState(ns);
   },
 
   updateMissionProgress: (missionId, progress) => set(s => {

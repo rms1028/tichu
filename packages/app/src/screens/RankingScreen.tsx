@@ -24,11 +24,17 @@ export function RankingScreen({ onBack, onRefresh }: Props) {
 
   useEffect(() => { onRefresh?.(); }, []);
 
-  // 리더보드 데이터
-  const serverPlayers = leaderboard.map(p => ({
-    name: p.nickname, xp: p.xp, wins: p.wins, totalGames: p.totalGames,
-    isMe: p.nickname === nickname,
-  }));
+  // 리더보드 데이터 — 탭에 따라 소스 선택
+  const seasonEntries = seasonLeaderboard?.entries ?? [];
+  const serverPlayers = tab === 'season' && seasonEntries.length > 0
+    ? seasonEntries.map(p => ({
+        name: p.nickname, xp: p.ratingPoints, wins: p.wins, totalGames: p.gamesPlayed,
+        isMe: p.nickname === nickname,
+      }))
+    : leaderboard.map(p => ({
+        name: p.nickname, xp: p.xp, wins: p.wins, totalGames: p.totalGames,
+        isMe: p.nickname === nickname,
+      }));
   const meInList = serverPlayers.some(p => p.isMe);
   const allPlayers = meInList
     ? serverPlayers

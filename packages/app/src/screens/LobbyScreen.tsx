@@ -27,6 +27,7 @@ interface LobbyScreenProps {
   onEquipShopItem?: (itemId: string, category: 'avatar' | 'cardback') => void;
   onChangeNickname?: (nickname: string) => void;
   onGetGameHistory?: () => void;
+  onClaimAttendance?: () => void;
 }
 
 // 티어
@@ -71,7 +72,7 @@ function FloatingSymbol({ symbol, x, delay }: { symbol: string; x: number; delay
   return <Animated.Text style={[{ position: 'absolute', left: `${x}%` as any, top: `${20 + delay * 7}%` as any, fontSize: 22, color: '#fff', opacity: 0.04 }, s]}>{symbol}</Animated.Text>;
 }
 
-export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRooms, onGetLeaderboard, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite, onBuyShopItem, onEquipShopItem, onChangeNickname, onGetGameHistory }: LobbyScreenProps) {
+export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRooms, onGetLeaderboard, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite, onBuyShopItem, onEquipShopItem, onChangeNickname, onGetGameHistory, onClaimAttendance }: LobbyScreenProps) {
   const savedNickname = useUserStore((s) => s.nickname);
   const savedPlayerId = useUserStore((s) => s.playerId);
   const userSetNickname = useUserStore((s) => s.setNickname);
@@ -365,7 +366,16 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                     <View style={S.fpAW}><Text style={S.fpAv}>{'🐲'}</Text><View style={S.fpDotOn} /></View>
                     <View style={{ flex: 1 }}><Text style={S.fpN}>{f.nickname}</Text><Text style={S.fpSt}>{f.status === 'lobby' ? '로비' : f.status === 'matching' ? '매칭 중' : '게임 중'}</Text></View>
                     {f.status === 'lobby' && (
-                      <TouchableOpacity style={S.fpInv} onPress={() => { setFriendMsg(`${f.nickname}님에게 초대를 보냈습니다!`); setTimeout(() => setFriendMsg(''), 2000); }}>
+                      <TouchableOpacity style={S.fpInv} onPress={() => {
+                        const roomId = useGameStore.getState().roomId;
+                        if (roomId) {
+                          onFriendInvite?.(savedNickname, f.playerId, roomId);
+                          setFriendMsg(`${f.nickname}님에게 초대를 보냈습니다!`);
+                        } else {
+                          setFriendMsg('방에 입장한 후 초대할 수 있습니다');
+                        }
+                        setTimeout(() => setFriendMsg(''), 2000);
+                      }}>
                         <Text style={S.fpInvT}>{'초대'}</Text>
                       </TouchableOpacity>
                     )}
@@ -398,7 +408,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                 </View>
               ))}
             </View>
-            <TouchableOpacity style={S.attBtn} onPress={() => { useUserStore.getState().claimAttendance(); setShowAttendance(false); }}>
+            <TouchableOpacity style={S.attBtn} onPress={() => { useUserStore.getState().claimAttendance(); onClaimAttendance?.(); setShowAttendance(false); }}>
               <Text style={S.attBtnT}>{'보상 받기'}</Text>
             </TouchableOpacity>
           </Animated.View>

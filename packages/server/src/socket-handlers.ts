@@ -349,6 +349,7 @@ export function registerSocketHandlers(io: Server): void {
             tichuSuccess: g.tichuSuccess,
             rank: g.finishRank,
             date: g.createdAt.toISOString().slice(0, 10),
+            xpGained: g.xpGained ?? 0,
           })),
         });
       } catch (err) { console.error('[get_game_history] error:', err); }
@@ -1379,31 +1380,51 @@ export function registerSocketHandlers(io: Server): void {
       });
     });
 
-    // ── 상점: 아이템 구매 ─────────────────────────────────────
+    // ── 상점: 아이템 구매 (트랜잭션으로 레이스 컨디션 방지) ────
     socket.on('buy_item', async (data: { itemId: string; category: 'avatar' | 'cardback'; price: number }) => {
       if (!dbUserId) { socket.emit('shop_error', { error: 'not_logged_in' }); return; }
       if (!rateLimitCheck(socket.id, 10)) return;
       try {
-        const user = await prisma.user.findUnique({ where: { id: dbUserId }, select: { coins: true, ownedAvatars: true, ownedCardBacks: true } });
-        if (!user) { socket.emit('shop_error', { error: 'user_not_found' }); return; }
-        const field = data.category === 'avatar' ? 'ownedAvatars' : 'ownedCardBacks';
-        const owned = user[field].split(',').filter(Boolean);
-        if (owned.includes(data.itemId)) { socket.emit('shop_error', { error: 'already_owned' }); return; }
-        if (user.coins < data.price) { socket.emit('shop_error', { error: 'not_enough_coins' }); return; }
-        owned.push(data.itemId);
-        await prisma.user.update({
-          where: { id: dbUserId },
-          data: { coins: { decrement: data.price }, [field]: owned.join(',') },
+        const result = await prisma.$transaction(async (tx) => {
+          const user = await tx.user.findUnique({ where: { id: dbUserId! }, select: { coins: true, ownedAvatars: true, ownedCardBacks: true } });
+          if (!user) throw new Error('user_not_found');
+          const field = data.category === 'avatar' ? 'ownedAvatars' : 'ownedCardBacks';
+          const owned = user[field].split(',').filter(Boolean);
+          if (owned.includes(data.itemId)) throw new Error('already_owned');
+          if (user.coins < data.price) throw new Error('not_enough_coins');
+          owned.push(data.itemId);
+          const updated = await tx.user.update({
+            where: { id: dbUserId! },
+            data: { coins: { decrement: data.price }, [field]: owned.join(',') },
+            select: { coins: true },
+          });
+          return { coins: updated.coins };
         });
-        socket.emit('shop_bought', { itemId: data.itemId, category: data.category, coins: user.coins - data.price });
-      } catch (err) { console.error('[buy_item] error:', err); socket.emit('shop_error', { error: 'db_error' }); }
+        socket.emit('shop_bought', { itemId: data.itemId, category: data.category, coins: result.coins });
+      } catch (err: any) {
+        const msg = err?.message ?? 'db_error';
+        if (['user_not_found', 'already_owned', 'not_enough_coins'].includes(msg)) {
+          socket.emit('shop_error', { error: msg });
+        } else {
+          console.error('[buy_item] error:', err);
+          socket.emit('shop_error', { error: 'db_error' });
+        }
+      }
     });
 
-    // ── 상점: 아이템 장착 ─────────────────────────────────────
+    // ── 상점: 아이템 장착 (소유 여부 검증) ─────────────────────
     socket.on('equip_item', async (data: { itemId: string; category: 'avatar' | 'cardback' }) => {
       if (!dbUserId) return;
       if (!rateLimitCheck(socket.id, 10)) return;
       try {
+        const user = await prisma.user.findUnique({ where: { id: dbUserId }, select: { ownedAvatars: true, ownedCardBacks: true } });
+        if (!user) return;
+        const ownedField = data.category === 'avatar' ? 'ownedAvatars' : 'ownedCardBacks';
+        const owned = user[ownedField].split(',').filter(Boolean);
+        if (!owned.includes(data.itemId)) {
+          socket.emit('shop_error', { error: 'not_owned' });
+          return;
+        }
         const field = data.category === 'avatar' ? 'equippedAvatar' : 'equippedCardBack';
         await prisma.user.update({ where: { id: dbUserId }, data: { [field]: data.itemId } });
         socket.emit('shop_equipped', { itemId: data.itemId, category: data.category });
@@ -1418,6 +1439,48 @@ export function registerSocketHandlers(io: Server): void {
         await prisma.user.update({ where: { id: dbUserId }, data: { nickname: data.nickname } });
         socket.emit('nickname_changed', { nickname: data.nickname });
       } catch (err) { console.error('[change_nickname] error:', err); }
+    });
+
+    // ── 출석 보상 ──────────────────────────────────────────
+    socket.on('claim_attendance', async () => {
+      if (!dbUserId) return;
+      if (!rateLimitCheck(socket.id, 5)) return;
+      try {
+        const user = await prisma.user.findUnique({
+          where: { id: dbUserId },
+          select: { lastAttendanceDate: true, attendanceStreak: true, coins: true },
+        });
+        if (!user) return;
+
+        const today = new Date().toISOString().slice(0, 10);
+        if (user.lastAttendanceDate === today) {
+          socket.emit('attendance_result', { success: false, error: 'already_claimed' });
+          return;
+        }
+
+        // 연속 출석 판정
+        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        const isConsecutive = user.lastAttendanceDate === yesterday;
+        const newStreak = isConsecutive ? user.attendanceStreak + 1 : 1;
+        const reward = newStreak >= 7 ? 100 : 50;
+        const resetStreak = newStreak >= 7 ? 0 : newStreak;
+
+        await prisma.user.update({
+          where: { id: dbUserId },
+          data: {
+            lastAttendanceDate: today,
+            attendanceStreak: resetStreak,
+            coins: { increment: reward },
+          },
+        });
+
+        socket.emit('attendance_result', {
+          success: true,
+          reward,
+          streak: resetStreak,
+          coins: user.coins + reward,
+        });
+      } catch (err) { console.error('[claim_attendance] error:', err); }
     });
 
     // ── 신고/차단 ──────────────────────────────────────────

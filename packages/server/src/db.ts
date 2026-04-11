@@ -187,7 +187,7 @@ export async function getGameHistory(userId: string, limit = 20) {
     select: {
       id: true, won: true, score: true, opponentScore: true,
       tichuDeclared: true, tichuSuccess: true, finishRank: true,
-      createdAt: true,
+      xpGained: true, createdAt: true,
     },
   });
 }

@@ -47,6 +47,10 @@ model User {
   matchCooldownUntil DateTime?                // 매칭 제한 해제 시간
   lastActiveAt     DateTime @default(now())   // 마지막 활동 시간
 
+  // 출석
+  lastAttendanceDate String?                 // 마지막 출석 날짜 (YYYY-MM-DD)
+  attendanceStreak   Int      @default(0)    // 연속 출석 일수
+
   // 상점
   ownedAvatars     String   @default("dragon")         // 쉼표 구분 ID 목록
   ownedCardBacks   String   @default("classic")        // 쉼표 구분 ID 목록
