@@ -250,6 +250,13 @@ export function registerSocketHandlers(io: Server): void {
     let playerSeat: number = -1;
     let dbUserId: string | null = null;
     let authenticatedPlayerId: string | null = null; // 로그인 시 인증된 playerId (guestId 또는 firebaseUid)
+    let loginPromise: Promise<void> | null = null; // 로그인 완료 대기용
+
+    /** 로그인 완료까지 대기 후 dbUserId 반환 (null이면 미인증) */
+    async function waitForLogin(): Promise<string | null> {
+      if (loginPromise) await loginPromise;
+      return dbUserId;
+    }
 
     /** 인증 검증: playerId가 로그인한 유저와 일치하는지 확인 */
     function requireAuth(playerId?: string): boolean {
@@ -284,6 +291,7 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── 게스트 로그인 (DB 유저 생성/조회) ──────────────────
     socket.on('guest_login', async (data: { guestId: string; nickname: string }) => {
+      const doLogin = async () => {
       try {
         const user = await findOrCreateGuestUser(data.guestId, data.nickname);
         dbUserId = user.id;
@@ -311,11 +319,14 @@ export function registerSocketHandlers(io: Server): void {
         logger.error('auth', 'guest_login failed', err);
         socket.emit('login_error', { error: 'db_error' });
       }
+      };
+      loginPromise = doLogin();
+      await loginPromise;
     });
 
     // ── Firebase 소셜 로그인 (토큰 검증) ─────────────────────
     socket.on('firebase_login', async (data: { idToken?: string; firebaseUid?: string; nickname: string }) => {
-      try {
+      const doLogin = async () => {
         if (!data.idToken) {
           socket.emit('login_error', { error: 'missing_credentials' });
           return;
@@ -349,10 +360,12 @@ export function registerSocketHandlers(io: Server): void {
           equippedAvatar: user.equippedAvatar,
           equippedCardBack: user.equippedCardBack,
         });
-      } catch (err) {
+      };
+      loginPromise = doLogin().catch(err => {
         logger.error('auth', 'firebase_login failed', err);
         socket.emit('login_error', { error: 'db_error' });
-      }
+      });
+      await loginPromise;
     });
 
     // ── 랭킹 조회 ─────────────────────────────────────────
@@ -367,6 +380,7 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── 전적 조회 ─────────────────────────────────────────
     socket.on('get_game_history', async () => {
+      if (!dbUserId) await waitForLogin();
       if (!dbUserId) return;
       try {
         const history = await getGameHistory(dbUserId, 20);
@@ -1417,6 +1431,7 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── 상점: 아이템 구매 (트랜잭션으로 레이스 컨디션 방지) ────
     socket.on('buy_item', async (data: { itemId: string; category: 'avatar' | 'cardback'; price: number }) => {
+      if (!dbUserId) await waitForLogin();
       if (!dbUserId) { socket.emit('shop_error', { error: 'not_logged_in' }); return; }
       if (!rateLimitCheck(socket.id, 10)) return;
       try {
@@ -1449,6 +1464,7 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── 상점: 아이템 장착 (소유 여부 검증) ─────────────────────
     socket.on('equip_item', async (data: { itemId: string; category: 'avatar' | 'cardback' }) => {
+      if (!dbUserId) await waitForLogin();
       if (!dbUserId) return;
       if (!rateLimitCheck(socket.id, 10)) return;
       try {
@@ -1478,6 +1494,7 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── 출석 보상 ──────────────────────────────────────────
     socket.on('claim_attendance', async () => {
+      if (!dbUserId) await waitForLogin();
       if (!dbUserId) return;
       if (!rateLimitCheck(socket.id, 5)) return;
       try {
@@ -1520,6 +1537,7 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── 계정 삭제 ──────────────────────────────────────────
     socket.on('delete_account', async () => {
+      if (!dbUserId) await waitForLogin();
       if (!dbUserId) { socket.emit('error', { message: 'not_logged_in' }); return; }
       try {
         // 게임 중이면 먼저 나가기
