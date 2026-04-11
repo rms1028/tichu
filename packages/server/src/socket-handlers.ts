@@ -2174,21 +2174,37 @@ function startDragonGiveTimer(io: Server, room: GameRoom): void {
     }
   }, room.settings.dragonGiveTimeLimit);
 
-  // 봇이면 빠르게 결정
+  // 봇이면 전략적으로 결정: 카드 많은 상대에게 (나가기 먼 상대 = 안전)
   if (player?.isBot) {
     const botDragonTimer = setTimeout(() => {
       if (!room.dragonGivePending) return;
+      const active = getActivePlayers(room);
       const opponents = [0, 1, 2, 3].filter(
-        s => s !== seat && (s + 2) % 4 !== seat
+        s => s !== seat && (s + 2) % 4 !== seat && active.includes(s)
       );
-      const target = opponents[Math.floor(Math.random() * opponents.length)]!;
-      const result = dragonGive(room, seat, target);
+      if (opponents.length === 0) {
+        // 상대 모두 나감 → 아무 상대에게
+        const anyOpp = [0, 1, 2, 3].filter(s => s !== seat && (s + 2) % 4 !== seat);
+        if (anyOpp.length > 0) {
+          const result = dragonGive(room, seat, anyOpp[0]!);
+          if (result.ok) { broadcastEvents(io, room, result.events); handlePostPlay(io, room); }
+        }
+        return;
+      }
+      // 카드 가장 많은 상대 선택 (티츄 선언자 회피)
+      let bestTarget = opponents[0]!;
+      let bestScore = -Infinity;
+      for (const opp of opponents) {
+        let score = room.hands[opp]?.length ?? 0;
+        if (room.tichuDeclarations[opp] !== null) score -= 20;
+        if (score > bestScore) { bestScore = score; bestTarget = opp; }
+      }
+      const result = dragonGive(room, seat, bestTarget);
       if (result.ok) {
         broadcastEvents(io, room, result.events);
         handlePostPlay(io, room);
       }
     }, 1500 + Math.random() * 1000);
-    // 메인 타임아웃에서 정리될 수 있도록 참조 저장
     (room as any)._botDragonTimer = botDragonTimer;
   }
 }
