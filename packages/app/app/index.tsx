@@ -117,6 +117,13 @@ function AppInner() {
     }
   }, [gameOver]);
 
+  // 결과 화면 — gameOver가 null이면 로비로 복귀
+  useEffect(() => {
+    if (screen === 'result' && !gameOver) {
+      setScreen('lobby');
+    }
+  }, [screen, gameOver]);
+
   // 첫 방문 튜토리얼 프롬프트
   const handleTutorialPrompt = () => {
     if (firstVisit) {
@@ -262,12 +269,6 @@ function AppInner() {
     );
   }
 
-  // 결과 화면 — gameOver가 null이면 로비로 복귀
-  useEffect(() => {
-    if (screen === 'result' && !gameOver) {
-      setScreen('lobby');
-    }
-  }, [screen, gameOver]);
   if (screen === 'result' && gameOver) {
     const myTeam = mySeat === 0 || mySeat === 2 ? 'team1' : 'team2';
     const isWin = gameOver.winner === myTeam;
