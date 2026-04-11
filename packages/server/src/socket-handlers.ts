@@ -1518,15 +1518,19 @@ export function registerSocketHandlers(io: Server): void {
             }
             notifyLobby(io);
           }, 30_000);
-        } else if (room.phase !== 'GAME_OVER' && !player.isBot) {
-          // 게임 진행 중이면 10초 후 봇 대체 예약
-          // C3: 기존 타이머 취소
-          if (player.botReplaceTimer) clearTimeout(player.botReplaceTimer);
-          const savedRoomId = playerRoomId;
-          const savedSeat = playerSeat;
-          player.botReplaceTimer = setTimeout(() => {
-            replaceWithBot(io, savedRoomId, savedSeat);
-          }, 10_000);
+        } else if (!player.isBot) {
+          if (room.phase !== 'GAME_OVER') {
+            // 게임 진행 중이면 10초 후 봇 대체 예약
+            // C3: 기존 타이머 취소
+            if (player.botReplaceTimer) clearTimeout(player.botReplaceTimer);
+            const savedRoomId = playerRoomId;
+            const savedSeat = playerSeat;
+            player.botReplaceTimer = setTimeout(() => {
+              replaceWithBot(io, savedRoomId, savedSeat);
+            }, 10_000);
+          }
+          // 커스텀 방: 모든 인간이 나갔으면 방 삭제 (GAME_OVER 포함)
+          if (room.settings.isCustom) checkAndDestroyEmptyRoom(io, room);
         }
       }
     });
@@ -1970,6 +1974,14 @@ function cleanupRoom(room: GameRoom): void {
     clearTimeout((room as any)._botDragonTimer);
     delete (room as any)._botDragonTimer;
   }
+  if ((room as any)._exchangeTimer) {
+    clearTimeout((room as any)._exchangeTimer);
+    delete (room as any)._exchangeTimer;
+  }
+  if ((room as any)._largeTichuTimer) {
+    clearTimeout((room as any)._largeTichuTimer);
+    delete (room as any)._largeTichuTimer;
+  }
   room.bombWindow = null;
   for (let s = 0; s < 4; s++) {
     const p = room.players[s];
@@ -2022,7 +2034,18 @@ function returnCustomRoomToWaiting(io: Server, room: GameRoom): void {
     }
   }
 
-  const humanSeats = [0, 1, 2, 3].filter(s => room.players[s] !== null && !room.players[s]!.isBot);
+  // 연결된 인간 플레이어만 유지 (끊긴 인간도 제거)
+  const humanSeats = [0, 1, 2, 3].filter(s =>
+    room.players[s] !== null && !room.players[s]!.isBot && room.players[s]!.connected,
+  );
+  // 연결 끊긴 인간 슬롯도 비움
+  for (let s = 0; s < 4; s++) {
+    const p = room.players[s];
+    if (p && !p.isBot && !p.connected) {
+      if (p.playerId) decrementUserRoomCount(p.playerId);
+      room.players[s] = null;
+    }
+  }
   if (humanSeats.length === 0) {
     rooms.delete(room.roomId);
     notifyLobby(io);

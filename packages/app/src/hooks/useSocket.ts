@@ -111,7 +111,10 @@ export function useSocket() {
 
     // ── 방 참가 ────────────────────────────────────────────
     socket.on('room_joined', (data: { seat: number; roomId: string; players: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null>; hostPlayerId?: string }) => {
-      // unmuteSounds는 게임 시작 시에만 호출 (대기방에서는 음소거 유지)
+      // 이전 게임 상태 초기화 후 새 방 정보 설정 (stale phase 방지)
+      const { connected, playerId, nickname } = useGameStore.getState();
+      store.reset();
+      useGameStore.setState({ connected, playerId, nickname });
       store.setRoomInfo(data.roomId, data.seat, data.players);
       if (data.hostPlayerId) useGameStore.setState({ hostPlayerId: data.hostPlayerId });
     });
@@ -287,6 +290,8 @@ export function useSocket() {
     // ── 연결 상태 변경 ────────────────────────────────────────
     socket.on('room_closed', () => {
       cancelAllSounds();
+      if (rejoinRetryTimer) { clearTimeout(rejoinRetryTimer); rejoinRetryTimer = null; }
+      rejoinRetryCount = 0;
       store.reset();
     });
 

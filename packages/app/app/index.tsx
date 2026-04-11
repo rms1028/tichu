@@ -46,6 +46,7 @@ function AppInner() {
   const mySeat = useGameStore((s) => s.mySeat);
   const players = useGameStore((s) => s.players);
   const roundResult = useGameStore((s) => s.roundResult);
+  const phase = useGameStore((s) => s.phase);
 
   const {
     joinRoom, declareTichu, passTichu,
@@ -97,6 +98,14 @@ function AppInner() {
       playBgm('lobby');
     }
   }, [screen]);
+
+  // 재접속 시 게임 진행 중이면 게임 화면으로 전환
+  useEffect(() => {
+    if ((screen === 'lobby' || screen === 'matchmaking') && roomId && phase &&
+        phase !== 'WAITING_FOR_PLAYERS' && phase !== 'GAME_OVER') {
+      setScreen('game');
+    }
+  }, [phase, roomId, screen]);
 
   // gameOver 시 결과 화면으로
   useEffect(() => {
@@ -239,10 +248,11 @@ function AppInner() {
   }
 
   // 결과 화면 — gameOver가 null이면 로비로 복귀
-  if (screen === 'result' && !gameOver) {
-    setScreen('lobby');
-    return null;
-  }
+  useEffect(() => {
+    if (screen === 'result' && !gameOver) {
+      setScreen('lobby');
+    }
+  }, [screen, gameOver]);
   if (screen === 'result' && gameOver) {
     const myTeam = mySeat === 0 || mySeat === 2 ? 'team1' : 'team2';
     const isWin = gameOver.winner === myTeam;
