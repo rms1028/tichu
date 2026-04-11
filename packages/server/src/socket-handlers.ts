@@ -450,7 +450,7 @@ export function registerSocketHandlers(io: Server): void {
         if (!room.settings.isCustom) continue;
         if (room.phase !== 'WAITING_FOR_PLAYERS') continue;
         const playerCount = [0, 1, 2, 3].filter(s => room.players[s] !== null).length;
-        if (playerCount === 0 || playerCount >= 4) continue;
+        if (playerCount >= 4) continue; // 풀방은 숨기지만, 0명(방금 생성)도 표시
         if (skipped < offset) { skipped++; continue; }
         if (roomList.length >= limit) break;
         roomList.push({
@@ -469,7 +469,8 @@ export function registerSocketHandlers(io: Server): void {
     });
 
     // ── 커스텀 방 생성 ──────────────────────────────────────
-    socket.on('create_custom_room', (data: { roomName: string; password?: string; playerId: string; nickname: string }) => {
+    socket.on('create_custom_room', async (data: { roomName: string; password?: string; playerId: string; nickname: string }) => {
+      if (!authenticatedPlayerId) await waitForLogin();
       if (!requireAuth(data.playerId)) return;
       if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
       if (!isValidPlayerId(data.playerId) || !isValidNickname(data.nickname)) {
@@ -531,7 +532,8 @@ export function registerSocketHandlers(io: Server): void {
     });
 
     // ── join_room ──────────────────────────────────────────
-    socket.on('join_room', (data: { roomId: string; playerId: string; nickname: string; password?: string }) => {
+    socket.on('join_room', async (data: { roomId: string; playerId: string; nickname: string; password?: string }) => {
+      if (!authenticatedPlayerId) await waitForLogin();
       if (!requireAuth(data.playerId)) return;
       if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
       if (!isValidPlayerId(data.playerId) || !isValidNickname(data.nickname)) {
@@ -1225,7 +1227,8 @@ export function registerSocketHandlers(io: Server): void {
     });
 
     // ── queue_match (자동 매칭 큐 참가) ─────────────────────
-    socket.on('queue_match', (data: { playerId: string; nickname: string }) => {
+    socket.on('queue_match', async (data: { playerId: string; nickname: string }) => {
+      if (!authenticatedPlayerId) await waitForLogin();
       if (!requireAuth(data.playerId)) return;
       if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
       if (!isValidPlayerId(data.playerId) || !isValidNickname(data.nickname)) {
@@ -1275,6 +1278,7 @@ export function registerSocketHandlers(io: Server): void {
 
     // 로비 진입 시 온라인 등록 + 친구 목록/요청 전송
     socket.on('friend_init', async (data: { playerId: string; nickname: string }) => {
+      if (!authenticatedPlayerId) await waitForLogin();
       if (!requireAuth(data.playerId)) return;
       playerOnline({ playerId: data.playerId, nickname: data.nickname, socketId: socket.id, status: 'lobby' });
       const code = getPlayerFriendCode(data.playerId);
@@ -1302,6 +1306,7 @@ export function registerSocketHandlers(io: Server): void {
 
     // 친구 요청 보내기
     socket.on('friend_request', async (data: { fromId: string; fromNickname: string; toId: string }) => {
+      if (!authenticatedPlayerId) await waitForLogin();
       if (!requireAuth(data.fromId)) return;
       if (!rateLimitCheck(socket.id, 10)) { socket.emit('friend_error', { error: 'rate_limited' }); return; }
       if (!isValidPlayerId(data.fromId) || !isValidNickname(data.fromNickname) || !isValidPlayerId(data.toId)) {

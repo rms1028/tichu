@@ -634,6 +634,22 @@ export function useSocket() {
       store.onError(data.reason);
     });
 
+    // ── 서버 에러 핸들링 ────────────────────────────────────────
+    socket.on('error', (data: { message?: string }) => {
+      const msg = data?.message;
+      if (msg && msg !== 'rate_limited') {
+        const errorMap: Record<string, string> = {
+          not_logged_in: '로그인이 필요합니다',
+          auth_mismatch: '인증 정보가 일치하지 않습니다',
+          already_in_room: '이미 방에 참가 중입니다',
+          room_not_found: '방을 찾을 수 없습니다',
+          room_full: '방이 가득 찼습니다',
+          invalid_input: '입력이 올바르지 않습니다',
+        };
+        useGameStore.setState({ toastMsg: errorMap[msg] ?? msg });
+      }
+    });
+
     return () => {
       if (rejoinRetryTimer) clearTimeout(rejoinRetryTimer);
       if (pendingUnmuteTimer) clearTimeout(pendingUnmuteTimer);
