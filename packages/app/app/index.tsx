@@ -56,7 +56,7 @@ function AppInner() {
     createCustomRoom, listRooms, startGame, addBotToSeat, removeBot,
     friendInit, friendSearch, friendRequest, friendAccept, friendReject, friendRemove, friendInvite,
     guestLogin, firebaseLogin, getLeaderboard, getGameHistory, sendEmote, buyShopItem, equipShopItem, changeNickname,
-    leaveRoom, moveSeat, shuffleTeams, claimAttendance,
+    leaveRoom, moveSeat, shuffleTeams, claimAttendance, deleteAccount,
   } = useSocket();
 
   const connected = useGameStore((s) => s.connected);
@@ -216,6 +216,7 @@ function AppInner() {
         onChangeNickname={changeNickname}
         onGetGameHistory={getGameHistory}
         onClaimAttendance={claimAttendance}
+        onDeleteAccount={() => { deleteAccount(); setScreen('login'); }}
       />
       <TutorialModal visible={showTutorial} onClose={() => setShowTutorial(false)} />
       </>

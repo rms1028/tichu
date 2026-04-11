@@ -142,6 +142,7 @@ interface UserState {
   checkAttendance: () => boolean; // true if new attendance
   claimAttendance: () => number; // returns coins rewarded
   syncAttendance: (streak: number) => void;
+  clearAll: () => void;
   updateMissionProgress: (missionId: string, progress: number) => void;
   claimMission: (missionId: string) => number; // returns coins rewarded
   resetDailyMissions: () => void;
@@ -290,6 +291,19 @@ export const useUserStore = create<UserState>((set, get) => ({
     const ns = { ...s, lastAttendanceDate: today, attendanceStreak: streak };
     set(ns);
     saveState(ns);
+  },
+
+  clearAll: () => {
+    try {
+      const { Platform } = require('react-native');
+      if (Platform.OS !== 'web') {
+        const { MMKV } = require('react-native-mmkv');
+        const storage = new MMKV({ id: 'user-store' });
+        storage.clearAll();
+      } else {
+        Object.keys(localStorage).filter(k => k.startsWith('user_')).forEach(k => localStorage.removeItem(k));
+      }
+    } catch { /* */ }
   },
 
   updateMissionProgress: (missionId, progress) => set(s => {

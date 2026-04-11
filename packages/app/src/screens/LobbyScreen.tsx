@@ -28,6 +28,7 @@ interface LobbyScreenProps {
   onChangeNickname?: (nickname: string) => void;
   onGetGameHistory?: () => void;
   onClaimAttendance?: () => void;
+  onDeleteAccount?: () => void;
 }
 
 // 티어
@@ -72,7 +73,7 @@ function FloatingSymbol({ symbol, x, delay }: { symbol: string; x: number; delay
   return <Animated.Text style={[{ position: 'absolute', left: `${x}%` as any, top: `${20 + delay * 7}%` as any, fontSize: 22, color: '#fff', opacity: 0.04 }, s]}>{symbol}</Animated.Text>;
 }
 
-export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRooms, onGetLeaderboard, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite, onBuyShopItem, onEquipShopItem, onChangeNickname, onGetGameHistory, onClaimAttendance }: LobbyScreenProps) {
+export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRooms, onGetLeaderboard, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite, onBuyShopItem, onEquipShopItem, onChangeNickname, onGetGameHistory, onClaimAttendance, onDeleteAccount }: LobbyScreenProps) {
   const savedNickname = useUserStore((s) => s.nickname);
   const savedPlayerId = useUserStore((s) => s.playerId);
   const userSetNickname = useUserStore((s) => s.setNickname);
@@ -193,6 +194,23 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
             <TouchableOpacity style={S.menuRow} onPress={() => { if (onTutorial) onTutorial(); }}><Text style={S.menuIcon}>{'🎓'}</Text><Text style={S.menuText}>{'초보자 가이드'}</Text><Text style={S.menuArrow}>{'>'}</Text></TouchableOpacity>
             <TouchableOpacity style={S.menuRow} onPress={() => setPage('rules')}><Text style={S.menuIcon}>{'❓'}</Text><Text style={S.menuText}>{'도움말 / 게임 규칙'}</Text><Text style={S.menuArrow}>{'>'}</Text></TouchableOpacity>
             <TouchableOpacity style={S.menuRow} onPress={() => setPage('terms')}><Text style={S.menuIcon}>{'📋'}</Text><Text style={S.menuText}>{'이용약관'}</Text><Text style={S.menuArrow}>{'>'}</Text></TouchableOpacity>
+          </View>
+          <View style={S.section}>
+            <Text style={S.secTitle}>{'계정'}</Text>
+            <TouchableOpacity style={S.menuRow} onPress={() => {
+              if (typeof globalThis.confirm === 'function') {
+                if (globalThis.confirm('정말 계정을 삭제하시겠습니까?\n모든 데이터가 영구 삭제되며 복구할 수 없습니다.')) {
+                  onDeleteAccount?.();
+                }
+              } else {
+                const { Alert } = require('react-native');
+                Alert.alert('계정 삭제', '정말 계정을 삭제하시겠습니까?\n모든 데이터가 영구 삭제되며 복구할 수 없습니다.',
+                  [{ text: '취소', style: 'cancel' }, { text: '삭제', style: 'destructive', onPress: () => onDeleteAccount?.() }]
+                );
+              }
+            }}>
+              <Text style={S.menuIcon}>{'🗑️'}</Text><Text style={[S.menuText, { color: '#e74c3c' }]}>{'계정 삭제'}</Text><Text style={S.menuArrow}>{'>'}</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </SafeAreaView>

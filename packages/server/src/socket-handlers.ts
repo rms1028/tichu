@@ -235,6 +235,20 @@ export function registerSocketHandlers(io: Server): void {
     let playerRoomId: string | null = null;
     let playerSeat: number = -1;
     let dbUserId: string | null = null;
+    let authenticatedPlayerId: string | null = null; // 로그인 시 인증된 playerId (guestId 또는 firebaseUid)
+
+    /** 인증 검증: playerId가 로그인한 유저와 일치하는지 확인 */
+    function requireAuth(playerId?: string): boolean {
+      if (!authenticatedPlayerId) {
+        socket.emit('error', { message: 'not_logged_in' });
+        return false;
+      }
+      if (playerId && playerId !== authenticatedPlayerId) {
+        socket.emit('error', { message: 'auth_mismatch' });
+        return false;
+      }
+      return true;
+    }
 
     function isRoomHost(room: GameRoom): boolean {
       if (!room.hostPlayerId) return playerSeat === 0;
@@ -252,6 +266,7 @@ export function registerSocketHandlers(io: Server): void {
       try {
         const user = await findOrCreateGuestUser(data.guestId, data.nickname);
         dbUserId = user.id;
+        authenticatedPlayerId = data.guestId;
         socket.emit('login_success', {
           userId: user.id,
           nickname: user.nickname,
@@ -280,26 +295,20 @@ export function registerSocketHandlers(io: Server): void {
     // ── Firebase 소셜 로그인 (토큰 검증) ─────────────────────
     socket.on('firebase_login', async (data: { idToken?: string; firebaseUid?: string; nickname: string }) => {
       try {
-        let uid: string | null = null;
-
-        if (data.idToken) {
-          // ID 토큰 검증 (권장)
-          uid = await verifyIdToken(data.idToken);
-          if (!uid) {
-            socket.emit('login_error', { error: 'invalid_token' });
-            return;
-          }
-        } else if (data.firebaseUid) {
-          // 레거시 호환: 토큰 없이 uid 직접 전송 (개발 환경용)
-          console.warn('[firebase_login] No idToken provided, using raw firebaseUid (insecure)');
-          uid = data.firebaseUid;
-        } else {
+        if (!data.idToken) {
           socket.emit('login_error', { error: 'missing_credentials' });
+          return;
+        }
+
+        const uid = await verifyIdToken(data.idToken);
+        if (!uid) {
+          socket.emit('login_error', { error: 'invalid_token' });
           return;
         }
 
         const user = await createOrUpdateFirebaseUser(uid, data.nickname);
         dbUserId = user.id;
+        authenticatedPlayerId = uid;
         socket.emit('login_success', {
           userId: user.id,
           nickname: user.nickname,
@@ -426,6 +435,7 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── 커스텀 방 생성 ──────────────────────────────────────
     socket.on('create_custom_room', (data: { roomName: string; password?: string; playerId: string; nickname: string }) => {
+      if (!requireAuth(data.playerId)) return;
       if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
       if (!isValidPlayerId(data.playerId) || !isValidNickname(data.nickname)) {
         socket.emit('error', { message: 'invalid_input' }); return;
@@ -487,6 +497,7 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── join_room ──────────────────────────────────────────
     socket.on('join_room', (data: { roomId: string; playerId: string; nickname: string; password?: string }) => {
+      if (!requireAuth(data.playerId)) return;
       if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
       if (!isValidPlayerId(data.playerId) || !isValidNickname(data.nickname)) {
         socket.emit('error', { message: 'invalid_input' }); return;
@@ -1180,6 +1191,7 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── queue_match (자동 매칭 큐 참가) ─────────────────────
     socket.on('queue_match', (data: { playerId: string; nickname: string }) => {
+      if (!requireAuth(data.playerId)) return;
       if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
       if (!isValidPlayerId(data.playerId) || !isValidNickname(data.nickname)) {
         socket.emit('error', { message: 'invalid_input' }); return;
@@ -1228,6 +1240,7 @@ export function registerSocketHandlers(io: Server): void {
 
     // 로비 진입 시 온라인 등록 + 친구 목록/요청 전송
     socket.on('friend_init', async (data: { playerId: string; nickname: string }) => {
+      if (!requireAuth(data.playerId)) return;
       playerOnline({ playerId: data.playerId, nickname: data.nickname, socketId: socket.id, status: 'lobby' });
       const code = getPlayerFriendCode(data.playerId);
       socket.emit('friend_code', { code });
@@ -1254,6 +1267,7 @@ export function registerSocketHandlers(io: Server): void {
 
     // 친구 요청 보내기
     socket.on('friend_request', async (data: { fromId: string; fromNickname: string; toId: string }) => {
+      if (!requireAuth(data.fromId)) return;
       if (!rateLimitCheck(socket.id, 10)) { socket.emit('friend_error', { error: 'rate_limited' }); return; }
       if (!isValidPlayerId(data.fromId) || !isValidNickname(data.fromNickname) || !isValidPlayerId(data.toId)) {
         socket.emit('friend_error', { error: 'invalid_input' }); return;
@@ -1481,6 +1495,44 @@ export function registerSocketHandlers(io: Server): void {
           coins: user.coins + reward,
         });
       } catch (err) { console.error('[claim_attendance] error:', err); }
+    });
+
+    // ── 계정 삭제 ──────────────────────────────────────────
+    socket.on('delete_account', async () => {
+      if (!dbUserId) { socket.emit('error', { message: 'not_logged_in' }); return; }
+      try {
+        // 게임 중이면 먼저 나가기
+        if (playerRoomId) {
+          const room = rooms.get(playerRoomId);
+          if (room && playerSeat >= 0) {
+            const player = room.players[playerSeat];
+            if (player && !player.isBot) {
+              player.connected = false;
+              if (room.settings.isCustom) checkAndDestroyEmptyRoom(io, room);
+            }
+          }
+        }
+
+        // 관련 데이터 모두 삭제 (트랜잭션)
+        await prisma.$transaction([
+          prisma.gameResult.deleteMany({ where: { userId: dbUserId } }),
+          prisma.friendRequest.deleteMany({ where: { OR: [{ fromId: dbUserId }, { toId: dbUserId }] } }),
+          prisma.friendship.deleteMany({ where: { OR: [{ userAId: dbUserId }, { userBId: dbUserId }] } }),
+          prisma.report.deleteMany({ where: { OR: [{ reporterId: dbUserId }, { reportedId: dbUserId }] } }),
+          prisma.block.deleteMany({ where: { OR: [{ blockerId: dbUserId }, { blockedId: dbUserId }] } }),
+          prisma.seasonRanking.deleteMany({ where: { userId: dbUserId } }),
+          prisma.pushToken.deleteMany({ where: { userId: dbUserId } }),
+          prisma.user.delete({ where: { id: dbUserId } }),
+        ]);
+
+        socket.emit('account_deleted');
+        dbUserId = null;
+        authenticatedPlayerId = null;
+        socket.disconnect();
+      } catch (err) {
+        console.error('[delete_account] error:', err);
+        socket.emit('error', { message: 'delete_failed' });
+      }
     });
 
     // ── 신고/차단 ──────────────────────────────────────────

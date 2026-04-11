@@ -502,6 +502,14 @@ export function useSocket() {
       useGameStore.setState({ toastMsg: '보상 수령 실패: ' + data.error });
     });
 
+    // ── 계정 삭제 완료 ────────────────────────────────────────
+    socket.on('account_deleted', () => {
+      cancelAllSounds();
+      store.reset();
+      const us = require('../stores/userStore').useUserStore.getState();
+      us.clearAll();
+    });
+
     // ── 출석 보상 응답 ────────────────────────────────────────
     socket.on('attendance_result', (data: { success: boolean; reward?: number; streak?: number; coins?: number; error?: string }) => {
       if (data.success && data.coins !== undefined) {
@@ -811,6 +819,10 @@ export function useSocket() {
     socketRef.current?.emit('claim_attendance');
   }, []);
 
+  const deleteAccount = useCallback(() => {
+    socketRef.current?.emit('delete_account');
+  }, []);
+
   const leaveRoom = useCallback(() => {
     socketRef.current?.emit('leave_room');
     cancelAllSounds();
@@ -862,6 +874,7 @@ export function useSocket() {
     equipShopItem,
     changeNickname,
     claimAttendance,
+    deleteAccount,
     leaveRoom,
     moveSeat,
     shuffleTeams,
