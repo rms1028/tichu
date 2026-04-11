@@ -74,6 +74,13 @@ export function useSocket() {
     socket.on('connect', () => {
       store.setConnection(true);
 
+      // 앱 버전 체크
+      try {
+        const Constants = require('expo-constants').default;
+        const appVersion = Constants.expoConfig?.version ?? '1.0.0';
+        socket.emit('check_version', { appVersion });
+      } catch { /* expo-constants 미사용 환경 */ }
+
       // 매 재접속 시 로그인 + rejoin (서버 재시작 대비)
       const us = require('../stores/userStore').useUserStore.getState();
       if (us.playerId && us.nickname) {
@@ -85,6 +92,13 @@ export function useSocket() {
 
     socket.on('disconnect', () => {
       store.setConnection(false);
+    });
+
+    // 앱 버전 강제 업데이트 필요 시
+    socket.on('version_info', (data: { minAppVersion: string; needsUpdate: boolean }) => {
+      if (data.needsUpdate) {
+        useGameStore.setState({ forceUpdate: true });
+      }
     });
 
     // 서버 재시작 알림 → 재접속 대기 모드

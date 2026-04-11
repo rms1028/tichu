@@ -4,6 +4,7 @@ import {
   isNormalCard, isBomb,
   getAvailableBombs, validateHand, canBeat,
 } from '@tichu/shared';
+import { logger } from './logger.js';
 import type { GameRoom, PlayerInfo } from './game-room.js';
 import {
   createGameRoom, emptyTrick, getActivePlayers, getTeamForSeat, getPartnerSeat, clearTimers,
@@ -69,6 +70,19 @@ function isValidPassword(pw: unknown): pw is string {
 
 function isValidPlayerId(id: unknown): id is string {
   return typeof id === 'string' && id.length > 0 && id.length <= 100;
+}
+
+/** 버전 비교: "1.2.3" vs "1.3.0" → -1 (a < b), 0 (같음), 1 (a > b) */
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const va = pa[i] ?? 0;
+    const vb = pb[i] ?? 0;
+    if (va < vb) return -1;
+    if (va > vb) return 1;
+  }
+  return 0;
 }
 
 // ── 레이트 리미터 ───────────────────────────────────────────
@@ -261,6 +275,13 @@ export function registerSocketHandlers(io: Server): void {
       console.error(`[socket error] ${socket.id}:`, err);
     });
 
+    // ── 앱 버전 체크 ──────────────────────────────────────
+    socket.on('check_version', (data: { appVersion?: string }) => {
+      const minVer = process.env['MIN_APP_VERSION'] ?? '1.0.0';
+      const needsUpdate = data.appVersion ? compareVersions(data.appVersion, minVer) < 0 : false;
+      socket.emit('version_info', { minAppVersion: minVer, needsUpdate });
+    });
+
     // ── 게스트 로그인 (DB 유저 생성/조회) ──────────────────
     socket.on('guest_login', async (data: { guestId: string; nickname: string }) => {
       try {
@@ -287,7 +308,7 @@ export function registerSocketHandlers(io: Server): void {
           equippedCardBack: user.equippedCardBack,
         });
       } catch (err) {
-        console.error('[guest_login] error:', err);
+        logger.error('auth', 'guest_login failed', err);
         socket.emit('login_error', { error: 'db_error' });
       }
     });
@@ -329,7 +350,7 @@ export function registerSocketHandlers(io: Server): void {
           equippedCardBack: user.equippedCardBack,
         });
       } catch (err) {
-        console.error('[firebase_login] error:', err);
+        logger.error('auth', 'firebase_login failed', err);
         socket.emit('login_error', { error: 'db_error' });
       }
     });
@@ -1420,7 +1441,7 @@ export function registerSocketHandlers(io: Server): void {
         if (['user_not_found', 'already_owned', 'not_enough_coins'].includes(msg)) {
           socket.emit('shop_error', { error: msg });
         } else {
-          console.error('[buy_item] error:', err);
+          logger.error('shop', 'buy_item failed', err);
           socket.emit('shop_error', { error: 'db_error' });
         }
       }
@@ -1442,7 +1463,7 @@ export function registerSocketHandlers(io: Server): void {
         const field = data.category === 'avatar' ? 'equippedAvatar' : 'equippedCardBack';
         await prisma.user.update({ where: { id: dbUserId }, data: { [field]: data.itemId } });
         socket.emit('shop_equipped', { itemId: data.itemId, category: data.category });
-      } catch (err) { console.error('[equip_item] error:', err); }
+      } catch (err) { logger.error('shop', 'equip_item failed', err); }
     });
 
     // ── 닉네임 변경 ──────────────────────────────────────────
@@ -1452,7 +1473,7 @@ export function registerSocketHandlers(io: Server): void {
       try {
         await prisma.user.update({ where: { id: dbUserId }, data: { nickname: data.nickname } });
         socket.emit('nickname_changed', { nickname: data.nickname });
-      } catch (err) { console.error('[change_nickname] error:', err); }
+      } catch (err) { logger.error('account', 'change_nickname failed', err); }
     });
 
     // ── 출석 보상 ──────────────────────────────────────────
@@ -1494,7 +1515,7 @@ export function registerSocketHandlers(io: Server): void {
           streak: resetStreak,
           coins: user.coins + reward,
         });
-      } catch (err) { console.error('[claim_attendance] error:', err); }
+      } catch (err) { logger.error('attendance', 'claim_attendance failed', err); }
     });
 
     // ── 계정 삭제 ──────────────────────────────────────────
@@ -1530,7 +1551,7 @@ export function registerSocketHandlers(io: Server): void {
         authenticatedPlayerId = null;
         socket.disconnect();
       } catch (err) {
-        console.error('[delete_account] error:', err);
+        logger.error('account', 'delete_account failed', err);
         socket.emit('error', { message: 'delete_failed' });
       }
     });

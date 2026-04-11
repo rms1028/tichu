@@ -119,6 +119,7 @@ export interface GameState {
   friendSearchResult: { found: boolean; playerId?: string; nickname?: string } | null;
   friendInvite: { fromNickname: string; roomId: string } | null;
   pendingInviteRoomId: string | null;
+  forceUpdate: boolean;
   emoteEvent: { seat: number; emoji: string; label: string; ts: number } | null;
   dbUserId: string | null;
   leaderboard: { id: string; nickname: string; xp: number; wins: number; totalGames: number }[];
@@ -223,6 +224,7 @@ const INITIAL_STATE = {
   friendSearchResult: null as { found: boolean; playerId?: string; nickname?: string } | null,
   friendInvite: null as { fromNickname: string; roomId: string } | null,
   pendingInviteRoomId: null as string | null,
+  forceUpdate: false,
   emoteEvent: null as { seat: number; emoji: string; label: string; ts: number } | null,
   dbUserId: null as string | null,
   leaderboard: [] as { id: string; nickname: string; xp: number; wins: number; totalGames: number }[],

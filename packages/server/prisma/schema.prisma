@@ -84,6 +84,7 @@ model FriendRequest {
   createdAt DateTime @default(now())
 
   @@unique([fromId, toId])
+  @@index([toId])
 }
 
 // ── 친구 관계 ───────────────────────────────────────────────
@@ -97,6 +98,7 @@ model Friendship {
   createdAt DateTime @default(now())
 
   @@unique([userAId, userBId])
+  @@index([userBId])
 }
 
 // ── 게임 결과 ───────────────────────────────────────────────
@@ -169,6 +171,7 @@ model Report {
   createdAt    DateTime @default(now())
 
   @@index([reportedId, createdAt])
+  @@index([reporterId])
 }
 
 // ── 차단 ────────────────────────────────────────────────────
@@ -182,6 +185,7 @@ model Block {
   createdAt  DateTime @default(now())
 
   @@unique([blockerId, blockedId])
+  @@index([blockedId])
 }
 
 // ── 푸시 토큰 ──────────────────────────────────────────────

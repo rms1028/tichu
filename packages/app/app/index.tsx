@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, LogBox, Platform } from 'react-native';
+import { View, Text, LogBox, Platform } from 'react-native';
 import { useGameStore } from '../src/stores/gameStore';
 
 // React Native Web에서 Reanimated가 만드는 공백 텍스트 노드 경고 무시
@@ -47,6 +47,7 @@ function AppInner() {
   const players = useGameStore((s) => s.players);
   const roundResult = useGameStore((s) => s.roundResult);
   const phase = useGameStore((s) => s.phase);
+  const forceUpdate = useGameStore((s) => s.forceUpdate);
 
   const {
     joinRoom, declareTichu, passTichu,
@@ -157,6 +158,18 @@ function AppInner() {
   };
 
   // 스플래시
+  // 강제 업데이트 필요 시
+  if (forceUpdate) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#1a1a2e', justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+        <Text style={{ color: '#FFD700', fontSize: 24, fontWeight: '900', marginBottom: 16 }}>{'업데이트 필요'}</Text>
+        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, textAlign: 'center', lineHeight: 22 }}>
+          {'새로운 버전이 출시되었습니다.\n앱을 업데이트한 후 다시 시작해주세요.'}
+        </Text>
+      </View>
+    );
+  }
+
   if (screen === 'splash') {
     return <SplashScreen onFinish={() => {
       const us = useUserStore.getState();

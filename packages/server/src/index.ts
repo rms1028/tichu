@@ -1,8 +1,10 @@
+import { logger } from './logger.js';
+
 process.on('uncaughtException', (err) => {
-  console.error('[CRASH] uncaughtException:', err);
+  logger.fatal('process', 'uncaughtException', err);
 });
 process.on('unhandledRejection', (err) => {
-  console.error('[CRASH] unhandledRejection:', err);
+  logger.fatal('process', 'unhandledRejection', err);
 });
 
 import http from 'node:http';
@@ -12,6 +14,8 @@ import { startScheduler, stopScheduler } from './scheduler.js';
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
 const START_TIME = Date.now();
+const SERVER_VERSION = '1.1.0';
+const MIN_APP_VERSION = process.env['MIN_APP_VERSION'] ?? '1.0.0';
 
 const httpServer = http.createServer((req, res) => {
   if (req.url === '/health') {
@@ -22,6 +26,8 @@ const httpServer = http.createServer((req, res) => {
       startedAt: START_TIME,
       uptime: Math.floor((Date.now() - START_TIME) / 1000),
       rooms: getRoomCount(),
+      serverVersion: SERVER_VERSION,
+      minAppVersion: MIN_APP_VERSION,
     }));
     return;
   }
@@ -47,12 +53,12 @@ registerSocketHandlers(io);
 startScheduler();
 
 httpServer.listen(PORT, () => {
-  console.log(`Tichu server listening on port ${PORT}`);
+  logger.info('server', `Tichu server v${SERVER_VERSION} listening on port ${PORT}`);
 });
 
 // ── Graceful Shutdown ─────────────────────────────────────────
 function gracefulShutdown(signal: string) {
-  console.log(`[${signal}] Graceful shutdown started...`);
+  logger.info('server', `Graceful shutdown started (${signal})`);
 
   // 글로벌 타이머 정리
   stopScheduler();
@@ -65,7 +71,7 @@ function gracefulShutdown(signal: string) {
   // 1초 대기 후 연결 종료 (클라이언트가 이벤트 수신할 시간)
   setTimeout(() => {
     io.close(() => {
-      console.log('[shutdown] Socket.IO closed');
+      logger.info('server', 'Socket.IO closed');
       httpServer.close(() => {
         console.log('[shutdown] HTTP server closed');
         process.exit(0);
