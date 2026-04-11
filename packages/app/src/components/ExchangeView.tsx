@@ -44,6 +44,16 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
     return () => clearInterval(iv);
   }, [phase]);
 
+  // 타이머 만료 시 배정된 카드가 있으면 자동 제출
+  useEffect(() => {
+    if (remaining > 2 || remaining === 0 || submitted) return;
+    const { left, partner, right } = assignments;
+    if (left && partner && right) {
+      setSubmitted(true);
+      onExchange(left, partner, right);
+    }
+  }, [remaining, assignments, submitted]);
+
   if (phase !== 'PASSING') return null;
 
   const leftSeat = (mySeat + 3) % 4;

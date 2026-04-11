@@ -138,7 +138,7 @@ export function OpponentHand({
               <Text style={styles.avatarEmoji}>{avatar.emoji}</Text>
             </View>
           </View>
-          <Text style={[styles.nickname, !connected && styles.nicknameDimmed, nickColor ? { color: nickColor } : undefined]} numberOfLines={1}>{nickname}</Text>
+          <Text style={[styles.nickname, !connected && styles.nicknameDimmed, nickColor ? { color: nickColor } : undefined]} numberOfLines={1} ellipsizeMode="tail">{nickname}</Text>
           {tichu && (
             <View style={[styles.tichuBadge, tichu === 'large' && styles.tichuLarge]}>
               <Text style={styles.tichuText}>{tichu === 'large' ? '🔥' : '⭐'}</Text>
@@ -183,7 +183,7 @@ export function OpponentHand({
         </View>
       )}
       {/* 이름 (아바타 위) */}
-      <Text style={[styles.nickname, !connected && styles.nicknameDimmed, nickColor ? { color: nickColor } : undefined]} numberOfLines={1}>
+      <Text style={[styles.nickname, !connected && styles.nicknameDimmed, nickColor ? { color: nickColor } : undefined]} numberOfLines={1} ellipsizeMode="tail">
         {nickname}
       </Text>
       {/* 아바타 프레임 */}
@@ -339,9 +339,9 @@ const styles = StyleSheet.create({
 
   nickname: {
     color: COLORS.text,
-    fontSize: 12,
+    fontSize: mob(9, 12),
     fontWeight: 'bold',
-    maxWidth: 80,
+    maxWidth: mob(52, 80),
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },

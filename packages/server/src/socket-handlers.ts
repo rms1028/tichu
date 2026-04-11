@@ -1451,9 +1451,11 @@ export function registerSocketHandlers(io: Server): void {
           if (owned.includes(data.itemId)) throw new Error('already_owned');
           if (user.coins < data.price) throw new Error('not_enough_coins');
           owned.push(data.itemId);
+          // 구매 + 자동 장착을 하나의 트랜잭션으로 (equip_item 별도 전송 시 레이스 방지)
+          const equipField = data.category === 'avatar' ? 'equippedAvatar' : 'equippedCardBack';
           const updated = await tx.user.update({
             where: { id: dbUserId! },
-            data: { coins: { decrement: data.price }, [field]: owned.join(',') },
+            data: { coins: { decrement: data.price }, [field]: owned.join(','), [equipField]: data.itemId },
             select: { coins: true },
           });
           return { coins: updated.coins };
@@ -2398,17 +2400,20 @@ async function recordGameResults(io: Server, room: GameRoom): Promise<void> {
     const isOneTwo = room.finishOrder.length >= 2
       && getTeamForSeat(room, room.finishOrder[0]!) === getTeamForSeat(room, room.finishOrder[1]!);
 
-    // 현재 유저 XP + 탈주 횟수 조회
+    // 현재 유저 조회 (실제 DB id + XP + 탈주 횟수)
+    let dbId: string | null = null;
     let currentXp = 0;
     let disconnectCount24h = 0;
     try {
       const user = await prisma.user.findFirst({
         where: { OR: [{ guestId: player.playerId }, { id: player.playerId }] },
-        select: { rankXp: true, leaveCount24h: true },
+        select: { id: true, rankXp: true, leaveCount24h: true },
       });
+      dbId = user?.id ?? null;
       currentXp = user?.rankXp ?? 0;
       disconnectCount24h = user?.leaveCount24h ?? 0;
     } catch {}
+    if (!dbId) continue; // DB에 없는 유저는 스킵
 
     const myTierIndex = rankGetTierInfo(currentXp).tierIndex;
 
@@ -2440,7 +2445,7 @@ async function recordGameResults(io: Server, room: GameRoom): Promise<void> {
     // DB 기록
     try {
       await dbRecordGameResult({
-        userId: player.playerId,
+        userId: dbId,
         roomId: room.roomId,
         won,
         team,

@@ -100,9 +100,9 @@ function AppInner() {
     }
   }, [screen]);
 
-  // 재접속 시 게임 진행 중이면 게임 화면으로 전환
+  // 재접속 시 게임 진행 중이면 게임 화면으로 전환 (로비에서만 — 매칭 대기실은 카운트다운 사용)
   useEffect(() => {
-    if ((screen === 'lobby' || screen === 'matchmaking') && roomId && phase &&
+    if (screen === 'lobby' && roomId && phase &&
         phase !== 'WAITING_FOR_PLAYERS' && phase !== 'GAME_OVER') {
       setScreen('game');
     }

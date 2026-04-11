@@ -426,8 +426,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     isMyTurn: seat === state.mySeat,
     turnStartedAt: Date.now(),
     trickWonEvent: null,
-    dragonGiveRequired: false,
-    dragonGiveSeat: -1,
+    // 용 양도 대기 중이면 리셋하지 않음 (dragon_give_required가 우선)
+    ...(state.dragonGiveRequired ? {} : { dragonGiveRequired: false, dragonGiveSeat: -1 }),
     ...(turnDuration ? { turnDuration } : {}),
   })),
 
@@ -444,6 +444,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   onDragonGiveCompleted: (fromSeat: number, targetSeat: number) => set({
     dragonGiveCompleted: { fromSeat, targetSeat },
+    dragonGiveRequired: false,
+    dragonGiveSeat: -1,
   }),
 
   onRoundResult: (team1, team2, scores, details, finishOrder, tichuDeclarations) => set({

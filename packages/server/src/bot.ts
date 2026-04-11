@@ -460,6 +460,198 @@ function getPositionInfo(room: GameRoom, seat: number): PositionInfo {
 }
 
 // ══════════════════════════════════════════════════════════════
+// 2e. [NEW] 엔드게임 솔버 — 2인 ≤5장에서 최적 수 계산
+// ══════════════════════════════════════════════════════════════
+
+/** 2인 엔드게임에서 최적 플레이를 미니맥스로 탐색. null이면 솔버 적용 불가. */
+function solveEndgame(hand: Card[], room: GameRoom, seat: number, isLead: boolean): PlayedHand | null {
+  const active = getActivePlayers(room);
+  if (active.length !== 2) return null;
+  const oppSeat = active.find(s => s !== seat)!;
+  const oppHand = room.hands[oppSeat];
+  if (!oppHand || hand.length > 5 || oppHand.length > 5) return null;
+  if (hand.length === 0) return null;
+
+  // 미니맥스: 내가 먼저 핸드를 비우면 승리
+  const plays = getValidPlays(hand, isLead ? null : room.tableCards, room.wish);
+  if (plays.length === 0) return null;
+
+  let bestPlay: PlayedHand | null = null;
+  let bestScore = -Infinity;
+
+  for (const play of plays) {
+    const myRemaining = hand.filter(c => !play.cards.some(pc => cardId(pc) === cardId(c)));
+    // 내가 이 카드를 내면 상대가 응답
+    const maxDepth = Math.min(6, hand.length + (oppHand?.length ?? 0)); // 깊이 6 (카드 합 이하)
+    const score = endgameMinimaxOpp(myRemaining, [...oppHand], play, room, maxDepth);
+    if (score > bestScore) { bestScore = score; bestPlay = play; }
+  }
+
+  // 패스 옵션 (팔로우 시)
+  if (!isLead) {
+    const maxDepth = Math.min(6, hand.length + (oppHand?.length ?? 0));
+    const passScore = endgameMinimaxMe(hand, [...oppHand], room.tableCards, room, maxDepth, true);
+    if (passScore > bestScore) return null; // 패스가 더 좋으면 null 반환 → shouldPass에서 처리
+  }
+
+  return bestScore > 0 ? bestPlay : null; // 이길 수 있을 때만 사용
+}
+
+/** 상대 차례: 상대는 최선을 다해 나를 방해 */
+function endgameMinimaxOpp(myHand: Card[], oppHand: Card[], lastPlay: PlayedHand, room: GameRoom, depth: number): number {
+  if (myHand.length === 0) return 10; // 내가 이김
+  if (oppHand.length === 0) return -10; // 상대가 이김
+  if (depth <= 0) return myHand.length < oppHand.length ? 1 : myHand.length > oppHand.length ? -1 : 0;
+
+  const oppPlays = getValidPlays(oppHand, lastPlay, room.wish);
+  let bestForOpp = Infinity; // 상대는 나에게 불리한 결과를 원함
+
+  // 상대가 패스하면 내가 리드
+  const passScore = endgameMinimaxMe(myHand, oppHand, null, room, depth - 1, true);
+  bestForOpp = Math.min(bestForOpp, passScore);
+
+  for (const play of oppPlays) {
+    if (isBomb(play)) continue; // 간소화: 폭탄 제외
+    const oppRemaining = oppHand.filter(c => !play.cards.some(pc => cardId(pc) === cardId(c)));
+    if (oppRemaining.length === 0) return -10; // 상대가 나감
+    // 내 차례
+    const score = endgameMinimaxMe(myHand, oppRemaining, play, room, depth - 1, false);
+    bestForOpp = Math.min(bestForOpp, score);
+  }
+
+  return bestForOpp;
+}
+
+/** 내 차례: 나는 최선을 다해 이김 */
+function endgameMinimaxMe(myHand: Card[], oppHand: Card[], lastPlay: PlayedHand | null, room: GameRoom, depth: number, isLead: boolean): number {
+  if (myHand.length === 0) return 10;
+  if (oppHand.length === 0) return -10;
+  if (depth <= 0) return myHand.length < oppHand.length ? 1 : myHand.length > oppHand.length ? -1 : 0;
+
+  const myPlays = getValidPlays(myHand, isLead ? null : lastPlay, room.wish);
+  let bestForMe = -Infinity;
+
+  // 패스 (팔로우 시): 상대가 리드
+  if (!isLead) {
+    const passScore = endgameMinimaxOpp(myHand, oppHand, lastPlay!, room, depth - 1);
+    bestForMe = Math.max(bestForMe, passScore);
+  }
+
+  for (const play of myPlays) {
+    if (isBomb(play)) continue;
+    const myRemaining = myHand.filter(c => !play.cards.some(pc => cardId(pc) === cardId(c)));
+    if (myRemaining.length === 0) return 10; // 내가 나감
+    const score = endgameMinimaxOpp(myRemaining, oppHand, play, room, depth - 1);
+    bestForMe = Math.max(bestForMe, score);
+  }
+
+  return bestForMe === -Infinity ? -5 : bestForMe; // 낼 수 없으면 불리
+}
+
+// ══════════════════════════════════════════════════════════════
+// 2f. [NEW] 상대 핸드 타입 추론
+// ══════════════════════════════════════════════════════════════
+
+interface OpponentTypeProfile {
+  weakOnPairs: boolean;     // 페어에 패스 이력
+  weakOnTriples: boolean;   // 트리플에 패스 이력
+  weakOnStraights: boolean; // 스트레이트에 패스 이력
+  weakOnSteps: boolean;     // 연속페어에 패스 이력
+  passedTypes: Set<string>; // 패스한 타입 세트
+}
+
+function buildOpponentTypeProfiles(room: GameRoom, mySeat: number): Map<number, OpponentTypeProfile> {
+  const result = new Map<number, OpponentTypeProfile>();
+  const partner = getPartnerSeat(mySeat);
+
+  for (let s = 0; s < 4; s++) {
+    if (s === mySeat || s === partner) continue;
+    const profile: OpponentTypeProfile = {
+      weakOnPairs: false, weakOnTriples: false,
+      weakOnStraights: false, weakOnSteps: false,
+      passedTypes: new Set(),
+    };
+
+    // 라운드 히스토리에서 해당 좌석이 패스한 타입 수집
+    for (const trick of room.roundHistory) {
+      if (trick.plays.length === 0) continue;
+      const trickType = trick.plays[0]?.hand.type;
+      const played = trick.plays.some(p => p.seat === s);
+      if (!played && trickType) {
+        profile.passedTypes.add(trickType);
+        if (trickType === 'pair') profile.weakOnPairs = true;
+        if (trickType === 'triple') profile.weakOnTriples = true;
+        if (trickType === 'straight') profile.weakOnStraights = true;
+        if (trickType === 'steps') profile.weakOnSteps = true;
+      }
+    }
+
+    // 현재 트릭
+    if (room.tableCards) {
+      const played = room.currentTrick.plays.some(p => p.seat === s);
+      if (!played) {
+        profile.passedTypes.add(room.tableCards.type);
+        if (room.tableCards.type === 'pair') profile.weakOnPairs = true;
+        if (room.tableCards.type === 'triple') profile.weakOnTriples = true;
+        if (room.tableCards.type === 'straight') profile.weakOnStraights = true;
+        if (room.tableCards.type === 'steps') profile.weakOnSteps = true;
+      }
+    }
+
+    result.set(s, profile);
+  }
+  return result;
+}
+
+// ══════════════════════════════════════════════════════════════
+// 2g. [NEW] 봉황 최적 활용 — 봉황을 조합에 넣어 강한 플레이 생성
+// ══════════════════════════════════════════════════════════════
+
+/** 라운드에서 우리 팀이 확보한 포인트 추정 */
+function getTeamTrickPoints(room: GameRoom, seat: number): number {
+  const partner = getPartnerSeat(seat);
+  let points = 0;
+  for (const s of [seat, partner]) {
+    const tricks = room.wonTricks[s];
+    if (tricks) points += sumPoints(tricks);
+  }
+  return points;
+}
+
+/** 게임에 남은 폭탄 수 추정 (내 폭탄 제외) */
+function estimateRemainingBombs(hand: Card[], room: GameRoom): number {
+  const played = getPlayedCards(room);
+  const myKeys = new Set(hand.map(cardId));
+  // 포카드 가능한 랭크 확인
+  let possibleBombs = 0;
+  for (let v = 2; v <= 14; v++) {
+    let remaining = 0;
+    const rank = valueToRank(v);
+    for (const suit of ['sword', 'star', 'jade', 'pagoda']) {
+      const id = `${suit}-${rank}`;
+      if (!played.has(id) && !myKeys.has(id)) remaining++;
+    }
+    if (remaining >= 4) possibleBombs++; // 상대가 4장 다 가질 수 있음
+  }
+  return possibleBombs;
+}
+
+/** 봉황을 조합에 활용하는 플레이 중 가장 효율적인 것 반환 */
+function findBestPhoenixCombo(plays: PlayedHand[], hand: Card[]): PlayedHand | null {
+  const phoenixPlays = plays.filter(p =>
+    p.cards.some(isPhoenix) && p.length >= 2 && !isBomb(p)
+  );
+  if (phoenixPlays.length === 0) return null;
+
+  // 가장 많은 카드를 소모하는 봉황 조합 선호
+  phoenixPlays.sort((a, b) => {
+    if (a.length !== b.length) return b.length - a.length;
+    return a.value - b.value; // 같은 장수면 낮은 값 선호
+  });
+  return phoenixPlays[0] ?? null;
+}
+
+// ══════════════════════════════════════════════════════════════
 // 3. 메인 의사결정
 // ══════════════════════════════════════════════════════════════
 
@@ -522,6 +714,13 @@ export function decideBotAction(room: GameRoom, seat: number): BotDecision {
     return toDecision(sorted[0]!, hand, room, seat);
   }
 
+  // [NEW] Hard 엔드게임 솔버: 2인 ≤5장이면 미니맥스로 최적 수 계산
+  if (diff === 'hard' && getActivePlayers(room).length === 2 && hand.length <= 5) {
+    const solved = solveEndgame(hand, room, seat, isLead);
+    if (solved) return toDecision(solved, hand, room, seat);
+    // solved === null이면 패스가 최적이거나 솔버 적용 불가 → 기존 로직으로 폴백
+  }
+
   if (isLead) {
     if (validPlays.length === 0) {
       if (hand.length === 0) return { action: 'pass' };
@@ -581,21 +780,28 @@ export function decideBotBomb(room: GameRoom, seat: number): BotDecision {
     // 내가 곧 나갈 수 있을 때
     if (hand.length <= bombs[0]!.cards.length + 2) return true;
 
-    // 파트너 카드 적을 때
-    if (room.hands[partner]!.length <= 3) return true;
+    // 내 티츄
+    if (room.tichuDeclarations[seat] !== null) return true;
 
     // 트릭 점수 높을 때 (10점+)
     const trickPoints = room.currentTrick.plays.reduce((sum, p) => sum + sumPoints(p.hand.cards), 0);
     if (trickPoints >= 10) return true;
 
-    // 내 티츄
-    if (room.tichuDeclarations[seat] !== null) return true;
+    // 파트너 카드 적을 때
+    if (room.hands[partner]!.length <= 3) return true;
 
     // 점수 상황
     const myTeam = getTeamForSeat(room, seat);
     const myScore = room.scores[myTeam];
     const oppScore = room.scores[myTeam === 'team1' ? 'team2' : 'team1'];
     if (oppScore - myScore >= 150) return true;
+
+    // [NEW #5] 폭탄 보존: 위 조건에 해당 안 하면 → 상대에 남은 폭탄 추정
+    if (diff === 'hard') {
+      const remainingBombs = estimateRemainingBombs(hand, room);
+      // 상대에게 폭탄이 있을 수 있고 트릭 포인트가 낮으면 → 보존
+      if (remainingBombs >= 1 && trickPoints < 10) return false;
+    }
 
     return false;
   })();
@@ -656,7 +862,9 @@ export function decideBotTichu(room: GameRoom, seat: number, type: 'large' | 'sm
       // 페어 많으면 가점
       if (pairs >= 3) score += 1;
     }
-    const largeThreshold = diff === 'hard' ? 8 : 7;
+    // [NEW #6] 라지 티츄도 점수 상황 반영
+    let largeThreshold = diff === 'hard' ? 8 : 7;
+    if (desperate) largeThreshold -= 1;
     return score >= largeThreshold;
   }
 
@@ -690,8 +898,13 @@ export function decideBotTichu(room: GameRoom, seat: number, type: 'large' | 'sm
     if (enemyMinCards <= 5) score -= 2; // 적이 곧 나감 → 위험
   }
 
-  // 스몰 티츄 임계값: hard=6.5 (신중하게 선언), medium=6
-  return score >= (diff === 'hard' ? 6.5 : 6);
+  // [NEW #6] 스몰 티츄 임계값: 점수 상황에 따라 동적 조정
+  // 기대값: 선언 시 +100×P - 100×(1-P) = 200P - 100. P>50%면 기대값 양수.
+  // 지고 있으면 더 공격적으로 (임계값 낮춤), 이기고 있으면 보수적
+  let smallThreshold = diff === 'hard' ? 6.0 : 6; // 기본 6.0 (5.5에서 상향 — 실패율 줄이기)
+  if (desperate) smallThreshold -= 1.5; // 위기 → 공격적
+  else if (myScore >= 800) smallThreshold += 1; // 안전 리드 → 보수적
+  return score >= smallThreshold;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -718,34 +931,42 @@ export function decideBotExchange(room: GameRoom, seat: number): { left: Card; p
       if (g.length >= 2) g.cards.forEach(c => usedInCombo.add(cardId(c)));
     }
 
-    // 파트너에게: 티츄 선언 시 최강 카드, 아니면 조합에 안 쓰이는 높은 카드
+    // 내 티츄면 파트너에게 약한 카드 (내가 1등 나가야 하므로 강카드 보존)
+    const myTichu = room.tichuDeclarations[seat] !== null;
+
+    // 파트너에게: 파트너 티츄→최강, 내 티츄→약한 카드, 그 외→좋은 프리 카드
     const forPartner = partnerTichu
       ? pickBestForPartner(hand)
-      : (() => {
-          // 조합에 안 쓰이는 카드 중 높은 것 → 항상 좋은 카드 주기
-          const free = hand.filter(c => !usedInCombo.has(cardId(c)));
-          // 프리 카드 중 A/K/봉황 우선, 없으면 가장 높은 카드
-          const freeAce = free.find(c => isNormalCard(c) && c.rank === 'A');
-          if (freeAce) return freeAce;
-          const freePhoenix = free.find(isPhoenix);
-          if (freePhoenix) return freePhoenix;
-          const freeKing = free.find(c => isNormalCard(c) && c.rank === 'K');
-          if (freeKing) return freeKing;
-          const good = free.filter(isNormalCard).sort((a, b) => cardSortValue(b) - cardSortValue(a));
-          return good[0] ?? pickGoodForPartner(hand);
-        })();
+      : myTichu
+        ? pickWorstForEnemy(hand) // 내 티츄면 파트너에게도 약한 카드 (내 핸드 보존)
+        : (() => {
+            // 조합에 안 쓰이는 카드 중 높은 것 → 좋은 카드 주기
+            const free = hand.filter(c => !usedInCombo.has(cardId(c)));
+            // 프리 카드 중 A/봉황/K 순, 없으면 높은 카드 (단, 용은 내가 보존)
+            const freeAce = free.find(c => isNormalCard(c) && c.rank === 'A');
+            if (freeAce) return freeAce;
+            const freePhoenix = free.find(isPhoenix);
+            if (freePhoenix) return freePhoenix;
+            const freeKing = free.find(c => isNormalCard(c) && c.rank === 'K');
+            if (freeKing) return freeKing;
+            // 프리 카드 중 가장 높은 일반 카드
+            const good = free.filter(c => isNormalCard(c) && !isDragon(c)).sort((a, b) => cardSortValue(b) - cardSortValue(a));
+            return good[0] ?? pickGoodForPartner(hand);
+          })();
 
     const remaining1 = hand.filter(c => !cardEquals(c, forPartner));
 
-    // 상대에게: 조합에 안 쓰이는 카드 중 가장 약한 것 (점수 카드 제외)
-    const pickFreeWorst = (cards: Card[]): Card => {
+    // 상대에게: 프리 카드 중 가장 약한 것 (용/봉황/A 절대 불가)
+    const pickSafeWorst = (cards: Card[]): Card => {
+      // 콤보에 안 쓰이는 카드 우선, 없으면 전체에서 선택
       const free = cards.filter(c => !usedInCombo.has(cardId(c)));
-      return pickWorstForEnemy(free.length > 0 ? free : cards);
+      const pool = free.length > 0 ? free : cards;
+      return pickWorstForEnemy(pool);
     };
 
-    const forLeft = pickFreeWorst(remaining1);
+    const forLeft = pickSafeWorst(remaining1);
     const remaining2 = remaining1.filter(c => !cardEquals(c, forLeft));
-    const forRight = pickFreeWorst(remaining2);
+    const forRight = pickSafeWorst(remaining2);
 
     return { left: forLeft, partner: forPartner, right: forRight };
   }
@@ -837,12 +1058,20 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
     if (dogPlay) return dogPlay;
   }
 
-  // 개 타이밍: 파트너가 카드 적고 아직 활성일 때만
-  if (active.includes(partner) && room.hands[partner]!.length <= 3 && hand.length > 3) {
+  // [NEW #2] 개 타이밍 개선: 파트너가 곧 나갈 수 있을 때만 사용
+  if (active.includes(partner) && hand.length > 3) {
+    const partnerHandLen = room.hands[partner]!.length;
     const dogPlay = plays.find(p => p.cards.length === 1 && isDog(p.cards[0]!));
-    if (dogPlay) return dogPlay;
+    if (dogPlay) {
+      // 파트너 카드 적고 적 카드 많으면 → 개 사용 (파트너에게 기회)
+      const enemySeats = [0, 1, 2, 3].filter(s => s !== seat && s !== partner && active.includes(s));
+      const enemyMinLen = enemySeats.length > 0 ? Math.min(...enemySeats.map(s => room.hands[s]?.length ?? 14)) : 14;
+      if (partnerHandLen <= 3 && enemyMinLen > 3) return dogPlay;
+      // 파트너 티츄면 무조건 개 사용
+      if (partnerTichu) return dogPlay;
+      // 파트너 카드가 적보다 많으면 → 개 안 씀 (파트너에게 넘기면 오히려 불리)
+    }
   }
-  // 파트너 나갔으면 개 리드 의미 없음 → scored에서 자연스럽게 낮은 점수
 
   const nonBombs = plays.filter(p => !isBomb(p) && !p.cards.some(isDog));
   if (nonBombs.length === 0) return plays[0]!;
@@ -889,8 +1118,11 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
     // 봉황 싱글 리드 (1.5로 나감): 약해서 비추
     if (p.type === 'single' && p.cards.some(isPhoenix)) score -= 30;
 
-    // 내 티츄: 장수 많은 조합 더 우선
-    if (myTichu) score += p.length * 5;
+    // 내 티츄: 장수 많은 조합 더 우선 + 탑싱글로 컨트롤 잡기
+    if (myTichu) {
+      score += p.length * 8;
+      if (p.type === 'single' && isTopSingle(p.cards[0]!, hand, room)) score += 15;
+    }
 
     // ── 중급 이상 전략 ──
     if (diff === 'medium' || diff === 'hard') {
@@ -902,88 +1134,113 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
       if (!active.includes(partner) && p.cards.some(isDog)) score -= 50;
     }
 
-    // ── 고급 전략 (A~E 통합) ──
+    // ── 고급 전략 (A~E 통합 + NEW 1~6) ──
     if (diff === 'hard') {
       const situation = assessGameSituation(room, seat);
       const opponents = buildOpponentProfiles(room, seat);
+      const oppTypes = buildOpponentTypeProfiles(room, seat);
       const decomp = analysis.decomposition;
       const enemyCards = opponents.filter(o => o.seat !== partner && active.includes(o.seat)).map(o => o.estimatedCards);
       const enemyMinCards = enemyCards.length > 0 ? Math.min(...enemyCards) : 14;
+      const partnerCards = room.hands[partner]?.length ?? 0;
 
       // ── [1] 핸드 분해 기반 ──
-      // 고립 싱글 먼저 처리
       if (p.type === 'single' && isNormalCard(p.cards[0]!)) {
         if (decomp.isolatedSingles.includes(p.cards[0]!.value)) score += 12;
       }
-      // 분해 결과에 포함된 조합 우선
       const inDecomp = decomp.groups.some(g =>
         g.type === p.type && g.length === p.length && g.value === p.value
       );
-      // 플랜 순서 반영: 플랜에서 앞쪽(빨리 내야 할 것)에 있으면 가점
       const planIdx = analysis.playPlan.findIndex(g =>
         g.type === p.type && g.length === p.length && g.value === p.value
       );
-      if (planIdx >= 0 && planIdx < 3) score += 10; // 플랜 상위 3개는 우선
+      if (planIdx >= 0 && planIdx < 3) score += 10;
       if (inDecomp) score += 8;
 
       // ── [2] 포인트 카드 인식 ──
-      // 리드에서 포인트 카드를 내면 상대에게 줄 수 있음 → 탑이 아니면 감점
       if (p.type === 'single') {
         const pts = sumPoints(p.cards);
         if (pts > 0 && !isTopSingle(p.cards[0]!, hand, room)) {
-          score -= pts * 2; // 5점 카드=-10, 10점 카드=-20
+          score -= pts * 2;
         }
       }
 
-      // ── [3] 용/봉황 최적화 ──
-      // 봉황을 조합에서 쓰는 리드 가점
-      if (p.cards.some(isPhoenix) && p.length >= 2) score += 15;
-      // 용: 마지막 1~2장이 아니면 억제 (양도 리스크)
+      // ── [3] 용 전략 (개선: 컨트롤 충분하면 적극 사용) ──
       if (p.cards.some(isDragon)) {
-        if (hand.length <= 2) score += 30; // 마지막 카드 → 적극
-        else score -= 80; // 아끼기
+        if (hand.length <= 2) score += 40;
+        else if (analysis.controlCount >= 3 && hand.length <= 6) score += 15; // [NEW] 컨트롤 충분 → 용 적극
+        else if (hand.length <= 4) score -= 10;
+        else score -= 40;
+        // 적 곧 나감 → 양도 위험
+        if (enemyMinCards <= 3 && hand.length > 2) score -= 30;
+        // [NEW] 파트너가 곧 나가면 용 써도 안전 (파트너에게 양도 불필요)
+        if (partnerCards <= 2 && hand.length <= 4) score += 20;
       }
-      // 용이 마지막 2장에 포함되면 → 다른 카드 먼저 리드
       if (hand.length === 2 && !p.cards.some(isDragon) && hand.some(isDragon)) score += 30;
 
-      // ── [4] 카운팅 기반 리드 선택 ──
+      // ── [4] 봉황 최적화 (개선: 조합 활용 강력 가점) ──
+      if (p.cards.some(isPhoenix)) {
+        if (p.length >= 2) {
+          score += 25; // [NEW] 조합에 봉황 → 강한 가점 (15→25)
+          if (p.type === 'straight' && p.length >= 5) score += 10; // 스트레이트에 봉황 = 매우 효율
+        } else {
+          score -= 20; // 싱글 봉황은 비추 (낭비)
+        }
+      }
+
+      // ── [5] 카운팅 기반 리드 ──
       if (p.type === 'single' && isNormalCard(p.cards[0]!)) {
         const beatProb = getSingleBeatProbability(p.cards[0]!.value, hand, room);
-        // 먹힐 확률 낮으면 안전 리드 → 가점
         if (beatProb < 0.2) score += 20;
         else if (beatProb < 0.4) score += 10;
-        // 먹힐 확률 높은 약한 카드 → 고립 싱글이면 빨리 처리
         if (beatProb > 0.6 && decomp.isolatedSingles.includes(p.cards[0]!.value)) score += 8;
       }
-      // 상대가 패스한 값 이하의 싱글은 안전
       if (p.type === 'single' && isNormalCard(p.cards[0]!)) {
         const enemies = opponents.filter(o => o.seat !== partner);
         const pVal = isNormalCard(p.cards[0]!) ? p.cards[0]!.value : p.value;
         if (enemies.every(o => o.hasPassedOnSingle && o.passedMaxValue >= pVal)) score += 20;
       }
 
-      // ── [5] 파트너 협력 ──
-      // 파트너 카드 적으면 개로 리드 넘기기
-      if (active.includes(partner) && room.hands[partner]!.length <= 4 && p.cards.some(isDog)) {
-        score += 50;
-      }
-      // 파트너 나갔으면 개 감점
-      if (!active.includes(partner) && p.cards.some(isDog)) score -= 50;
-      // 파트너 티츄 + 파트너 카드 적을 때 → 약한 리드로 파트너가 이길 기회 제공
-      if (partnerTichu && active.includes(partner) && room.hands[partner]!.length <= 5) {
-        if (p.type === 'single' && p.value <= 8) score += 15; // 파트너가 이길 수 있는 약한 리드
+      // ── [6] 상대 약점 타입 리드 (NEW #3) ──
+      if (p.type !== 'single') {
+        let allWeak = true;
+        for (const [, tp] of oppTypes) {
+          if (p.type === 'pair' && tp.weakOnPairs) continue;
+          if (p.type === 'triple' && tp.weakOnTriples) continue;
+          if (p.type === 'straight' && tp.weakOnStraights) continue;
+          if (p.type === 'steps' && tp.weakOnSteps) continue;
+          allWeak = false;
+          break;
+        }
+        if (allWeak && oppTypes.size > 0) score += 20; // 모든 상대가 이 타입에 약함
       }
 
-      // ── [6] 2인 엔드게임 ──
+      // ── [7] 파트너 협력 (개선 NEW #2) ──
+      // 개로 리드 넘기기
+      if (active.includes(partner) && partnerCards <= 4 && p.cards.some(isDog)) {
+        score += 50;
+      }
+      if (!active.includes(partner) && p.cards.some(isDog)) score -= 50;
+      // 파트너 티츄 → 약한 리드로 파트너가 이기게
+      if (partnerTichu && active.includes(partner) && partnerCards <= 5) {
+        if (p.type === 'single' && p.value <= 8) score += 20;
+        // [NEW] 파트너가 이길 수 있는 조합 리드 (낮은 페어/트리플)
+        if ((p.type === 'pair' || p.type === 'triple') && p.value <= 8) score += 15;
+      }
+      // [NEW] 파트너가 방금 나갔으면(1등) → 내가 빨리 나가야 (원투 피니시)
+      if (room.finishOrder.length === 1 && room.finishOrder[0] === partner) {
+        score += p.length * 8; // 카드 많이 소모하는 조합 강하게 선호
+        if (p.type === 'single' && isTopSingle(p.cards[0]!, hand, room)) score += 20;
+      }
+      // [NEW] 파트너가 리드를 잡고 있고 약한 카드를 냈을 때 → 패스하지 말고 약하게 이어가는 건 shouldPass에서 처리
+
+      // ── [8] 2인 엔드게임 ──
       if (active.length === 2) {
-        // 탑 싱글 순서대로 리드 → 컨트롤 유지
         if (p.type === 'single' && isTopSingle(p.cards[0]!, hand, room)) score += 30;
-        // 먹힐 확률 높은 약한 카드 자제
         if (p.type === 'single' && isNormalCard(p.cards[0]!)) {
           const beatProb = getSingleBeatProbability(p.cards[0]!.value, hand, room);
           if (beatProb > 0.5) score -= 15;
         }
-        // 적이 카드 1~2장이면 반드시 강하게 (탈출 차단)
         if (enemyMinCards <= 2) {
           if (isTopSingle(p.cards[0]!, hand, room) || p.value >= 13) score += 25;
         }
@@ -996,8 +1253,40 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
         if (pts >= 10 && analysis.topSingles >= 1) score += 15;
       }
 
-      // 적 카드 적으면 강하게 선점
       if (enemyMinCards <= 3 && p.value >= 12) score += 15;
+
+      // ── [NEW #3] 상대 탈출 차단: 적 1~2장이면 약점 타입으로 리드 ──
+      if (enemyMinCards <= 2 && p.type !== 'single') {
+        // 적이 이 타입에 약하면 강한 가점 (탈출 불가능한 타입으로 리드)
+        let allWeak = true;
+        for (const [, tp] of oppTypes) {
+          if (p.type === 'pair' && !tp.weakOnPairs) allWeak = false;
+          if (p.type === 'triple' && !tp.weakOnTriples) allWeak = false;
+          if (p.type === 'straight' && !tp.weakOnStraights) allWeak = false;
+          if (p.type === 'steps' && !tp.weakOnSteps) allWeak = false;
+        }
+        if (allWeak) score += 30; // 적이 이 타입 못 이김 → 안전하게 카드 소모
+      }
+      // 적 1~2장 + 싱글 리드 → 탑이 아니면 위험 (적이 이길 수 있음)
+      if (enemyMinCards <= 2 && p.type === 'single' && !isTopSingle(p.cards[0]!, hand, room)) {
+        score -= 20; // 약한 싱글 리드 억제
+      }
+
+      // ── [NEW #4] 조합 시퀀싱: 이걸 리드하면 나머지 핸드가 좋아지는가? ──
+      if (hand.length >= 4) {
+        const remainAfterLead = hand.filter(c => !p.cards.some(pc => cardId(pc) === cardId(c)));
+        const decompAfterLead = decomposeHand(remainAfterLead);
+        const trickDiffLead = decompAfterLead.minTricks - analysis.decomposition.minTricks;
+        if (trickDiffLead < 0) score += 12;  // 리드 후 핸드 개선
+        if (trickDiffLead >= 2) score -= 15; // 핸드 구조 크게 악화
+      }
+
+      // ── [NEW #6] 원투 피니시 조기 추적: 파트너 카드 ≤3이면 미리 모드 ──
+      if (active.includes(partner) && partnerCards <= 3 && !room.finishOrder.includes(partner)) {
+        // 파트너가 곧 나감 → 내가 빨리 나가야 원투
+        score += p.length * 5; // 카드 많이 소모하는 리드 선호
+        if (p.type === 'single' && isTopSingle(p.cards[0]!, hand, room)) score += 15;
+      }
     }
 
     return { play: p, score };
@@ -1049,8 +1338,11 @@ function pickFollowPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat:
     // 폭탄은 최후의 수단
     if (isBomb(p)) score -= 100;
 
-    // 내 티츄: 적극적
-    if (myTichu) score += 10;
+    // 내 티츄: 매우 적극적 — 카드 소모 최우선
+    if (myTichu) {
+      score += 15;
+      score += p.length * 3; // 카드 많이 소모하는 플레이 강한 가점
+    }
 
     // ── 중급 이상 팔로우 전략 ──
     if (diff === 'medium' || diff === 'hard') {
@@ -1066,63 +1358,113 @@ function pickFollowPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat:
       const situation = assessGameSituation(room, seat);
       const analysisF = analyzeHand(hand, room);
       const decomp = analysisF.decomposition;
+      const partnerCards = room.hands[partner]?.length ?? 14;
+      const activePlayers = getActivePlayers(room);
 
-      // 플랜에서 이 조합의 우선순위 → 빨리 내야 할 것이면 가점
+      // 플랜 우선순위
       const planIdx = analysisF.playPlan.findIndex(g =>
         g.type === p.type && g.length === p.length && g.value === p.value
       );
       if (planIdx >= 0 && planIdx < 3) score += 8;
 
-      // [1] 최소 차이로 이기는 카드 선호 (카드 가치 절약)
-      if (table && p.value - table.value <= 2) score += 15;
-      if (table && p.value - table.value > 5) score -= 8;
+      // ── [NEW #2] 최소 오버킬 강화 ──
+      if (table) {
+        const margin = p.value - table.value;
+        if (margin <= 1) score += 20;      // 최소 차이로 이김 → 최고
+        else if (margin <= 2) score += 12;
+        else if (margin <= 4) score += 0;  // 적당
+        else if (margin <= 6) score -= 10; // 낭비
+        else score -= 18;                  // 큰 낭비
+      }
 
-      // 고립 싱글이면 우선 소모
+      // 고립 싱글 우선 소모
       if (p.type === 'single' && isNormalCard(p.cards[0]!) && decomp.isolatedSingles.includes(p.cards[0]!.value)) {
         score += 10;
       }
 
-      // [2] 포인트 카드 인식: 트릭에 포인트가 많으면 반드시 가져가기
+      // ── [NEW #3] 포인트 적극 확보 (상황별 가중) ──
       const trickPts = trickPointTotal(room);
-      if (trickPts >= 10) score += 15;
-      if (trickPts >= 20) score += 10;
-      // 상대가 포인트 카드를 냈으면 적극 먹기
+      const situationMultiplier = (situation === 'desperate' || situation === 'losing') ? 2 : 1;
+      if (trickPts >= 5) score += 8 * situationMultiplier;
+      if (trickPts >= 10) score += 10 * situationMultiplier;
+      if (trickPts >= 20) score += 12 * situationMultiplier;
+      // 상대가 포인트 낸 경우
       const enemyPlays = room.currentTrick.plays.filter(pp => pp.seat !== seat && pp.seat !== partner);
       const enemyPoints = enemyPlays.reduce((sum, pp) => sum + sumPoints(pp.hand.cards), 0);
-      if (enemyPoints >= 10) score += 12;
+      if (enemyPoints >= 10) score += 15 * situationMultiplier;
 
-      // [3] 용 최적화: 트릭 점수 높을 때만 용 사용
-      // (기본 로직에서 이미 처리되지만 강화)
+      // ── [NEW #1] 트릭 흐름: 이기면 리드에서 뭘 낼 수 있는지 ──
+      {
+        const remainAfter = hand.filter(c => !p.cards.some(pc => cardId(pc) === cardId(c)));
+        if (remainAfter.length > 0) {
+          const leadPlays = getValidPlays(remainAfter, null, room.wish);
+          // 리드에서 3장+ 조합을 낼 수 있으면 가점 (트릭 승리 → 리드 → 대량 소모)
+          const bigCombo = leadPlays.find(lp => lp.length >= 3 && !isBomb(lp));
+          if (bigCombo) score += bigCombo.length * 3;
+          // 리드에서 한방에 끝낼 수 있으면 대가점
+          const finisher = leadPlays.find(lp => lp.length === remainAfter.length);
+          if (finisher) score += 30;
+        }
+      }
 
-      // [4] 포지션 인식
-      if (pos.amLastToAct) score += 25; // 마지막이면 무조건 유리
+      // 포지션
+      if (pos.amLastToAct) score += 25;
       if (pos.partnerIsNext) score += 5;
 
-      // [5] 파트너 협력: 파트너 티츄 시 약한 카드로 이기기
+      // 파트너 협력
       if (room.tichuDeclarations[partner] !== null && p.value <= 8) score += 10;
 
-      // [6] 조합 깨기 방지 (모든 타입 대상)
-      if (hand.length >= 5) {
+      // ── [NEW #4] 조합 시퀀싱: 이걸 내면 나머지 핸드가 좋아지는가? ──
+      if (hand.length >= 4) {
         const remainAfter = hand.filter(c => !p.cards.some(pc => cardId(pc) === cardId(c)));
         const decompAfter = decomposeHand(remainAfter);
         const trickDiff = decompAfter.minTricks - decomp.minTricks;
-        if (trickDiff >= 2) score -= 20;
-        else if (trickDiff === 1) score -= 8;
-        else if (trickDiff < 0) score += 10; // 오히려 개선되면 가점
+        if (trickDiff >= 2) score -= 25;     // 핸드 구조 크게 악화
+        else if (trickDiff === 1) score -= 10;
+        else if (trickDiff === 0) score += 3; // 유지
+        else if (trickDiff < 0) score += 15;  // 개선! (강한 가점)
       }
 
-      // [6] 2인 엔드게임
-      if (getActivePlayers(room).length === 2) {
-        score += 15; // 패스 = 리드 넘기기 → 적극 참여
-        // 카운팅: 이 카드로 이기면 다음 리드에서 내가 유리한지
+      // ── [NEW #6] 원투 피니시 조기 추적 ──
+      if (activePlayers.includes(partner) && partnerCards <= 3 && !room.finishOrder.includes(partner)) {
+        // 파트너가 곧 나갈 수 있음 → 내가 빨리 따라가야
+        score += p.length * 5;
+        if (p.type === 'single' && isTopSingle(p.cards[0]!, hand, room)) score += 15;
+      }
+      // 파트너 이미 1등 나감 → 원투 모드
+      if (room.finishOrder.length >= 1 && room.finishOrder[0] === partner) {
+        score += p.length * 6;
+        score += 10; // 적극 참여
+      }
+
+      // 2인 엔드게임
+      if (activePlayers.length === 2) {
+        score += 15;
         if (p.type === 'single' && isNormalCard(p.cards[0]!)) {
           const remainAfter = hand.filter(c => !p.cards.some(pc => cardId(pc) === cardId(c)));
           const topAfter = remainAfter.filter(c => isTopSingle(c, remainAfter, room)).length;
-          if (topAfter > 0) score += 10; // 이후 탑 싱글로 연속 컨트롤
+          if (topAfter > 0) score += 10;
         }
       }
 
       if (situation === 'desperate') score += 8;
+
+      // ── [NEW #4] 트릭 포기 전략: 이길 수 없을 것 같으면 쓰레기 처분 ──
+      // 바닥 값이 높고(12+) 내 카드도 이기기 어려우면 → 약한 카드가 차라리 나음
+      if (table && table.value >= 12 && p.type === 'single' && isNormalCard(p.cards[0]!)) {
+        const beatProb = getSingleBeatProbability(table.value, hand, room);
+        if (beatProb > 0.7) {
+          // 어차피 다음 사람이 이길 확률 높음 → 고립 싱글 버리기
+          if (decomp.isolatedSingles.includes(p.cards[0]!.value)) score += 15;
+        }
+      }
+
+      // ── [NEW #6] 라운드 누적 점수 인식 ──
+      const teamPts = getTeamTrickPoints(room, seat);
+      // 우리 팀 75점+ 확보 → 포인트 카드 보존 불필요 → 적극 소모
+      if (teamPts >= 75) score += 5;
+      // 우리 팀 25점 이하 → 포인트 트릭 필사적으로 먹기
+      if (teamPts <= 25 && trickPts >= 10) score += 15;
     }
 
     return { play: p, score };
@@ -1198,23 +1540,45 @@ function shouldPass(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: num
   // 남은 카드가 모두 강하면(A/K 등) 아끼기
   if (weakest.value >= 13 && weakest.type === 'single' && hand.length > 6) return true;
 
-  // 고급 패스 판단 (A~E)
+  // 고급 패스 판단
   if (diff === 'hard') {
     const pos = getPositionInfo(room, seat);
     const situation = assessGameSituation(room, seat);
+    const partnerCards = room.hands[partner]?.length ?? 14;
+    const trickPts = room.currentTrick.plays.reduce((sum, pp) => sum + sumPoints(pp.hand.cards), 0);
 
-    // [E] 파트너가 바로 다음이고 파트너 카드가 적으면 기회 양보
-    if (pos.partnerIsNext && room.hands[partner]!.length <= 3 && weakest.value >= 12) return true;
+    // 파트너가 이기고 있고 파트너 카드 적으면 → 패스 (파트너 살리기)
+    if (room.currentTrick.lastPlayedSeat === partner && partnerCards <= 3 && !myTichu) return true;
 
-    // [C] 크게 이기고 있으면 보수적 (불필요한 카드 소모 방지)
+    // 파트너가 바로 다음이고 파트너 카드가 적으면 기회 양보
+    if (pos.partnerIsNext && partnerCards <= 3 && weakest.value >= 12) return true;
+
+    // 파트너 1등 나감 → 무조건 공격 (원투 피니시)
+    if (room.finishOrder.length === 1 && room.finishOrder[0] === partner) return false;
+
+    // [NEW #1] 전략적 패스: 이기려면 A/K를 써야 하고 트릭 포인트가 낮으면 → 아끼기
+    if (trickPts <= 0 && weakest.value >= 13 && hand.length > 4) {
+      // 다음 리드에서 내가 더 좋은 플레이를 할 수 있는지 확인
+      const decomp = decomposeHand(hand);
+      if (decomp.minTricks >= 4) return true; // 핸드가 길면 강카드 아끼기
+    }
+
+    // [NEW #1] 트릭 포인트가 0이고 내가 마지막이 아니면 → 패스해서 강카드 보존
+    if (trickPts === 0 && !pos.amLastToAct && weakest.value >= 12 && hand.length > 5) return true;
+
+    // [NEW #6] 라운드 누적 점수: 우리 팀이 이미 75점+ 확보했으면 보수적
+    const teamPts = getTeamTrickPoints(room, seat);
+    if (teamPts >= 75 && weakest.value >= 12 && trickPts <= 5) return true;
+
+    // 크게 이기고 있으면 보수적
     if (situation === 'dominant' && weakest.value >= 13 && hand.length > 7) return true;
 
-    // [C] 크게 지고 있으면 무조건 공격
+    // 크게 지고 있으면 무조건 공격
     if (situation === 'desperate') return false;
 
-    // [A] 핸드 분해: 남은 트릭 수가 적으면 적극 (빨리 나갈 수 있음)
-    const decomp = decomposeHand(hand);
-    if (decomp.minTricks <= 3) return false;
+    // 핸드 분해: 남은 트릭 수가 적으면 적극
+    const decompCheck = decomposeHand(hand);
+    if (decompCheck.minTricks <= 3) return false;
   }
 
   return false;
@@ -1225,6 +1589,7 @@ function shouldPass(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: num
 // ══════════════════════════════════════════════════════════════
 
 function shouldUseBombOnFollow(room: GameRoom, seat: number, bombPlays: PlayedHand[]): boolean {
+  const diff = getDifficulty(room, seat);
   const partner = getPartnerSeat(seat);
   const hand = room.hands[seat]!;
 
@@ -1239,6 +1604,12 @@ function shouldUseBombOnFollow(room: GameRoom, seat: number, bombPlays: PlayedHa
   const trickPoints = room.currentTrick.plays.reduce((sum, p) => sum + sumPoints(p.hand.cards), 0);
   if (trickPoints >= 15) return true;
 
+  // [NEW #5] 폭탄 보존: 트릭 포인트 낮고 상대에게도 폭탄 있을 수 있으면 보존
+  if (diff === 'hard' && trickPoints < 10) {
+    const remainingBombs = estimateRemainingBombs(hand, room);
+    if (remainingBombs >= 1) return false; // 상대 폭탄 가능 → 내 폭탄 아끼기
+  }
+
   return false;
 }
 
@@ -1248,9 +1619,25 @@ function shouldUseBombOnFollow(room: GameRoom, seat: number, bombPlays: PlayedHa
 
 function decideBotWish(hand: Card[], room: GameRoom, seat: number): Rank | undefined {
   const myRanks = new Set(hand.filter(isNormalCard).map(c => c.rank));
+  const myValues = hand.filter(isNormalCard).map(c => c.value).sort((a, b) => a - b);
   const played = getPlayedCards(room);
 
-  // 모든 랭크 대상, 전략적 점수 계산
+  // [NEW #5] 내 핸드에 스트레이트 갭이 있으면 그 카드를 소원 → 상대가 강제 소모 → 내 스트레이트 안전
+  const gapRanks = new Set<Rank>();
+  if (myValues.length >= 4) {
+    for (let i = 0; i < myValues.length - 1; i++) {
+      const gap = myValues[i + 1]! - myValues[i]!;
+      if (gap === 2) {
+        // 1칸 갭 = 소원 대상
+        const gapVal = myValues[i]! + 1;
+        if (gapVal >= 2 && gapVal <= 14) {
+          const r = valueToRank(gapVal);
+          if (!myRanks.has(r)) gapRanks.add(r);
+        }
+      }
+    }
+  }
+
   const allTargets: Rank[] = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
   const candidates: { rank: Rank; score: number }[] = [];
 
@@ -1264,12 +1651,12 @@ function decideBotWish(hand: Card[], room: GameRoom, seat: number): Rank | undef
 
     const val = RANK_VALUES[r] ?? 0;
     let score = 0;
-    // 높은 카드 = 상대가 강제로 내면 큰 낭비
     score += val * 2;
-    // 남은 수 많을수록 상대가 실제로 갖고 있을 확률 높음
     score += remaining * 4;
-    // 너무 낮은 카드는 효과 적음
     if (val <= 5) score -= 8;
+
+    // [NEW #5] 내 핸드 갭에 해당하면 강한 가점 (상대가 이 카드를 쓰면 내 스트레이트가 안전해짐)
+    if (gapRanks.has(r)) score += 15;
 
     candidates.push({ rank: r, score });
   }
@@ -1296,13 +1683,16 @@ function pickWeakestBomb(plays: PlayedHand[]): PlayedHand {
 
 function pickBestForPartner(hand: Card[]): Card {
   if (hand.length === 0) return { type: 'special', specialType: 'mahjong' } as Card;
-  // 티츄한 파트너에게: 용 > A > 봉황 > K
+  // 티츄한 파트너에게: 용 > A > 봉황 > 참새(첫 리드권) > K
   const dragon = hand.find(isDragon);
   if (dragon) return dragon;
   const ace = hand.filter(c => isNormalCard(c) && c.rank === 'A')[0];
   if (ace) return ace;
   const phoenix = hand.find(isPhoenix);
   if (phoenix) return phoenix;
+  // 참새: 파트너에게 첫 리드권을 줌 → 티츄 성공률 높임
+  const mahjong = hand.find(isMahjong);
+  if (mahjong) return mahjong;
   const king = hand.filter(c => isNormalCard(c) && c.rank === 'K')[0];
   if (king) return king;
   return hand.sort((a, b) => cardSortValue(b) - cardSortValue(a))[0]!;
@@ -1310,29 +1700,44 @@ function pickBestForPartner(hand: Card[]): Card {
 
 function pickGoodForPartner(hand: Card[]): Card {
   if (hand.length === 0) return { type: 'special', specialType: 'mahjong' } as Card;
-  // 일반 상황: A나 봉황을 줌 (용은 내가 쓰기)
+  // 일반 상황: A나 K를 줌 (용/봉황은 내가 보존 — 유연하게 활용 가능)
   const ace = hand.filter(c => isNormalCard(c) && c.rank === 'A')[0];
   if (ace) return ace;
-  const phoenix = hand.find(isPhoenix);
-  if (phoenix) return phoenix;
   const king = hand.filter(c => isNormalCard(c) && c.rank === 'K')[0];
   if (king) return king;
-  return hand.filter(isNormalCard).sort((a, b) => cardSortValue(b) - cardSortValue(a))[0] ?? hand[0]!;
+  const queen = hand.filter(c => isNormalCard(c) && c.rank === 'Q')[0];
+  if (queen) return queen;
+  return hand.filter(c => isNormalCard(c)).sort((a, b) => cardSortValue(b) - cardSortValue(a))[0] ?? hand[0]!;
 }
 
 function pickWorstForEnemy(hand: Card[]): Card {
   if (hand.length === 0) return { type: 'special', specialType: 'mahjong' } as Card;
-  // 적에게: 점수 없는 가장 약한 카드, 개 우선 (적에게 쓸모없음)
-  const dog = hand.find(isDog);
+
+  // 적에게 절대 주면 안 되는 카드: 용, 봉황, 참새, A
+  // 용(싱글 최강), 봉황(와일드카드), 참새(첫 리드+소원) 모두 전략적 가치가 높음
+  const safe = hand.filter(c =>
+    !isDragon(c) && !isPhoenix(c) && !isMahjong(c) && !(isNormalCard(c) && c.rank === 'A')
+  );
+  const pool = safe.length > 0 ? safe : hand;
+
+  // 1순위: 개 (적에게 쓸모없음 — 파트너에게 리드 넘기는 카드라 적에겐 무의미)
+  const dog = pool.find(isDog);
   if (dog) return dog;
-  const candidates = hand
-    .filter(c => {
-      if (!isNormalCard(c)) return false;
-      if (c.rank === '5' || c.rank === '10' || c.rank === 'K') return false;
-      return true;
-    })
+
+  // 2순위: 점수 없는 낮은 일반 카드 (2, 3, 4, 6, 7, 8, 9)
+  const lowNonPoint = pool
+    .filter(c => isNormalCard(c) && c.rank !== '5' && c.rank !== '10' && c.rank !== 'K')
     .sort((a, b) => cardSortValue(a) - cardSortValue(b));
-  return candidates[0] ?? hand.sort((a, b) => cardSortValue(a) - cardSortValue(b))[0]!;
+  if (lowNonPoint.length > 0) return lowNonPoint[0]!;
+
+  // 3순위: 점수 카드 중 가장 낮은 것 (5점짜리)
+  const pointCards = pool
+    .filter(c => isNormalCard(c))
+    .sort((a, b) => cardSortValue(a) - cardSortValue(b));
+  if (pointCards.length > 0) return pointCards[0]!;
+
+  // 최후: 어쩔 수 없이 가장 낮은 카드
+  return pool.sort((a, b) => cardSortValue(a) - cardSortValue(b))[0] ?? hand[0]!;
 }
 
 function cardEquals(a: Card, b: Card): boolean {
