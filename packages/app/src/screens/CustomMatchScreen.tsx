@@ -330,7 +330,7 @@ export function CustomMatchScreen({
           ref={searchInputRef}
           value={search}
           onChangeText={setSearch}
-          placeholder={'방 이름 또는 방장 검색...'}
+          placeholder={'방 이름 검색'}
           placeholderTextColor={COLORS.cmInkMute}
           style={S.searchInput}
         />
@@ -340,18 +340,22 @@ export function CustomMatchScreen({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={S.chipsContent}
       >
+        {/* 토글 그룹 */}
         <Chip label={'빈자리만'} active={onlyOpen} onPress={() => setOnlyOpen(!onlyOpen)} dot />
         <Chip label={'비밀방 제외'} active={hideLocked} onPress={() => setHideLocked(!hideLocked)} dot />
-        <Chip label={'최신순'} active={sortKey === 'recent'} onPress={() => setSortKey('recent')} />
-        <Chip label={'빈자리 많은 순'} active={sortKey === 'open'} onPress={() => setSortKey('open')} />
-        <Chip label={'곧 시작'} active={sortKey === 'starting'} onPress={() => setSortKey('starting')} />
+        {/* 시각적 구분선 */}
+        <View style={S.chipDivider} />
+        {/* 정렬 그룹 — 좌측 ↕ 아이콘으로 정렬임을 표시 */}
+        <Chip label={'↕ 최신순'} active={sortKey === 'recent'} onPress={() => setSortKey('recent')} />
+        <Chip label={'↕ 빈자리 많은 순'} active={sortKey === 'open'} onPress={() => setSortKey('open')} />
+        <Chip label={'↕ 곧 시작'} active={sortKey === 'starting'} onPress={() => setSortKey('starting')} />
       </ScrollView>
-      <TouchableOpacity onPress={handleRefresh} style={S.iconBtn} activeOpacity={0.7}>
-        <RNAnimated.Text style={[S.iconBtnText, rotateStyle]}>{'⟳'}</RNAnimated.Text>
-      </TouchableOpacity>
-      <View style={S.autoDotWrap}>
-        <View style={S.autoDot} />
-        {!isMobile && <Text style={S.autoDotText}>{'자동'}</Text>}
+      {/* 새로고침 버튼 + 우상단 자동 갱신 점 (한 컴포넌트로 통합) */}
+      <View style={S.refreshWrap}>
+        <TouchableOpacity onPress={handleRefresh} style={S.iconBtn} activeOpacity={0.7}>
+          <RNAnimated.Text style={[S.iconBtnText, rotateStyle]}>{'⟳'}</RNAnimated.Text>
+        </TouchableOpacity>
+        <View style={S.refreshAutoDot} pointerEvents="none" />
       </View>
     </View>
   );
@@ -1072,6 +1076,16 @@ const S = StyleSheet.create({
     shadowColor: COLORS.cmGold, shadowOpacity: 0.8,
     shadowRadius: 4, shadowOffset: { width: 0, height: 0 },
   },
+  chipDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: COLORS.cmLine,
+    marginHorizontal: 6,
+    alignSelf: 'center',
+  },
+  refreshWrap: {
+    position: 'relative',
+  },
   iconBtn: {
     width: 44, height: 44, borderRadius: 8,
     backgroundColor: 'rgba(0,0,0,0.3)',
@@ -1079,17 +1093,22 @@ const S = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   iconBtnText: { color: COLORS.cmInkDim, fontSize: 18, fontWeight: '700' },
-  autoDotWrap: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 6,
-  },
-  autoDot: {
-    width: 8, height: 8, borderRadius: 4,
+  refreshAutoDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: COLORS.cmPingGood,
-    shadowColor: COLORS.cmPingGood, shadowOpacity: 0.6,
-    shadowRadius: 4, shadowOffset: { width: 0, height: 0 },
+    borderWidth: 2,
+    borderColor: COLORS.cmBg0,
+    shadowColor: COLORS.cmPingGood,
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
   },
-  autoDotText: { color: COLORS.cmInkMute, fontSize: 11 },
 
   // Rooms list
   rooms: { flex: 1 },
