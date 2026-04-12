@@ -1,3 +1,8 @@
+// ⚠️ 이 import 는 반드시 최상단에 위치 — 글로벌 에러 핸들러를 가장 먼저 설치.
+// 다른 import 가 모듈 load 단계에서 throw 해도 캡처할 수 있도록.
+import { installGlobalErrorHandler, captureManual } from '../src/utils/globalErrorCapture';
+installGlobalErrorHandler();
+
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, LogBox, Platform } from 'react-native';
 import { useGameStore } from '../src/stores/gameStore';
@@ -36,8 +41,7 @@ import { ErrorBoundary } from '../src/components/ErrorBoundary';
 try {
   WebBrowser.maybeCompleteAuthSession();
 } catch (e) {
-  // eslint-disable-next-line no-console
-  console.warn('[init] WebBrowser.maybeCompleteAuthSession failed:', e);
+  captureManual(e, 'WebBrowser.maybeCompleteAuthSession');
 }
 import { playBgm, setBgmEnabled, stopAll as stopBgm } from '../src/utils/bgm';
 import { cancelAllSounds } from '../src/utils/sound';
