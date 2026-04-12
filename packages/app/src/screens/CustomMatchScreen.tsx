@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Platform,
-  useWindowDimensions, SafeAreaView,
+  View, Text, StyleSheet, TouchableOpacity, Pressable, Platform,
+  TextInput, ScrollView, useWindowDimensions, SafeAreaView,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,8 +9,8 @@ import { COLORS, cmLayout } from '../utils/theme';
 import { useGameStore } from '../stores/gameStore';
 import { useUserStore } from '../stores/userStore';
 import {
-  adaptServerRooms, generateMockRooms, countWaitingPlayers,
-  type FullRoom,
+  adaptServerRooms, generateMockRooms, countWaitingPlayers, pingQuality,
+  type FullRoom, type FullRoomMode,
 } from '../utils/roomDataAdapter';
 
 interface Props {
@@ -25,11 +25,19 @@ interface Props {
   onListRooms?: () => void;
 }
 
+type ModeFilter = 'all' | 'normal' | 'ranked';
+
+const SERIF = Platform.select({ ios: 'Times New Roman', android: 'serif', default: 'serif' });
+
 /**
  * Custom Match — 풀스크린 페이지
  *
- * Phase 2: 골격 (상단바, 반응형 grid, 배경 龍/鳳, 좌/우 placeholder, 라우팅)
- * Phase 3+: 좌측 방 목록, 우측 상세 패널 등 채워짐
+ * Phase 3 까지 구현 범위:
+ * - 상단바 (뒤로/브레드크럼/코인)
+ * - 배경 (gradient + 龍鳳)
+ * - 메인 grid 반응형
+ * - 좌측 섹션 헤더 + 필터 바 + 방 목록(가로/세로 카드)
+ * - 우측은 placeholder (Phase 4 에서 교체)
  */
 export function CustomMatchScreen({
   onBack, onJoin, onCreateCustomRoom, onListRooms,
@@ -40,7 +48,6 @@ export function CustomMatchScreen({
   const isTablet = layout === 'tablet';
   const isMobile = layout === 'mobile';
 
-  // 서버 방 목록 (기존 store/socket 재사용)
   const serverRooms = useGameStore((s) => s.customRoomList);
   const savedPlayerId = useUserStore((s) => s.playerId);
   const savedNickname = useUserStore((s) => s.nickname);
@@ -53,29 +60,67 @@ export function CustomMatchScreen({
     return () => clearInterval(id);
   }, [onListRooms]);
 
-  // 어댑터: 서버 응답이 비었으면 mock 데모 방 사용 (개발/첫 진입시)
+  // 어댑터: 서버 응답이 비었으면 mock 데모 방 사용
   // TODO: server 보강 후 generateMockRooms 호출 제거
-  const rooms: FullRoom[] = useMemo(() => {
+  const allRooms: FullRoom[] = useMemo(() => {
     if (serverRooms && serverRooms.length > 0) return adaptServerRooms(serverRooms);
     return generateMockRooms();
   }, [serverRooms]);
 
+  // 필터 / 검색 상태
+  const [search, setSearch] = useState('');
+  const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
+  const [onlyOpen, setOnlyOpen] = useState(true);
+  const [hideLocked, setHideLocked] = useState(false);
+
+  const rooms = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return allRooms.filter((r) => {
+      if (modeFilter !== 'all' && r.mode !== modeFilter) return false;
+      const filledCount = r.players.filter(Boolean).length;
+      if (onlyOpen && filledCount >= 4) return false;
+      if (hideLocked && r.hasPassword) return false;
+      if (q.length > 0) {
+        const hay = (r.name + ' ' + r.host.name).toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [allRooms, search, modeFilter, onlyOpen, hideLocked]);
+
   // 첫 방 자동 선택
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   useEffect(() => {
-    if (rooms.length > 0 && !selectedRoomId) {
+    if (rooms.length > 0 && (!selectedRoomId || !rooms.find(r => r.id === selectedRoomId))) {
       setSelectedRoomId(rooms[0]!.id);
     }
-    // 선택된 방이 더 이상 목록에 없으면 첫 방으로
-    if (selectedRoomId && !rooms.find(r => r.id === selectedRoomId)) {
-      setSelectedRoomId(rooms[0]?.id ?? null);
-    }
+    if (rooms.length === 0) setSelectedRoomId(null);
   }, [rooms]);
 
-  const totalPlayers = countWaitingPlayers(rooms);
+  const selectedRoom = useMemo(
+    () => rooms.find(r => r.id === selectedRoomId) ?? null,
+    [rooms, selectedRoomId],
+  );
+
+  const totalPlayers = countWaitingPlayers(allRooms);
+
+  // 비밀번호 입력 모달 (Phase 5 에서 풀 통합 — 임시 placeholder)
+  const [pwTarget, setPwTarget] = useState<FullRoom | null>(null);
+
+  function handleEnterRoom(room: FullRoom) {
+    if (!savedPlayerId || !savedNickname) return;
+    if (room.hasPassword) {
+      setPwTarget(room);
+      return;
+    }
+    onJoin(room.id, savedPlayerId, savedNickname);
+  }
+
+  function handleRefresh() {
+    onListRooms?.();
+  }
 
   // ─── 상단 바 ─────────────────────────────────────────────
-  // iOS 는 BlurView, Android 는 단색 fallback (Platform 분기)
   const TopBar = () => {
     const inner = (
       <View style={S.topbarInner}>
@@ -112,19 +157,94 @@ export function CustomMatchScreen({
     return <View style={[S.topbar, S.topbarSolid]}>{inner}</View>;
   };
 
-  // ─── 좌측: Phase 3 에서 채움 ────────────────────────────
-  const LeftPanel = (
-    <View style={S.leftPanel}>
-      <Text style={S.placeholderText}>{'[좌측 방 목록 영역 — Phase 3]'}</Text>
-      <Text style={S.placeholderSub}>{`방 ${rooms.length}개 · 플레이어 ${totalPlayers}명 (${layout})`}</Text>
+  // ─── 좌측 섹션 ──────────────────────────────────────────
+  const LeftSection = (
+    <View style={S.left}>
+      {/* 섹션 헤더 */}
+      <View style={[S.sectionHead, isMobile && S.sectionHeadMobile]}>
+        <View style={S.titleRow}>
+          <LinearGradient
+            colors={[COLORS.cmGold, COLORS.cmGoldDeep]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={S.titleAccent}
+          />
+          <Text style={[S.titleEn, isMobile && S.titleEnMobile]}>{'Custom Match'}</Text>
+          {!isMobile && <Text style={S.titleKo}>{'커스텀 매치'}</Text>}
+        </View>
+        <View style={S.countRow}>
+          <Text style={S.countText}>{'대기중 '}</Text>
+          <Text style={S.countNum}>{rooms.length}</Text>
+          <Text style={S.countText}>{' 방 · 플레이어 '}</Text>
+          <Text style={S.countNum}>{totalPlayers}</Text>
+          <Text style={S.countText}>{'명'}</Text>
+        </View>
+      </View>
+
+      {/* 필터 바 */}
+      <View style={[S.filterBar, isMobile && S.filterBarMobile]}>
+        <View style={[S.search, isMobile && S.searchMobile]}>
+          <Text style={S.searchIcon}>{'🔍'}</Text>
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder={'방 이름 또는 방장 검색...'}
+            placeholderTextColor={COLORS.cmInkMute}
+            style={S.searchInput}
+          />
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={S.chipsScroll}
+          contentContainerStyle={S.chipsContent}
+        >
+          <Chip label={'전체'} active={modeFilter === 'all'} onPress={() => setModeFilter('all')} />
+          <Chip label={'일반전'} active={modeFilter === 'normal'} onPress={() => setModeFilter('normal')} />
+          <Chip label={'랭크'} active={modeFilter === 'ranked'} onPress={() => setModeFilter('ranked')} />
+          <Chip label={'빈자리만'} active={onlyOpen} onPress={() => setOnlyOpen(!onlyOpen)} dot />
+          <Chip label={'비밀방 제외'} active={hideLocked} onPress={() => setHideLocked(!hideLocked)} dot />
+        </ScrollView>
+        <TouchableOpacity onPress={handleRefresh} style={S.iconBtn} activeOpacity={0.7}>
+          <Text style={S.iconBtnText}>{'⟳'}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 방 목록 */}
+      <ScrollView
+        style={S.rooms}
+        contentContainerStyle={S.roomsContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {rooms.length === 0 && (
+          <View style={S.emptyState}>
+            <Text style={S.emptyText}>{'조건에 맞는 방이 없습니다.'}</Text>
+            <Text style={S.emptySub}>{'필터를 조정하거나 방을 만들어 보세요.'}</Text>
+          </View>
+        )}
+        {rooms.map((r) => (
+          <RoomCard
+            key={r.id}
+            room={r}
+            selected={r.id === selectedRoomId}
+            isMobile={isMobile}
+            onPress={() => setSelectedRoomId(r.id)}
+            onEnter={() => handleEnterRoom(r)}
+          />
+        ))}
+      </ScrollView>
     </View>
   );
 
-  // ─── 우측: Phase 4 에서 채움 ────────────────────────────
+  // ─── 우측 (Phase 4 에서 채움) ────────────────────────────
   const RightPanel = (
-    <View style={[S.rightPanel, isDesktop && S.rightPanelDesktop, isTablet && S.rightPanelTablet]}>
+    <View style={[
+      S.rightPanel,
+      isDesktop && S.rightPanelDesktop,
+      isTablet && S.rightPanelTablet,
+    ]}>
       <Text style={S.placeholderText}>{'[우측 상세 패널 — Phase 4]'}</Text>
-      <Text style={S.placeholderSub}>{selectedRoomId ?? '(선택 없음)'}</Text>
+      <Text style={S.placeholderSub}>{selectedRoom?.name ?? '(선택 없음)'}</Text>
     </View>
   );
 
@@ -138,7 +258,6 @@ export function CustomMatchScreen({
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
-        {/* 한자 龍 / 鳳 (양옆) */}
         {!isMobile && (
           <>
             <Text style={[S.dragon, S.dragonLeft]}>{'龍'}</Text>
@@ -147,10 +266,8 @@ export function CustomMatchScreen({
         )}
       </View>
 
-      {/* 상단 바 */}
       <TopBar />
 
-      {/* 메인 영역 */}
       <View
         style={[
           S.main,
@@ -159,11 +276,218 @@ export function CustomMatchScreen({
           isMobile && S.mainMobile,
         ]}
       >
-        {LeftPanel}
-        {/* 데스크톱/태블릿: 우측 패널 즉시 표시. 모바일은 Phase 5 에서 슬라이드업 시트로 처리 */}
+        {LeftSection}
         {!isMobile && RightPanel}
       </View>
     </SafeAreaView>
+  );
+}
+
+// ────────────────────────────────────────────────────────
+// Chip 컴포넌트
+// ────────────────────────────────────────────────────────
+function Chip({
+  label, active, onPress, dot,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  dot?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        S.chip,
+        active && S.chipActive,
+        pressed && S.chipPressed,
+      ]}
+    >
+      {dot && (
+        <View style={[S.chipDot, active && S.chipDotActive]} />
+      )}
+      <Text style={[S.chipText, active && S.chipTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+// ────────────────────────────────────────────────────────
+// RoomCard 컴포넌트 (가로/세로 분기)
+// ────────────────────────────────────────────────────────
+function RoomCard({
+  room, selected, isMobile, onPress, onEnter,
+}: {
+  room: FullRoom;
+  selected: boolean;
+  isMobile: boolean;
+  onPress: () => void;
+  onEnter: () => void;
+}) {
+  const filled = room.players.filter(Boolean).length;
+  const isFull = filled >= 4;
+  const ping = pingQuality(room.ping);
+
+  // 아바타
+  const avatar = (
+    <View style={S.avatar}>
+      <LinearGradient
+        colors={[COLORS.cmGold, COLORS.cmGoldDeep]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <Text style={S.avatarChar}>{room.host.avatarChar}</Text>
+      <View style={S.avatarLvl}>
+        <Text style={S.avatarLvlText}>{room.host.level}</Text>
+      </View>
+    </View>
+  );
+
+  // 방 이름 + 뱃지
+  const nameRow = (
+    <View style={S.nameRow}>
+      <Text style={S.roomName} numberOfLines={1}>{room.name}</Text>
+      <Badge mode={room.mode} />
+      {room.hasPassword && <BadgeLock />}
+    </View>
+  );
+
+  // 메타 정보
+  const metaItems: { icon: string; text: string }[] = [
+    { icon: '👤', text: room.host.name },
+    { icon: '⭐', text: room.host.rating.toLocaleString() },
+    { icon: '🎯', text: `${room.scoreLimit}점` },
+  ];
+  if (room.turnTimer) metaItems.push({ icon: '⏱', text: `${room.turnTimer}s/턴` });
+  if (room.allowSpectators) metaItems.push({ icon: '👁', text: '관전허용' });
+  if (room.aiFill) metaItems.push({ icon: '🤖', text: 'AI 채움' });
+
+  const meta = (
+    <View style={[S.metaRow, isMobile && S.metaRowMobile]}>
+      {metaItems.map((m, i) => (
+        <View key={i} style={S.metaItem}>
+          <Text style={S.metaIcon}>{m.icon}</Text>
+          <Text style={S.metaText}>{m.text}</Text>
+        </View>
+      ))}
+    </View>
+  );
+
+  // 슬롯 표시
+  const slots = (
+    <View style={S.slots}>
+      {[0, 1, 2, 3].map((i) => {
+        const filledThis = i < filled;
+        return (
+          <View key={i} style={[S.slot, filledThis && S.slotFilled]}>
+            {filledThis && (
+              <LinearGradient
+                colors={[COLORS.cmGold, COLORS.cmGoldDeep]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+
+  // 핑 표시
+  const pingDisplay = (
+    <View style={S.ping}>
+      <View style={[S.pingBar, { height: 6 }, ping === 'good' && S.pingBarGood]} />
+      <View style={[S.pingBar, { height: 9 }, ping === 'good' && S.pingBarGood]} />
+      <View style={[S.pingBar, { height: 12 }, ping === 'good' && S.pingBarGood]} />
+      <Text style={[S.pingText, ping === 'good' && S.pingTextGood]}>{room.ping}ms</Text>
+    </View>
+  );
+
+  // 입장 버튼
+  const enterBtn = (
+    <Pressable
+      onPress={onEnter}
+      style={({ pressed }) => [
+        S.enterMini,
+        pressed && S.enterMiniPressed,
+        isFull && S.enterMiniSpectate,
+      ]}
+    >
+      <Text style={[S.enterMiniText, isFull && S.enterMiniTextSpectate]}>
+        {isFull ? '관전' : '입장'}
+      </Text>
+    </Pressable>
+  );
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        S.room,
+        isMobile && S.roomMobile,
+        selected && S.roomSelected,
+        pressed && !selected && S.roomPressed,
+      ]}
+    >
+      {/* 좌측 골드 액센트 바 (selected 시 표시) */}
+      {selected && <View style={S.roomAccent} />}
+
+      {isMobile ? (
+        // 모바일: 세로 배치
+        <>
+          <View style={S.roomMobileTop}>
+            {avatar}
+            <View style={S.roomMobileTopInfo}>
+              {nameRow}
+            </View>
+          </View>
+          {meta}
+          <View style={S.roomMobileBottom}>
+            {slots}
+            <View style={S.roomMobileBottomRight}>
+              {pingDisplay}
+              {enterBtn}
+            </View>
+          </View>
+        </>
+      ) : (
+        // 데스크톱/태블릿: 가로 배치
+        <>
+          {avatar}
+          <View style={S.roomInfo}>
+            {nameRow}
+            {meta}
+          </View>
+          {slots}
+          {pingDisplay}
+          {enterBtn}
+        </>
+      )}
+    </Pressable>
+  );
+}
+
+function Badge({ mode }: { mode: FullRoomMode }) {
+  if (mode === 'ranked') {
+    return (
+      <View style={[S.badge, S.badgeRank]}>
+        <Text style={S.badgeRankText}>{'랭크'}</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={[S.badge, S.badgeNormal]}>
+      <Text style={S.badgeNormalText}>{'일반'}</Text>
+    </View>
+  );
+}
+
+function BadgeLock() {
+  return (
+    <View style={[S.badge, S.badgeLock]}>
+      <Text style={S.badgeLockText}>{'🔒'}</Text>
+    </View>
   );
 }
 
@@ -180,7 +504,7 @@ const S = StyleSheet.create({
   dragon: {
     position: 'absolute',
     fontSize: 520,
-    fontFamily: Platform.select({ ios: 'Times New Roman', android: 'serif', default: 'serif' }),
+    fontFamily: SERIF,
     fontWeight: '700',
     color: 'rgba(255,210,74,0.025)',
     lineHeight: 520,
@@ -197,9 +521,7 @@ const S = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.cmLine,
   },
-  topbarSolid: {
-    backgroundColor: COLORS.cmTopbarSolid,
-  },
+  topbarSolid: { backgroundColor: COLORS.cmTopbarSolid },
   topbarInner: {
     flex: 1,
     paddingHorizontal: 28,
@@ -230,16 +552,11 @@ const S = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 2,
     color: COLORS.cmInkMute,
-    fontFamily: Platform.select({ ios: 'Times New Roman', android: 'serif', default: 'serif' }),
+    fontFamily: SERIF,
     fontWeight: '600',
   },
-  crumbSep: {
-    color: COLORS.cmInkMute,
-    opacity: 0.4,
-  },
-  crumbActive: {
-    color: COLORS.cmGold,
-  },
+  crumbSep: { color: COLORS.cmInkMute, opacity: 0.4 },
+  crumbActive: { color: COLORS.cmGold },
   spacer: { flex: 1 },
   coinsPill: {
     flexDirection: 'row',
@@ -265,11 +582,8 @@ const S = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // ─── Main grid ─────
-  main: {
-    flex: 1,
-    zIndex: 5,
-  },
+  // ─── Main ─────
+  main: { flex: 1, zIndex: 5 },
   mainDesktop: {
     flexDirection: 'row',
     gap: 24,
@@ -286,13 +600,441 @@ const S = StyleSheet.create({
     padding: 12,
   },
 
-  leftPanel: {
+  // ─── Left ─────
+  left: { flex: 1, minWidth: 0 },
+
+  sectionHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: 18,
+  },
+  sectionHeadMobile: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 12,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  titleAccent: {
+    width: 6,
+    height: 32,
+    borderRadius: 2,
+  },
+  titleEn: {
+    fontFamily: SERIF,
+    fontSize: 34,
+    fontWeight: '700',
+    color: COLORS.cmInk,
+    letterSpacing: 2,
+  },
+  titleEnMobile: { fontSize: 26 },
+  titleKo: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.cmInkMute,
+    marginLeft: 4,
+  },
+  countRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  countText: { fontSize: 13, color: COLORS.cmInkDim },
+  countNum: { fontSize: 15, color: COLORS.cmGold, fontWeight: '700' },
+
+  // ─── Filters ─────
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderWidth: 1,
+    borderColor: COLORS.cmLine,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  filterBarMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    padding: 10,
+    gap: 8,
+  },
+  search: {
     flex: 1,
+    minWidth: 200,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderWidth: 1,
+    borderColor: COLORS.cmLine,
+    borderRadius: 8,
+    minHeight: 44,
+  },
+  searchMobile: {
     minWidth: 0,
+    width: '100%',
+  },
+  searchIcon: {
+    color: COLORS.cmInkMute,
+    fontSize: 14,
+  },
+  searchInput: {
+    flex: 1,
+    color: COLORS.cmInk,
+    fontSize: 14,
+    padding: 0,
+  },
+  chipsScroll: {
+    flexShrink: 1,
+  },
+  chipsContent: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.cmLine,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    minHeight: 36,
+  },
+  chipActive: {
+    borderColor: COLORS.cmGold,
+    backgroundColor: 'rgba(255,210,74,0.12)',
+  },
+  chipPressed: {
+    opacity: 0.7,
+  },
+  chipText: {
+    color: COLORS.cmInkDim,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  chipTextActive: {
+    color: COLORS.cmGold,
+  },
+  chipDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.cmInkMute,
+  },
+  chipDotActive: {
+    backgroundColor: COLORS.cmGold,
+    shadowColor: COLORS.cmGold,
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderWidth: 1,
+    borderColor: COLORS.cmLine,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
   },
+  iconBtnText: {
+    color: COLORS.cmInkDim,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+
+  // ─── Rooms list ─────
+  rooms: {
+    flex: 1,
+  },
+  roomsContent: {
+    paddingBottom: 12,
+    gap: 10,
+  },
+
+  emptyState: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: COLORS.cmInkDim,
+    fontSize: 14,
+    marginBottom: 6,
+  },
+  emptySub: {
+    color: COLORS.cmInkMute,
+    fontSize: 12,
+  },
+
+  // 가로 카드 (데스크톱/태블릿)
+  room: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
+    padding: 16,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(26,71,42,0.5)',
+    borderWidth: 1,
+    borderColor: COLORS.cmLine,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  roomMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 10,
+    padding: 14,
+  },
+  roomSelected: {
+    borderColor: COLORS.cmGold,
+    backgroundColor: 'rgba(34,89,58,0.7)',
+    shadowColor: COLORS.cmGold,
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  roomPressed: {
+    backgroundColor: 'rgba(34,89,58,0.6)',
+    borderColor: COLORS.cmLineStrong,
+  },
+  roomAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: COLORS.cmGold,
+  },
+
+  // 아바타
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'visible',
+    borderWidth: 2,
+    borderColor: COLORS.cmLineStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  avatarChar: {
+    fontFamily: SERIF,
+    fontWeight: '700',
+    color: COLORS.cmBg0,
+    fontSize: 18,
+  },
+  avatarLvl: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: COLORS.cmBg0,
+    borderWidth: 1,
+    borderColor: COLORS.cmGold,
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  avatarLvlText: {
+    color: COLORS.cmGold,
+    fontSize: 9,
+    fontWeight: '700',
+  },
+
+  roomInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+    flexWrap: 'wrap',
+  },
+  roomName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.cmInk,
+    flexShrink: 1,
+  },
+
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+    alignItems: 'center',
+  },
+  metaRowMobile: {
+    gap: 10,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaIcon: {
+    fontSize: 11,
+  },
+  metaText: {
+    fontSize: 12,
+    color: COLORS.cmInkMute,
+  },
+
+  // Badges
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  badgeNormal: {
+    backgroundColor: COLORS.cmNormalBg,
+    borderColor: COLORS.cmNormalBorder,
+  },
+  badgeNormalText: {
+    color: COLORS.cmNormalSoft,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  badgeRank: {
+    backgroundColor: COLORS.cmRankBg,
+    borderColor: COLORS.cmRankBorder,
+  },
+  badgeRankText: {
+    color: COLORS.cmRankSoft,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  badgeLock: {
+    backgroundColor: COLORS.cmDangerBg,
+    borderColor: COLORS.cmDangerBorder,
+  },
+  badgeLockText: {
+    color: COLORS.cmDangerSoft,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  // Slots
+  slots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  slot: {
+    width: 14,
+    height: 18,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderWidth: 1,
+    borderColor: COLORS.cmLine,
+    overflow: 'hidden',
+  },
+  slotFilled: {
+    borderColor: COLORS.cmGold,
+    shadowColor: COLORS.cmGold,
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 3,
+  },
+
+  // Ping
+  ping: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  pingBar: {
+    width: 3,
+    borderRadius: 1,
+    backgroundColor: COLORS.cmInkMute,
+  },
+  pingBarGood: {
+    backgroundColor: COLORS.cmPingGood,
+  },
+  pingText: {
+    fontSize: 11,
+    color: COLORS.cmInkMute,
+    marginLeft: 4,
+  },
+  pingTextGood: {
+    color: COLORS.cmPingGood,
+  },
+
+  // Enter mini button
+  enterMini: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.cmLineStrong,
+    backgroundColor: 'rgba(255,210,74,0.1)',
+    minHeight: 44,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  enterMiniPressed: {
+    backgroundColor: COLORS.cmGold,
+  },
+  enterMiniSpectate: {
+    opacity: 0.5,
+  },
+  enterMiniText: {
+    color: COLORS.cmGold,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  enterMiniTextSpectate: {
+    color: COLORS.cmGold,
+  },
+
+  // 모바일 카드 내부 분기
+  roomMobileTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  roomMobileTopInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  roomMobileBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  roomMobileBottomRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+
+  // ─── Right (placeholder) ─────
   rightPanel: {
     backgroundColor: 'rgba(14,46,26,0.85)',
     borderWidth: 1,
@@ -302,12 +1044,8 @@ const S = StyleSheet.create({
     justifyContent: 'center',
     padding: 20,
   },
-  rightPanelDesktop: {
-    width: 420,
-  },
-  rightPanelTablet: {
-    width: 360,
-  },
+  rightPanelDesktop: { width: 420 },
+  rightPanelTablet: { width: 360 },
 
   placeholderText: {
     color: COLORS.cmInkDim,
