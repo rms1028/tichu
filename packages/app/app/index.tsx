@@ -29,9 +29,16 @@ import { signInWithGoogle, signInWithGoogleIdToken, signInAsGuest, signOutUser }
 import { GOOGLE_OAUTH, isGoogleOAuthConfigured } from '../src/utils/googleOAuth';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
+import { ErrorBoundary } from '../src/components/ErrorBoundary';
 
 // 인앱 브라우저 세션 자동 종료 (네이티브 Google 로그인 redirect)
-WebBrowser.maybeCompleteAuthSession();
+// try/catch — 네이티브 모듈 누락 시 모듈 load 단계에서 throw 하지 않도록 보호
+try {
+  WebBrowser.maybeCompleteAuthSession();
+} catch (e) {
+  // eslint-disable-next-line no-console
+  console.warn('[init] WebBrowser.maybeCompleteAuthSession failed:', e);
+}
 import { playBgm, setBgmEnabled, stopAll as stopBgm } from '../src/utils/bgm';
 import { cancelAllSounds } from '../src/utils/sound';
 
@@ -39,10 +46,12 @@ type AppScreen = 'splash' | 'login' | 'lobby' | 'matchmaking' | 'game' | 'result
 
 export default function App() {
   return (
-    <ToastProvider>
-      <AppInner />
-      <AchievementPopup />
-    </ToastProvider>
+    <ErrorBoundary>
+      <ToastProvider>
+        <AppInner />
+        <AchievementPopup />
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }
 

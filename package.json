@@ -12,6 +12,6 @@
     "dev:server": "npm run dev -w packages/server",
     "test:server": "npm test -w packages/server",
     "test": "npm test --workspaces --if-present",
-    "postinstall": "npm run build -w packages/shared"
+    "postinstall": "node scripts/postinstall.mjs"
   }
 }
