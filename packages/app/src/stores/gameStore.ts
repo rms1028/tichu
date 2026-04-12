@@ -3,36 +3,57 @@ import { Platform } from 'react-native';
 import type { Card, PlayedHand, Rank, GamePhase } from '@tichu/shared';
 
 // roomId 영속 저장 (재접속용)
+// MMKV 는 lazy init — module load 시점에 new MMKV() 를 호출하면 New Architecture
+// + Android 16 환경에서 native 초기화 실패가 흰 화면을 만들 수 있어, 첫 사용 시점에만
+// 만들고 실패 시 메모리 stub 으로 폴백.
 let gameStorage: any = null;
-if (Platform.OS !== 'web') {
+let gameStorageInited = false;
+function ensureGameStorage(): any {
+  if (gameStorageInited) return gameStorage;
+  gameStorageInited = true;
+  if (Platform.OS === 'web') {
+    gameStorage = {
+      getString: (key: string) => { try { return localStorage.getItem('game_' + key); } catch { return null; } },
+      set: (key: string, val: string) => { try { localStorage.setItem('game_' + key, val); } catch {} },
+      delete: (key: string) => { try { localStorage.removeItem('game_' + key); } catch {} },
+    };
+    return gameStorage;
+  }
   try {
     const { MMKV } = require('react-native-mmkv');
     gameStorage = new MMKV({ id: 'game-session' });
-  } catch { /* */ }
-} else {
-  gameStorage = {
-    getString: (key: string) => { try { return localStorage.getItem('game_' + key); } catch { return null; } },
-    set: (key: string, val: string) => { try { localStorage.setItem('game_' + key, val); } catch {} },
-    delete: (key: string) => { try { localStorage.removeItem('game_' + key); } catch {} },
-  };
+  } catch {
+    // 메모리 stub
+    const mem = new Map<string, string>();
+    gameStorage = {
+      getString: (k: string) => mem.get(k) ?? null,
+      set: (k: string, v: string) => { mem.set(k, v); },
+      delete: (k: string) => { mem.delete(k); },
+    };
+  }
+  return gameStorage;
 }
 
 function saveSession(roomId: string | null, mySeat: number) {
-  if (!gameStorage) return;
-  if (roomId) {
-    gameStorage.set('roomId', roomId);
-    gameStorage.set('mySeat', String(mySeat));
-  } else {
-    gameStorage.delete('roomId');
-    gameStorage.delete('mySeat');
-  }
+  const s = ensureGameStorage();
+  if (!s) return;
+  try {
+    if (roomId) {
+      s.set('roomId', roomId);
+      s.set('mySeat', String(mySeat));
+    } else {
+      s.delete('roomId');
+      s.delete('mySeat');
+    }
+  } catch { /* noop */ }
 }
 
 export function loadSession(): { roomId: string | null; mySeat: number } {
-  if (!gameStorage) return { roomId: null, mySeat: -1 };
+  const s = ensureGameStorage();
+  if (!s) return { roomId: null, mySeat: -1 };
   try {
-    const roomId = gameStorage.getString('roomId') ?? null;
-    const mySeat = parseInt(gameStorage.getString('mySeat') ?? '-1', 10);
+    const roomId = s.getString('roomId') ?? null;
+    const mySeat = parseInt(s.getString('mySeat') ?? '-1', 10);
     return { roomId, mySeat };
   } catch { return { roomId: null, mySeat: -1 }; }
 }

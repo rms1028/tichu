@@ -203,9 +203,10 @@ function findBestVoice(): SpeechSynthesisVoice | null {
 let ttsUnlocked = false;
 
 function initVoices() {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return;
+  // 웹 전용. RN 에서는 window.speechSynthesis 가 없으므로 즉시 return.
+  if (typeof window === 'undefined' || !(window as any).speechSynthesis) return;
   bestVoice = findBestVoice();
-  window.speechSynthesis.onvoiceschanged = () => { bestVoice = findBestVoice(); };
+  (window as any).speechSynthesis.onvoiceschanged = () => { bestVoice = findBestVoice(); };
   if (!bestVoice) {
     let retries = 0;
     const poll = setInterval(() => {
@@ -215,7 +216,7 @@ function initVoices() {
     }, 200);
   }
 }
-initVoices();
+try { initVoices(); } catch { /* noop — defensive */ }
 
 // iOS/모바일: 첫 터치에서 TTS + AudioContext 잠금 해제
 // iOS Safari는 사용자 제스처 내에서 speak()을 한 번 해야 이후 자동 재생 허용

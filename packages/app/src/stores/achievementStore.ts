@@ -49,15 +49,31 @@ interface AchievementState {
   checkProgress: (stat: string, value: number) => Achievement | null; // returns newly unlocked
 }
 
+// MMKV lazy init — module-load 시점 호출 회피 (Android 16 + New Arch native crash 방지)
 let storage: any = null;
-if (Platform.OS !== 'web') {
-  try { const { MMKV } = require('react-native-mmkv'); storage = new MMKV(); } catch {}
+let storageInited = false;
+function ensureAchStorage(): any {
+  if (storageInited) return storage;
+  storageInited = true;
+  if (Platform.OS === 'web') return null;
+  try {
+    const { MMKV } = require('react-native-mmkv');
+    storage = new MMKV();
+  } catch {
+    const mem = new Map<string, string>();
+    storage = {
+      getString: (k: string) => mem.get(k) ?? null,
+      set: (k: string, v: string) => { mem.set(k, v); },
+    };
+  }
+  return storage;
 }
 
 function loadAchievements(): Achievement[] {
-  if (storage) {
+  const s = ensureAchStorage();
+  if (s) {
     try {
-      const json = storage.getString('achievements');
+      const json = s.getString('achievements');
       if (json) return JSON.parse(json);
     } catch {}
   }
@@ -65,8 +81,9 @@ function loadAchievements(): Achievement[] {
 }
 
 function saveAchievements(list: Achievement[]) {
-  if (!storage) return;
-  try { storage.set('achievements', JSON.stringify(list)); } catch {}
+  const s = ensureAchStorage();
+  if (!s) return;
+  try { s.set('achievements', JSON.stringify(list)); } catch {}
 }
 
 export const useAchievementStore = create<AchievementState>((set, get) => ({

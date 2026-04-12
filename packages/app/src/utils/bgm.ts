@@ -22,8 +22,16 @@ let userInteracted = false;
 let pendingTrack: BgmTrack = 'none';
 
 // 브라우저 자동 재생 차단 대응: 첫 클릭 시 보류된 BGM 재생
+// React Native 에서 global.window 는 polyfill 로 정의되어 있지만 addEventListener 는 없음.
+// 기존 `typeof window === 'undefined'` 가드는 RN 에서 실패해서 addEventListener 호출 시
+// TypeError 가 throw 되고 이게 module load 를 깨뜨려서 앱 전체가 흰 화면이 됐다.
+// 이제 실제 DOM API 존재 여부로 정확히 가드.
 function setupInteractionListener() {
-  if (typeof window === 'undefined') return;
+  if (
+    typeof window === 'undefined' ||
+    typeof (window as any).addEventListener !== 'function' ||
+    typeof (window as any).removeEventListener !== 'function'
+  ) return;
   const handler = () => {
     userInteracted = true;
     if (pendingTrack !== 'none' && enabled) {
@@ -37,7 +45,7 @@ function setupInteractionListener() {
   window.addEventListener('touchstart', handler, { once: true });
   window.addEventListener('keydown', handler, { once: true });
 }
-setupInteractionListener();
+try { setupInteractionListener(); } catch { /* noop — defensive */ }
 
 function getAudio(track: BgmTrack): HTMLAudioElement | null {
   if (typeof window === 'undefined' || typeof Audio === 'undefined') return null;

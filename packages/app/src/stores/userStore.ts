@@ -165,34 +165,49 @@ interface UserState {
   }) => void;
 }
 
-// MMKV (모바일) 또는 localStorage (웹) 사용
+// MMKV (모바일) 또는 localStorage (웹) 사용 — lazy init.
+// module-load 에서 new MMKV() 호출이 Android 16 + New Arch 환경에서 native crash
+// 가능성이 있어 첫 사용 시점에만 만들고, 실패 시 메모리 stub 으로 폴백.
 let storage: any = null;
-if (Platform.OS !== 'web') {
+let storageInited = false;
+function ensureStorage(): any {
+  if (storageInited) return storage;
+  storageInited = true;
+  if (Platform.OS === 'web') {
+    storage = {
+      getString: (key: string) => { try { return localStorage.getItem(key); } catch { return null; } },
+      set: (key: string, val: string) => { try { localStorage.setItem(key, val); } catch {} },
+    };
+    return storage;
+  }
   try {
     const { MMKV } = require('react-native-mmkv');
     storage = new MMKV();
-  } catch { /* */ }
-} else {
-  // 웹: localStorage 래퍼
-  storage = {
-    getString: (key: string) => { try { return localStorage.getItem(key); } catch { return null; } },
-    set: (key: string, val: string) => { try { localStorage.setItem(key, val); } catch {} },
-  };
+  } catch {
+    const mem = new Map<string, string>();
+    storage = {
+      getString: (k: string) => mem.get(k) ?? null,
+      set: (k: string, v: string) => { mem.set(k, v); },
+    };
+  }
+  return storage;
 }
 
 function loadState(): Partial<UserState> {
-  if (!storage) return {};
+  const s = ensureStorage();
+  if (!s) return {};
   try {
-    const json = storage.getString('userStore');
+    const json = s.getString('userStore');
     return json ? JSON.parse(json) : {};
   } catch { return {}; }
 }
 
 function saveState(state: Partial<UserState>) {
-  if (!storage) return;
+  const s = ensureStorage();
+  if (!s) return;
   try {
     const { addCoins, addXp, recordGameResult, checkAttendance, claimAttendance, updateMissionProgress, claimMission, resetDailyMissions, buyItem, equipAvatar, equipCardBack, setNickname, setSetting, setPlayerId, isGuest, ...data } = state as any;
-    storage.set('userStore', JSON.stringify(data));
+    s.set('userStore', JSON.stringify(data));
   } catch { /* */ }
 }
 
