@@ -2,6 +2,21 @@ import React from 'react';
 import { View, Text, ScrollView, StyleSheet, Platform } from 'react-native';
 import { getCapturedErrors, hasCapturedErrors } from '../utils/globalErrorCapture';
 
+interface EarlyError {
+  message: string;
+  stack: string;
+  fatal: boolean;
+  at: number;
+}
+
+function getEarlyErrors(): EarlyError[] {
+  try {
+    const buf = (global as any).__earlyErrors__;
+    if (Array.isArray(buf)) return buf as EarlyError[];
+  } catch { /* noop */ }
+  return [];
+}
+
 interface Props {
   children: React.ReactNode;
 }
@@ -64,9 +79,11 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   render() {
     const captured = getCapturedErrors();
+    const early = getEarlyErrors();
     const hasGlobal = captured.length > 0;
+    const hasEarly = early.length > 0;
 
-    if (this.state.error || hasGlobal) {
+    if (this.state.error || hasGlobal || hasEarly) {
       const reactErr = this.state.error;
       const componentStack = this.state.errorInfo?.componentStack || '(no component stack)';
       return (
@@ -74,6 +91,18 @@ export class ErrorBoundary extends React.Component<Props, State> {
           <ScrollView contentContainerStyle={S.content}>
             <Text style={S.title}>{'⚠️ 앱 초기화 실패'}</Text>
             <Text style={S.platform}>{`Platform: ${Platform.OS} ${Platform.Version}`}</Text>
+
+            {hasEarly && (
+              <>
+                <Text style={S.sectionTitle}>{`🩺 Early Errors (${early.length}) — module load 시점`}</Text>
+                {early.map((e, i) => (
+                  <View key={'e' + i} style={S.captured}>
+                    <Text style={S.errorName}>{e.message}</Text>
+                    <Text style={S.code}>{e.stack}</Text>
+                  </View>
+                ))}
+              </>
+            )}
 
             {reactErr && (
               <>
@@ -89,7 +118,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
               <>
                 <Text style={S.sectionTitle}>{`Global Errors (${captured.length})`}</Text>
                 {captured.map((c, i) => (
-                  <View key={i} style={S.captured}>
+                  <View key={'g' + i} style={S.captured}>
                     <Text style={S.errorName}>{c.message}</Text>
                     <Text style={S.code}>{c.stack}</Text>
                   </View>
