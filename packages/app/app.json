@@ -53,6 +53,15 @@
           "sounds": []
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "14dad48b-5cd4-41b3-a05b-eb3ee73db858"
+      }
+    },
+    "owner": "rms1028"
   }
 }
