@@ -1,42 +1,107 @@
+// 🩺 Minimal diagnostic root layout.
+//
+// Zero src/ imports — only React, react-native, expo-router, expo-status-bar.
+// This is intentionally identical in import surface to the working
+// diagnostic build, so it must render. If even this doesn't render,
+// the failure is outside the JS layer (native, OS, package manager cache).
+//
+// Reads `global.__earlyErrors__` (populated by index.js) and renders a
+// red error screen if anything was caught during module load. Otherwise
+// renders a green 'LAYOUT OK' banner plus the normal Stack.
+
 import React from 'react';
-import { View, Text, Platform } from 'react-native';
+import { View, Text, ScrollView, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ErrorBoundary } from '../src/components/ErrorBoundary';
 
-/**
- * RootLayout — expo-router 의 진짜 root.
- *
- * 글로벌 에러 핸들러는 `index.js` 에서 module load 의 가장 첫 줄에 설치.
- * ES 모듈 hoisting 때문에 여기서 설치하면 이미 늦음.
- *
- * ErrorBoundary 는 `index.js` 의 `global.__earlyErrors__` 를 읽어 화면에 출력.
- *
- * 진단용 "LAYOUT MOUNTED" 텍스트는 layout 자체가 실행되는지 즉시 확인 가능하게 함.
- * 만약 이 텍스트 자체도 안 뜨면 = React Native core 초기화 단계가 죽은 것.
- */
+interface EarlyError {
+  message: string;
+  stack: string;
+  fatal: boolean;
+  at: number;
+}
+
+function getEarlyErrors(): EarlyError[] {
+  try {
+    const buf = (global as any).__earlyErrors__;
+    if (Array.isArray(buf)) return buf as EarlyError[];
+  } catch { /* noop */ }
+  return [];
+}
+
 export default function RootLayout() {
+  const errors = getEarlyErrors();
+
+  if (errors.length > 0) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#1a1a2e', paddingTop: 60 }}>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
+          <Text style={{ color: '#ff5555', fontSize: 22, fontWeight: '900', marginBottom: 8 }}>
+            {'⚠️ 앱 초기화 실패'}
+          </Text>
+          <Text style={{ color: '#888', fontSize: 12, marginBottom: 20 }}>
+            {`Platform: ${Platform.OS} ${Platform.Version} · errors: ${errors.length}`}
+          </Text>
+          {errors.map((e, i) => (
+            <View
+              key={i}
+              style={{
+                marginBottom: 14,
+                padding: 12,
+                backgroundColor: 'rgba(255,85,85,0.1)',
+                borderLeftWidth: 3,
+                borderLeftColor: '#ff5555',
+              }}
+            >
+              <Text style={{ color: '#ffaaaa', fontSize: 14, fontWeight: '700', marginBottom: 4 }}>
+                {e.message}
+              </Text>
+              <Text
+                style={{
+                  color: '#ccc',
+                  fontSize: 11,
+                  lineHeight: 16,
+                }}
+              >
+                {e.stack}
+              </Text>
+            </View>
+          ))}
+          <Text style={{ color: '#666', fontSize: 12, marginTop: 20, textAlign: 'center' }}>
+            {'이 화면 전체를 스크린샷으로 개발자에게 보내주세요.'}
+          </Text>
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: '#0a1f12' }}>
       <StatusBar style="light" />
-      {/* 진단용 상단 띠 — 임시. 나중에 제거. */}
-      <View style={{
-        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 9999,
-        backgroundColor: 'rgba(0,100,0,0.95)', paddingTop: 36, paddingBottom: 4,
-        alignItems: 'center',
-      }} pointerEvents="none">
-        <Text style={{ color: '#5dff9d', fontSize: 10, fontWeight: '700' }}>
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 9999,
+          backgroundColor: 'rgba(0,100,0,0.95)',
+          paddingTop: 38,
+          paddingBottom: 6,
+          alignItems: 'center',
+        }}
+        pointerEvents="none"
+      >
+        <Text style={{ color: '#5dff9d', fontSize: 11, fontWeight: '700' }}>
           {`LAYOUT OK · ${Platform.OS} ${Platform.Version}`}
         </Text>
       </View>
-      <ErrorBoundary>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: '#1a472a', overflow: 'hidden' },
-          }}
-        />
-      </ErrorBoundary>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: '#1a472a', overflow: 'hidden' },
+        }}
+      />
     </View>
   );
 }
