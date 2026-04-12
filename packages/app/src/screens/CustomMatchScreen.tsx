@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Pressable, Platform,
-  TextInput, ScrollView, useWindowDimensions, SafeAreaView,
+  TextInput, ScrollView, useWindowDimensions, SafeAreaView, Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -105,19 +106,54 @@ export function CustomMatchScreen({
 
   const totalPlayers = countWaitingPlayers(allRooms);
 
-  // 비밀번호 입력 모달 (Phase 5 에서 풀 통합 — 임시 placeholder)
+  // 비밀번호 입력 모달
   const [pwTarget, setPwTarget] = useState<FullRoom | null>(null);
+  const [pwInput, setPwInput] = useState('');
 
   // 우측 패널 탭
   const [rightTab, setRightTab] = useState<RightTab>('info');
 
+  // 모바일 전용 시트 상태
+  const [mobileSheet, setMobileSheet] = useState<'none' | 'info' | 'create'>('none');
+
+  // 더블탭 감지 (모바일 카드 더블탭 시 즉시 입장)
+  const lastTapRef = useRef<{ id: string; t: number } | null>(null);
+  const DOUBLE_TAP_MS = 300;
+
   function handleEnterRoom(room: FullRoom) {
     if (!savedPlayerId || !savedNickname) return;
     if (room.hasPassword) {
+      setPwInput('');
       setPwTarget(room);
       return;
     }
     onJoin(room.id, savedPlayerId, savedNickname);
+  }
+
+  function handleConfirmPassword() {
+    if (!pwTarget || !savedPlayerId || !savedNickname) return;
+    if (!pwInput.trim()) return;
+    onJoin(pwTarget.id, savedPlayerId, savedNickname, pwInput.trim());
+    setPwTarget(null);
+    setPwInput('');
+  }
+
+  function handleRoomCardPress(room: FullRoom) {
+    // 더블탭: 즉시 입장
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last && last.id === room.id && now - last.t < DOUBLE_TAP_MS) {
+      lastTapRef.current = null;
+      handleEnterRoom(room);
+      return;
+    }
+    lastTapRef.current = { id: room.id, t: now };
+
+    // 단일 탭: 선택. 모바일은 시트 열기.
+    setSelectedRoomId(room.id);
+    if (isMobile) {
+      setMobileSheet('info');
+    }
   }
 
   function handleRefresh() {
@@ -133,6 +169,7 @@ export function CustomMatchScreen({
       savedPlayerId,
       savedNickname,
     );
+    setMobileSheet('none');
     // TODO: server — mode/scoreLimit/turnTimer/allowSpectators/aiFill 도 같이 보내려면
     // useSocket의 createCustomRoom 시그니처 확장 필요. 지금은 이름+비번만 전송.
   }
@@ -245,11 +282,27 @@ export function CustomMatchScreen({
             room={r}
             selected={r.id === selectedRoomId}
             isMobile={isMobile}
-            onPress={() => setSelectedRoomId(r.id)}
+            onPress={() => handleRoomCardPress(r)}
             onEnter={() => handleEnterRoom(r)}
           />
         ))}
       </ScrollView>
+
+      {/* 모바일 전용: 방 만들기 FAB */}
+      {isMobile && (
+        <Pressable
+          onPress={() => setMobileSheet('create')}
+          style={({ pressed }) => [S.fab, pressed && S.fabPressed]}
+        >
+          <LinearGradient
+            colors={[COLORS.cmGold, COLORS.cmGoldSoft]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <Text style={S.fabText}>{'＋'}</Text>
+        </Pressable>
+      )}
     </View>
   );
 
@@ -329,6 +382,122 @@ export function CustomMatchScreen({
         {LeftSection}
         {!isMobile && RightPanel}
       </View>
+
+      {/* 모바일: 방 정보 풀스크린 시트 */}
+      {isMobile && (
+        <Modal
+          visible={mobileSheet === 'info'}
+          animationType="slide"
+          transparent={false}
+          onRequestClose={() => setMobileSheet('none')}
+        >
+          <SafeAreaView style={S.sheetRoot}>
+            <View style={S.sheetHeader}>
+              <TouchableOpacity
+                onPress={() => setMobileSheet('none')}
+                style={S.backBtn}
+              >
+                <Text style={S.backText}>{'← 닫기'}</Text>
+              </TouchableOpacity>
+              <Text style={S.sheetTitle}>{'방 정보'}</Text>
+              <View style={{ width: 60 }} />
+            </View>
+            <RoomInfoTab
+              room={selectedRoom}
+              onEnter={() => {
+                if (selectedRoom) handleEnterRoom(selectedRoom);
+              }}
+            />
+          </SafeAreaView>
+        </Modal>
+      )}
+
+      {/* 모바일: 방 만들기 풀스크린 시트 */}
+      {isMobile && (
+        <Modal
+          visible={mobileSheet === 'create'}
+          animationType="slide"
+          transparent={false}
+          onRequestClose={() => setMobileSheet('none')}
+        >
+          <SafeAreaView style={S.sheetRoot}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={{ flex: 1 }}
+            >
+              <View style={S.sheetHeader}>
+                <TouchableOpacity
+                  onPress={() => setMobileSheet('none')}
+                  style={S.backBtn}
+                >
+                  <Text style={S.backText}>{'← 닫기'}</Text>
+                </TouchableOpacity>
+                <Text style={S.sheetTitle}>{'방 만들기'}</Text>
+                <View style={{ width: 60 }} />
+              </View>
+              <RoomCreateTab onSubmit={handleCreateRoom} />
+            </KeyboardAvoidingView>
+          </SafeAreaView>
+        </Modal>
+      )}
+
+      {/* 비밀번호 입력 모달 (모든 플랫폼) */}
+      <Modal
+        visible={pwTarget !== null}
+        animationType="fade"
+        transparent
+        onRequestClose={() => { setPwTarget(null); setPwInput(''); }}
+      >
+        <View style={S.pwBackdrop}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={S.pwCard}
+          >
+            <Text style={S.pwTitle}>{'🔒 비밀번호 입력'}</Text>
+            {pwTarget && (
+              <Text style={S.pwSubtitle} numberOfLines={2}>{pwTarget.name}</Text>
+            )}
+            <TextInput
+              value={pwInput}
+              onChangeText={setPwInput}
+              placeholder={'비밀번호'}
+              placeholderTextColor={COLORS.cmInkMute}
+              style={S.formInput}
+              secureTextEntry
+              autoFocus
+              onSubmitEditing={handleConfirmPassword}
+              returnKeyType="done"
+            />
+            <View style={S.pwBtnRow}>
+              <Pressable
+                onPress={() => { setPwTarget(null); setPwInput(''); }}
+                style={({ pressed }) => [S.pwBtnGhost, pressed && S.chipPressed]}
+              >
+                <Text style={S.pwBtnGhostText}>{'취소'}</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleConfirmPassword}
+                disabled={!pwInput.trim()}
+                style={({ pressed }) => [
+                  S.pwBtnPrimary,
+                  pressed && pwInput.trim() && S.chipPressed,
+                  !pwInput.trim() && S.enterBtnWrapDisabled,
+                ]}
+              >
+                <LinearGradient
+                  colors={pwInput.trim() ? [COLORS.cmGold, COLORS.cmGoldSoft] : ['#555', '#333']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <Text style={[S.pwBtnPrimaryText, !pwInput.trim() && S.enterBtnTextDisabled]}>
+                  {'입장'}
+                </Text>
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1770,5 +1939,125 @@ const S = StyleSheet.create({
   },
   toggleBoxTextOn: {
     color: COLORS.cmGold,
+  },
+
+  // ─── 모바일 시트 ─────
+  sheetRoot: {
+    flex: 1,
+    backgroundColor: COLORS.cmBg0,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.cmLine,
+  },
+  sheetTitle: {
+    color: COLORS.cmGold,
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: SERIF,
+    letterSpacing: 1,
+  },
+
+  // ─── FAB (모바일 방 만들기 버튼) ─────
+  fab: {
+    position: 'absolute',
+    right: 16,
+    bottom: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: COLORS.cmGold,
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 10,
+  },
+  fabPressed: {
+    opacity: 0.85,
+  },
+  fabText: {
+    color: COLORS.cmBg0,
+    fontSize: 32,
+    fontWeight: '900',
+    lineHeight: 36,
+  },
+
+  // ─── 비밀번호 모달 ─────
+  pwBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  pwCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: COLORS.cmBg1,
+    borderWidth: 1,
+    borderColor: COLORS.cmGold,
+    borderRadius: 14,
+    padding: 24,
+    gap: 14,
+    shadowColor: COLORS.cmGold,
+    shadowOpacity: 0.3,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  },
+  pwTitle: {
+    color: COLORS.cmGold,
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  pwSubtitle: {
+    color: COLORS.cmInkDim,
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  pwBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  pwBtnGhost: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.cmLine,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  pwBtnGhostText: {
+    color: COLORS.cmInkDim,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  pwBtnPrimary: {
+    flex: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  pwBtnPrimaryText: {
+    color: COLORS.cmBg0,
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
 });

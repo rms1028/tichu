@@ -38,20 +38,45 @@
   - 기존 모달 코드는 그대로 보존 (Phase 6 에서 제거)
 - ✅ tsc 0
 
-## Phase 3: 좌측 방 목록 ✅ → 진행 예정
-- 섹션 헤더 (Cinzel-style 타이틀 + 액센트 바 + 카운터)
-- 필터 바 (검색 + 전체/일반전/랭크 칩 + 토글 + 새로고침)
-- 방 카드 컴포넌트 (아바타 + 정보 + 슬롯 + 핑 + 입장)
-- 반응형: 데스크톱은 가로 카드, 모바일은 세로 카드
+## Phase 3: 좌측 방 목록 ✅
+**커밋**: `f6798e8`
+- 섹션 헤더 (액센트 바 LinearGradient + serif 타이틀 + ko 부제 + 카운터)
+- 필터 바 (검색 input + 칩 가로 스크롤 + 새로고침 아이콘 버튼)
+- Chip 컴포넌트 (active/pressed/dot variants)
+- RoomCard 컴포넌트
+  - 데스크톱/태블릿: 가로 그리드 (avatar | info | slots | ping | enter)
+  - 모바일: 세로 배치 (avatar+name → meta → slots+ping+enter)
+  - selected 상태 = gold 보더 + glow + 좌측 액센트 바
+  - hover → Pressable pressed
+- Badge (normal/ranked/lock) + 슬롯 (filled = gold gradient + glow) + 핑 (3 bars + ms text, good = green)
+- 검색 + 모드 필터 + 빈자리만 + 비밀방 제외 작동
+- 첫 방 자동 선택 + 필터 적용 시 selected 재조정
+- ✅ tsc 0
 
-## Phase 4: 우측 상세 패널 ⏳
-- 탭 (방 정보 / + 방 만들기)
-- 방 정보 탭: 헤더 + info grid 2x2 + 팀 슬롯 + 입장 버튼
-- 방 만들기 탭: 폼 + 제출
+## Phase 4: 우측 상세 패널 ✅
+**커밋**: `91e81bc`
+- 탭 (방 정보 / ＋ 방 만들기) — active = gold 하단 보더 + 옅은 골드 tint
+- RoomInfoTab
+  - Preview head: 56x56 avatar + 방 이름 + 방장·레이팅
+  - Info grid 2x2: Mode / Score(gold) / Turn Timer / Spectators
+  - Players section: Team1 / Team2 박스 (filled = mini avatar + 닉, empty = dashed + '＋ 빈자리')
+  - 큰 입장 버튼 (gold linear-gradient + drop shadow)
+  - footnote: 평균 핑
+  - 빈 상태 처리
+- RoomCreateTab + `CreateRoomForm` 인터페이스
+  - 방 이름, 모드, 점수한도, 턴 타이머, 관전허용, AI fill, 비밀번호
+  - submit 시 onCreateCustomRoom(name, password?, playerId, nickname) 호출 (기존 시그니처 유지)
+  - TODO: server — 모드/점수/타이머 등 추가 필드는 서버 확장 후 전달
+  - 이름 비어있으면 disabled
+- 모든 터치 영역 ≥44x44
+- ✅ tsc 0
 
-## Phase 5: 인터랙션 + 모바일 시트 ⏳
-- 첫 방 자동 선택, 클릭/더블클릭, ESC, 10s polling 검증
-- 모바일: 방 클릭 시 풀스크린 시트 (방 정보 + 방 만들기 모두)
+## Phase 5: 인터랙션 + 모바일 시트 🚧
+- 모바일에서 방 클릭 시 우측 패널이 풀스크린 시트로 표시 (Modal)
+- 방 만들기도 모바일은 풀스크린 시트
+- 비밀번호 입력 모달 통합
+- 더블클릭 즉시 입장
+- 폴링 cleanup 검증
 
 ## Phase 6: 기존 모달 제거 + 최종 회귀 ⏳
 - LobbyScreen 의 showRoom/customTab/joinTarget 등 state + 모달 JSX 제거
