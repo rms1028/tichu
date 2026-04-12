@@ -19,8 +19,8 @@ export const GOOGLE_OAUTH = {
   // iOS OAuth client
   iosClientId: '858840967253-8lnh3ut8jlfeue2ec2ekpv2rkgi3v3p4.apps.googleusercontent.com',
 
-  // Android OAuth client — SHA-1 지문 등록 후 발급되면 교체
-  androidClientId: '',
+  // Android OAuth client (SHA-1: 8E:87:B6:16:5A:99:F6:96:62:B7:DA:51:9C:11:2A:07:FE:52:24:7B)
+  androidClientId: '858840967253-06rl2iqgqh2s2k7de9tt3t513k0oharb.apps.googleusercontent.com',
 };
 
 export function isGoogleOAuthConfigured(): boolean {

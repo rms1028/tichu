@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "858840967253-06rl2iqgqh2s2k7de9tt3t513k0oharb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tichu.app",
+            "certificate_hash": "8e87b6165a99f69662b7da519c112a07fe52247b"
+          }
+        },
+        {
           "client_id": "858840967253-4aigqhha1dkq7tvb0jct2r88lfsvkcg6.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -29,6 +37,13 @@
             {
               "client_id": "858840967253-4aigqhha1dkq7tvb0jct2r88lfsvkcg6.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "858840967253-8lnh3ut8jlfeue2ec2ekpv2rkgi3v3p4.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.tichu.app"
+              }
             }
           ]
         }
