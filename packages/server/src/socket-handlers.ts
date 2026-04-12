@@ -444,7 +444,20 @@ export function registerSocketHandlers(io: Server): void {
 
       const limit = Math.min(data?.limit ?? 50, 100);
       const offset = data?.offset ?? 0;
-      const roomList: { roomId: string; roomName: string; playerCount: number; hasPassword: boolean }[] = [];
+      // 확장된 응답 형태 — Custom Match 화면이 사용하는 모든 필드
+      interface RoomListEntry {
+        roomId: string;
+        roomName: string;
+        playerCount: number;
+        hasPassword: boolean;
+        hostId: string | null;
+        hostName: string | null;
+        scoreLimit: number;
+        turnTimer: number | null;   // seconds (0/Infinity → null)
+        allowSpectators: boolean;
+        createdAt: number;
+      }
+      const roomList: RoomListEntry[] = [];
       let skipped = 0;
       for (const [id, room] of rooms) {
         if (!room.settings.isCustom) continue;
@@ -453,11 +466,40 @@ export function registerSocketHandlers(io: Server): void {
         if (playerCount >= 4) continue; // 풀방은 숨기지만, 0명(방금 생성)도 표시
         if (skipped < offset) { skipped++; continue; }
         if (roomList.length >= limit) break;
+
+        // 방장 정보: hostPlayerId 가 우선, 없으면 seat 0
+        let hostInfo: { playerId: string | null; nickname: string | null } = { playerId: null, nickname: null };
+        if (room.hostPlayerId) {
+          hostInfo.playerId = room.hostPlayerId;
+          for (let s = 0; s < 4; s++) {
+            const p = room.players[s];
+            if (p && p.playerId === room.hostPlayerId) {
+              hostInfo.nickname = p.nickname;
+              break;
+            }
+          }
+        }
+        if (!hostInfo.nickname && room.players[0]) {
+          hostInfo.playerId = hostInfo.playerId || room.players[0]!.playerId;
+          hostInfo.nickname = room.players[0]!.nickname;
+        }
+
+        const turnTimerMs = room.settings.turnTimeLimit;
+        const turnTimerSec = !turnTimerMs || turnTimerMs <= 0 || !isFinite(turnTimerMs)
+          ? null
+          : Math.round(turnTimerMs / 1000);
+
         roomList.push({
           roomId: id,
           roomName: room.settings.roomName ?? id,
           playerCount,
           hasPassword: !!room.settings.password,
+          hostId: hostInfo.playerId,
+          hostName: hostInfo.nickname,
+          scoreLimit: room.settings.targetScore,
+          turnTimer: turnTimerSec,
+          allowSpectators: !!room.settings.allowSpectators,
+          createdAt: room.createdAt,
         });
       }
       socket.emit('room_list', { rooms: roomList });
@@ -469,7 +511,16 @@ export function registerSocketHandlers(io: Server): void {
     });
 
     // ── 커스텀 방 생성 ──────────────────────────────────────
-    socket.on('create_custom_room', async (data: { roomName: string; password?: string; playerId: string; nickname: string }) => {
+    socket.on('create_custom_room', async (data: {
+      roomName: string;
+      password?: string;
+      playerId: string;
+      nickname: string;
+      // Custom Match v2 옵션 — 모두 optional. 누락되면 기본값 사용.
+      scoreLimit?: number;
+      turnTimer?: number | null;
+      allowSpectators?: boolean;
+    }) => {
       if (!authenticatedPlayerId) await waitForLogin();
       if (!requireAuth(data.playerId)) return;
       if (!rateLimitCheck(socket.id)) { socket.emit('error', { message: 'rate_limited' }); return; }
@@ -481,6 +532,16 @@ export function registerSocketHandlers(io: Server): void {
       }
       if (data.password !== undefined && data.password !== null && !isValidPassword(data.password)) {
         socket.emit('error', { message: 'password_too_long' }); return;
+      }
+      // v2 옵션 검증 — 화이트리스트만 허용
+      const allowedScores = [500, 1000, 1500] as const;
+      const allowedTurnTimers = [15, 20, 30, null] as const;
+      if (data.scoreLimit !== undefined && !allowedScores.includes(data.scoreLimit as 500 | 1000 | 1500)) {
+        socket.emit('error', { message: 'invalid_score_limit' }); return;
+      }
+      if (data.turnTimer !== undefined &&
+          !(allowedTurnTimers as readonly (number | null)[]).includes(data.turnTimer)) {
+        socket.emit('error', { message: 'invalid_turn_timer' }); return;
       }
 
       // 전체 방 수 제한
@@ -503,6 +564,20 @@ export function registerSocketHandlers(io: Server): void {
       room.settings.roomName = sanitize(data.roomName || '티츄 방');
       if (data.password) room.settings.password = data.password;
       room.hostPlayerId = data.playerId;
+
+      // v2 옵션 적용
+      if (data.scoreLimit !== undefined) {
+        room.settings.targetScore = data.scoreLimit;
+      }
+      if (data.turnTimer !== undefined) {
+        // null = 무제한 (사실상 매우 큰 수). 0/null 은 게임 엔진에서 무한으로 처리되지 않으므로 큰 값 사용.
+        room.settings.turnTimeLimit = data.turnTimer === null
+          ? 365 * 24 * 60 * 60 * 1000  // 1 year — 사실상 무제한
+          : data.turnTimer * 1000;
+      }
+      if (data.allowSpectators !== undefined) {
+        room.settings.allowSpectators = data.allowSpectators;
+      }
 
       // 방장 seat 0으로 입장
       room.players[0] = {

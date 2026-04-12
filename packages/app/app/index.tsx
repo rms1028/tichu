@@ -32,17 +32,14 @@ import { DisconnectOverlay } from '../src/components/DisconnectOverlay';
 import { LoginScreen } from '../src/screens/LoginScreen';
 import { signInWithGoogle, signInWithGoogleIdToken, signInAsGuest, signOutUser } from '../src/utils/firebase';
 import { GOOGLE_OAUTH, isGoogleOAuthConfigured } from '../src/utils/googleOAuth';
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
+// 🩺 expo-auth-session / expo-web-browser 의 module-level import 가 Android
+// native init 시점에 크래시를 일으키는지 검증하기 위해 일시적으로 제거.
+// native Google 로그인 경로는 이 빌드에서 비활성. 웹 popup 은 영향 없음.
+// import * as Google from 'expo-auth-session/providers/google';
+// import * as WebBrowser from 'expo-web-browser';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 
-// 인앱 브라우저 세션 자동 종료 (네이티브 Google 로그인 redirect)
-// try/catch — 네이티브 모듈 누락 시 모듈 load 단계에서 throw 하지 않도록 보호
-try {
-  WebBrowser.maybeCompleteAuthSession();
-} catch (e) {
-  captureManual(e, 'WebBrowser.maybeCompleteAuthSession');
-}
+// WebBrowser.maybeCompleteAuthSession() 도 일시 비활성 (위 import 제거의 일부)
 import { playBgm, setBgmEnabled, stopAll as stopBgm } from '../src/utils/bgm';
 import { cancelAllSounds } from '../src/utils/sound';
 
@@ -103,49 +100,9 @@ function AppInner() {
   const [emoteMsg, setEmoteMsg] = useState<{ emoji: string; label: string } | null>(null);
   const resultRecorded = useRef(false);
 
-  // ── 네이티브 Google 로그인 (expo-auth-session) ────────────────
-  // 웹에서는 signInWithPopup 사용 → 훅은 native 에서만 의미있지만 모든 플랫폼에서 호출 (훅 규칙).
-  const [, googleAuthResponse, promptGoogleAuth] = Google.useIdTokenAuthRequest({
-    clientId: GOOGLE_OAUTH.webClientId,
-    ...(GOOGLE_OAUTH.iosClientId ? { iosClientId: GOOGLE_OAUTH.iosClientId } : {}),
-    ...(GOOGLE_OAUTH.androidClientId ? { androidClientId: GOOGLE_OAUTH.androidClientId } : {}),
-  });
-
-  // Google auth 결과가 오면 Firebase 자격증명으로 로그인
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    if (!googleAuthResponse) return;
-    if (googleAuthResponse.type !== 'success') {
-      if (googleAuthResponse.type === 'error' || googleAuthResponse.type === 'dismiss' || googleAuthResponse.type === 'cancel') {
-        setLoginLoading(false);
-        if (googleAuthResponse.type === 'error') setLoginError('Google 로그인에 실패했습니다');
-      }
-      return;
-    }
-    const idToken = (googleAuthResponse.params as any)?.id_token;
-    if (!idToken) {
-      setLoginLoading(false);
-      setLoginError('Google 로그인에 실패했습니다 (id_token 없음)');
-      return;
-    }
-    (async () => {
-      try {
-        const user = await signInWithGoogleIdToken(idToken);
-        const firebaseIdToken = await user.getIdToken();
-        const nick = user.displayName || user.email?.split('@')[0] || 'Player';
-        const us = useUserStore.getState();
-        us.setNickname(nick);
-        setNickname(nick);
-        firebaseLogin(firebaseIdToken, nick);
-        setScreen('lobby');
-      } catch (err) {
-        console.error('Google credential sign-in error:', err);
-        setLoginError('Google 로그인에 실패했습니다');
-      } finally {
-        setLoginLoading(false);
-      }
-    })();
-  }, [googleAuthResponse]);
+  // ── 네이티브 Google 로그인 (expo-auth-session) — 일시 비활성 ────
+  // 모듈 레벨 import 가 native crash 원인 후보라서 이 빌드에서는 stub.
+  // 복원 조건: Android 부팅 검증 후 별도 파일 + React.lazy 로 이관.
 
   // ── BGM 전환 ─────────────────────────────────────────────
   useEffect(() => {
@@ -229,20 +186,12 @@ function AppInner() {
       }
       return;
     }
-    // 네이티브(iOS/Android): expo-auth-session으로 id_token 획득 후 useEffect에서 처리
-    if (!isGoogleOAuthConfigured()) {
-      setLoginError('Google 로그인이 아직 설정되지 않았습니다');
-      setLoginLoading(false);
-      return;
-    }
-    try {
-      await promptGoogleAuth();
-      // 결과는 googleAuthResponse useEffect 에서 처리
-    } catch (err) {
-      console.error('Google prompt error:', err);
-      setLoginError('Google 로그인에 실패했습니다');
-      setLoginLoading(false);
-    }
+    // 🩺 네이티브 Google 로그인 일시 비활성 — 디버그 빌드.
+    // expo-auth-session module-level import 가 native crash 후보라서 import 자체를 제거함.
+    // 게스트 로그인을 사용해 주세요.
+    void isGoogleOAuthConfigured;  // 미사용 경고 회피
+    setLoginError('이 빌드에서는 Google 로그인 일시 비활성. 게스트 로그인을 사용해 주세요.');
+    setLoginLoading(false);
   };
 
   // 스플래시

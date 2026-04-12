@@ -678,9 +678,27 @@ export function useSocket() {
     socketRef.current?.emit('start_game');
   }, []);
 
-  const createCustomRoom = useCallback((roomName: string, password: string | undefined, playerId: string, nickname: string) => {
+  const createCustomRoom = useCallback((
+    roomName: string,
+    password: string | undefined,
+    playerId: string,
+    nickname: string,
+    options?: {
+      scoreLimit?: number;
+      turnTimer?: number | null;
+      allowSpectators?: boolean;
+    },
+  ) => {
     store.setPlayerInfo(playerId, nickname);
-    socketRef.current?.emit('create_custom_room', { roomName, password, playerId, nickname });
+    socketRef.current?.emit('create_custom_room', {
+      roomName,
+      password,
+      playerId,
+      nickname,
+      ...(options?.scoreLimit !== undefined ? { scoreLimit: options.scoreLimit } : {}),
+      ...(options?.turnTimer !== undefined ? { turnTimer: options.turnTimer } : {}),
+      ...(options?.allowSpectators !== undefined ? { allowSpectators: options.allowSpectators } : {}),
+    });
   }, []);
 
   const listRooms = useCallback(() => {
