@@ -84,6 +84,8 @@ export function CustomMatchScreen({
   const serverRoomsLen = serverRooms?.length ?? -1;
   useEffect(() => {
     if (serverRooms !== undefined && serverRooms !== null) {
+      // 빈 상태 ↔ 방 목록 전환 부드럽게 (Phase 3 변경 9)
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setInitialLoading(false);
       setRefreshing(false);
     }
@@ -94,6 +96,9 @@ export function CustomMatchScreen({
     if (!serverRooms) return [];
     return adaptServerRooms(serverRooms as any);
   }, [serverRooms]);
+
+  // 진짜 빈 상태 (로딩 끝났고 방 0개)
+  const isEmpty = !initialLoading && rooms.length === 0;
 
   // ─── 필터 / 검색 / 정렬 ──────────────────────────────
   const [search, setSearch] = useState('');
@@ -289,17 +294,20 @@ export function CustomMatchScreen({
         <Text style={[S.titleKo, isMobile && S.titleKoMobile]}>{'커스텀 매치'}</Text>
       </View>
       <View style={S.headerRight}>
-        {!isMobile && !initialLoading && (
+        {!isMobile && !initialLoading && !isEmpty && (
           <View style={S.countRow}>
             <Text style={S.countText}>{'대기중 '}</Text>
             <Text style={S.countNum}>{rooms.length}</Text>
             <Text style={S.countText}>{' 방'}</Text>
           </View>
         )}
-        <CreateButton
-          isMobile={isMobile}
-          onPress={() => setCreateOpen(true)}
-        />
+        {/* 빈 상태에서는 중앙 CTA 에 시선 집중 — 우상단 만들기 버튼 숨김 */}
+        {!isEmpty && (
+          <CreateButton
+            isMobile={isMobile}
+            onPress={() => setCreateOpen(true)}
+          />
+        )}
       </View>
     </View>
   );
@@ -383,7 +391,8 @@ export function CustomMatchScreen({
 
       <View style={[S.main, isMobile && S.mainMobile]}>
         <SectionHeader />
-        <FilterBar />
+        {/* 빈 상태에서는 필터 바 숨김 */}
+        {!isEmpty && <FilterBar />}
         {body}
       </View>
 
