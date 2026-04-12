@@ -10,7 +10,7 @@ export function BackgroundWatermark({ ingame = false }: Props) {
   return (
     <View style={S.container} pointerEvents="none">
       <ImageBackground
-        source={require('../../assets/티츄 배경화면.png')}
+        source={require('../../assets/splash.png')}
         style={S.bg}
         imageStyle={S.image}
         resizeMode="contain"
