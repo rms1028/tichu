@@ -61,8 +61,9 @@ import { RankingScreen } from './RankingScreen';
 import { ShopScreen } from './ShopScreen';
 import { AchievementsScreen } from './AchievementsScreen';
 import { TermsScreen } from './TermsScreen';
+import { CustomMatchScreen } from './CustomMatchScreen';
 
-type Page = 'main' | 'profile' | 'rules' | 'ranking' | 'shop' | 'achievements' | 'settings' | 'terms';
+type Page = 'main' | 'profile' | 'rules' | 'ranking' | 'shop' | 'achievements' | 'settings' | 'terms' | 'customMatch';
 
 function FloatingSymbol({ symbol, x, delay }: { symbol: string; x: number; delay: number }) {
   const ty = useSharedValue(0);
@@ -170,6 +171,14 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
   if (page === 'shop') return <ShopScreen onBack={() => setPage('main')} onBuyItem={onBuyShopItem} onEquipItem={onEquipShopItem} />;
   if (page === 'achievements') return <AchievementsScreen onBack={() => setPage('profile')} />;
   if (page === 'terms') return <TermsScreen onBack={() => setPage('settings')} />;
+  if (page === 'customMatch') return (
+    <CustomMatchScreen
+      onBack={() => setPage('main')}
+      onJoin={onJoin}
+      onCreateCustomRoom={onCreateCustomRoom}
+      onListRooms={onListRooms}
+    />
+  );
   if (page === 'settings') {
     return (
       <SafeAreaView style={S.root}>
@@ -272,7 +281,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                 <Text style={S.cSub}>{'\uBE44\uC2B7\uD55C \uC2E4\uB825\uC758 \uC720\uC800\uC640'}{'\n'}{'\uC989\uC2DC \uD50C\uB808\uC774'}</Text>
                 <View style={S.playBtn}><Text style={S.playBtnText}>{'\u25B6  \uD50C\uB808\uC774'}</Text></View>
               </TouchableOpacity>
-              <TouchableOpacity style={[S.card, S.cardD]} activeOpacity={0.85} onPress={() => { setShowRoom(true); setCustomTab('list'); onListRooms?.(); }}>
+              <TouchableOpacity style={[S.card, S.cardD]} activeOpacity={0.85} onPress={() => { setPage('customMatch'); }}>
                 <Text style={S.cIcon}>{'\uD83D\uDD12'}</Text>
                 <Text style={S.cTitle}>{'\uCEE4\uC2A4\uD140 \uBAA8\uB4DC'}</Text>
                 <Text style={S.cSub}>{'\uBC29 \uB9CC\uB4E4\uAE30 \uBC0F'}{'\n'}{'\uCF54\uB4DC\uB85C \uC785\uC7A5'}</Text>
