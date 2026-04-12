@@ -9,17 +9,28 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "cover",
       "backgroundColor": "#1a472a"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.tichu.app"
+      "bundleIdentifier": "com.tichu.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1a472a"
       },
-      "package": "com.tichu.app"
+      "package": "com.tichu.app",
+      "googleServicesFile": "./google-services.json",
+      "versionCode": 1,
+      "permissions": [
+        "INTERNET",
+        "VIBRATE"
+      ]
     },
     "web": {
       "bundler": "metro",

@@ -30,9 +30,9 @@ export function ShopScreen({ onBack, onBuyItem, onEquipItem }: Props) {
       if (ok) {
         setMessage(`${item.name} 구매 완료! (-${item.price} 코인)`);
         onBuyItem?.(item.id, item.category, item.price);
+        // 로컬 장착 (서버는 buy_item 트랜잭션에서 자동 장착 처리)
         if (tab === 'avatar') equipAvatar(item.id);
         else equipCardBack(item.id);
-        onEquipItem?.(item.id, item.category);
       } else {
         setMessage('코인이 부족합니다!');
       }

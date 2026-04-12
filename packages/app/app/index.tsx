@@ -25,7 +25,13 @@ import { AchievementPopup } from '../src/components/AchievementPopup';
 import { SplashScreen } from '../src/screens/SplashScreen';
 import { DisconnectOverlay } from '../src/components/DisconnectOverlay';
 import { LoginScreen } from '../src/screens/LoginScreen';
-import { signInWithGoogle, signInAsGuest, signOutUser } from '../src/utils/firebase';
+import { signInWithGoogle, signInWithGoogleIdToken, signInAsGuest, signOutUser } from '../src/utils/firebase';
+import { GOOGLE_OAUTH, isGoogleOAuthConfigured } from '../src/utils/googleOAuth';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
+
+// 인앱 브라우저 세션 자동 종료 (네이티브 Google 로그인 redirect)
+WebBrowser.maybeCompleteAuthSession();
 import { playBgm, setBgmEnabled, stopAll as stopBgm } from '../src/utils/bgm';
 import { cancelAllSounds } from '../src/utils/sound';
 
@@ -83,6 +89,50 @@ function AppInner() {
   const [firstVisit, setFirstVisit] = useState(true);
   const [emoteMsg, setEmoteMsg] = useState<{ emoji: string; label: string } | null>(null);
   const resultRecorded = useRef(false);
+
+  // ── 네이티브 Google 로그인 (expo-auth-session) ────────────────
+  // 웹에서는 signInWithPopup 사용 → 훅은 native 에서만 의미있지만 모든 플랫폼에서 호출 (훅 규칙).
+  const [, googleAuthResponse, promptGoogleAuth] = Google.useIdTokenAuthRequest({
+    clientId: GOOGLE_OAUTH.webClientId,
+    ...(GOOGLE_OAUTH.iosClientId ? { iosClientId: GOOGLE_OAUTH.iosClientId } : {}),
+    ...(GOOGLE_OAUTH.androidClientId ? { androidClientId: GOOGLE_OAUTH.androidClientId } : {}),
+  });
+
+  // Google auth 결과가 오면 Firebase 자격증명으로 로그인
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    if (!googleAuthResponse) return;
+    if (googleAuthResponse.type !== 'success') {
+      if (googleAuthResponse.type === 'error' || googleAuthResponse.type === 'dismiss' || googleAuthResponse.type === 'cancel') {
+        setLoginLoading(false);
+        if (googleAuthResponse.type === 'error') setLoginError('Google 로그인에 실패했습니다');
+      }
+      return;
+    }
+    const idToken = (googleAuthResponse.params as any)?.id_token;
+    if (!idToken) {
+      setLoginLoading(false);
+      setLoginError('Google 로그인에 실패했습니다 (id_token 없음)');
+      return;
+    }
+    (async () => {
+      try {
+        const user = await signInWithGoogleIdToken(idToken);
+        const firebaseIdToken = await user.getIdToken();
+        const nick = user.displayName || user.email?.split('@')[0] || 'Player';
+        const us = useUserStore.getState();
+        us.setNickname(nick);
+        setNickname(nick);
+        firebaseLogin(firebaseIdToken, nick);
+        setScreen('lobby');
+      } catch (err) {
+        console.error('Google credential sign-in error:', err);
+        setLoginError('Google 로그인에 실패했습니다');
+      } finally {
+        setLoginLoading(false);
+      }
+    })();
+  }, [googleAuthResponse]);
 
   // ── BGM 전환 ─────────────────────────────────────────────
   useEffect(() => {
@@ -147,19 +197,37 @@ function AppInner() {
   const handleGoogleLogin = async () => {
     setLoginLoading(true);
     setLoginError(null);
+    // 웹: Firebase popup
+    if (Platform.OS === 'web') {
+      try {
+        const user = await signInWithGoogle();
+        const idToken = await user.getIdToken();
+        const nick = user.displayName || user.email?.split('@')[0] || 'Player';
+        const us = useUserStore.getState();
+        us.setNickname(nick);
+        setNickname(nick);
+        firebaseLogin(idToken, nick);
+        setScreen('lobby');
+      } catch (err: any) {
+        console.error('Google login error:', err);
+        setLoginError('Google 로그인에 실패했습니다');
+      } finally {
+        setLoginLoading(false);
+      }
+      return;
+    }
+    // 네이티브(iOS/Android): expo-auth-session으로 id_token 획득 후 useEffect에서 처리
+    if (!isGoogleOAuthConfigured()) {
+      setLoginError('Google 로그인이 아직 설정되지 않았습니다');
+      setLoginLoading(false);
+      return;
+    }
     try {
-      const user = await signInWithGoogle();
-      const idToken = await user.getIdToken();
-      const nick = user.displayName || user.email?.split('@')[0] || 'Player';
-      const us = useUserStore.getState();
-      us.setNickname(nick);
-      setNickname(nick);
-      firebaseLogin(idToken, nick);
-      setScreen('lobby');
-    } catch (err: any) {
-      console.error('Google login error:', err);
+      await promptGoogleAuth();
+      // 결과는 googleAuthResponse useEffect 에서 처리
+    } catch (err) {
+      console.error('Google prompt error:', err);
       setLoginError('Google 로그인에 실패했습니다');
-    } finally {
       setLoginLoading(false);
     }
   };
