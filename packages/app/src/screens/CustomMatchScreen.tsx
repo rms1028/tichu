@@ -123,6 +123,9 @@ export function CustomMatchScreen({
     return () => clearTimeout(id);
   }, [toast]);
 
+  // 검색 input ref (키보드 단축키 / 포커스용)
+  const searchInputRef = useRef<TextInput | null>(null);
+
   // ─── 핸들러 ─────────────────────────────────────────
   const handleEnterRoom = useCallback((room: Room) => {
     if (!savedPlayerId || !savedNickname) return;
@@ -182,6 +185,43 @@ export function CustomMatchScreen({
     // 안전 타임아웃: 서버 응답 없어도 2초 뒤 스피너 해제
     setTimeout(() => setRefreshing(false), 2000);
   }, [onListRooms, refreshRotation]);
+
+  // ─── 키보드 단축키 (PC 웹 전용) ─────────────────────
+  // ESC 뒤로, / 또는 Ctrl+F 검색 포커스, N 방 만들기.
+  // 방향키 포커스 이동은 복잡도 대비 이득이 작아 이번 phase 에서는 생략.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const g: any = (typeof globalThis !== 'undefined' ? globalThis : {}) as any;
+    const w: any = g.window;
+    if (!w || typeof w.addEventListener !== 'function') return;
+    const onKey = (e: any) => {
+      // 입력 필드 안에서는 ESC 를 제외한 단축키 비활성
+      const tag = e?.target?.tagName?.toLowerCase?.() ?? '';
+      const inInput = tag === 'input' || tag === 'textarea';
+      if (e.key === 'Escape') {
+        if (createOpen) { setCreateOpen(false); return; }
+        if (pwTarget) { closePasswordModal(); return; }
+        onBack();
+        return;
+      }
+      if (inInput) return;
+      if (createOpen || pwTarget) return;
+      if (e.key === '/' || (e.key.toLowerCase?.() === 'f' && (e.ctrlKey || e.metaKey))) {
+        e.preventDefault?.();
+        searchInputRef.current?.focus?.();
+        return;
+      }
+      if (e.key.toLowerCase?.() === 'n') {
+        e.preventDefault?.();
+        setCreateOpen(true);
+        return;
+      }
+    };
+    w.addEventListener('keydown', onKey);
+    return () => {
+      try { w.removeEventListener('keydown', onKey); } catch { /* noop */ }
+    };
+  }, [createOpen, pwTarget, onBack, closePasswordModal]);
 
   const handleCreateRoom = useCallback((form: CreateRoomForm) => {
     if (!savedPlayerId || !savedNickname) return;
@@ -267,6 +307,7 @@ export function CustomMatchScreen({
       <View style={[S.search, isMobile && S.searchMobile]}>
         <Text style={S.searchIcon}>{'🔍'}</Text>
         <TextInput
+          ref={searchInputRef}
           value={search}
           onChangeText={setSearch}
           placeholder={'방 이름 또는 방장 검색...'}
