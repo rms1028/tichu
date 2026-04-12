@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, Pressable, Platform,
   TextInput, ScrollView, useWindowDimensions, SafeAreaView, Modal,
-  KeyboardAvoidingView, Animated as RNAnimated, Easing,
+  KeyboardAvoidingView, Animated as RNAnimated, Easing, LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,6 +14,17 @@ import {
   adaptServerRooms, sortRooms, pinMyRooms, hasOpenSlot, isMyRoom,
   type Room, type RoomSortKey,
 } from '../utils/roomDataAdapter';
+import { BackgroundWatermark } from '../components/BackgroundWatermark';
+import { CardView } from '../components/CardView';
+import type { Card } from '@tichu/shared';
+
+// Android: LayoutAnimation 활성화 (Phase 5 변경 9)
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// 빈 상태에 표시할 드래곤 카드 (CardView 에 전달)
+const DRAGON_CARD: Card = { type: 'special', specialType: 'dragon' };
 
 interface Props {
   onBack: () => void;
@@ -364,21 +376,8 @@ export function CustomMatchScreen({
 
   return (
     <SafeAreaView style={S.root}>
-      {/* 배경 */}
-      <View style={S.bg} pointerEvents="none">
-        <LinearGradient
-          colors={['#0a1f12', '#0e2e1a', '#061509']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-        {!isMobile && (
-          <>
-            <Text style={[S.dragon, S.dragonLeft]}>{'龍'}</Text>
-            <Text style={[S.dragon, S.dragonRight]}>{'鳳'}</Text>
-          </>
-        )}
-      </View>
+      {/* 배경: 로비와 동일한 BackgroundWatermark (splash.png) 재사용 */}
+      <BackgroundWatermark />
 
       <TopBar />
 
@@ -627,7 +626,10 @@ function EmptyState({
 }) {
   return (
     <View style={S.emptyWrap}>
-      <Text style={S.emptyEmoji}>{'🎴'}</Text>
+      {/* 게임 내 CardView 재사용 — Dragon 카드 (가장 상징적) + 골드 글로우 */}
+      <View style={S.emptyCardWrap}>
+        <CardView card={DRAGON_CARD} size="large" />
+      </View>
       {hasRooms ? (
         <>
           <Text style={S.emptyTitle}>{'조건에 맞는 방이 없어요'}</Text>
@@ -948,13 +950,6 @@ function PasswordModal({
 // ─── 스타일 ──────────────────────────────────────────────
 const S = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.cmBg0 },
-  bg: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
-  dragon: {
-    position: 'absolute', fontSize: 520, fontFamily: SERIF, fontWeight: '700',
-    color: 'rgba(255,210,74,0.025)', lineHeight: 520, top: '50%', marginTop: -260,
-  },
-  dragonLeft: { left: '8%' },
-  dragonRight: { right: '8%' },
 
   // Topbar
   topbar: {
@@ -1177,9 +1172,17 @@ const S = StyleSheet.create({
   // Empty state
   emptyWrap: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
-    padding: 40, gap: 12,
+    padding: 40, gap: 14,
   },
-  emptyEmoji: { fontSize: 80, marginBottom: 8 },
+  emptyCardWrap: {
+    marginBottom: 12,
+    // 골드 글로우 (Android elevation 으로 근사)
+    shadowColor: COLORS.cmGold,
+    shadowOpacity: 0.45,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 14,
+  },
   emptyTitle: {
     fontSize: 20, fontWeight: '800', color: COLORS.cmInk,
     textAlign: 'center',
