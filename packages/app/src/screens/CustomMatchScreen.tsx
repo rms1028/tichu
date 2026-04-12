@@ -26,6 +26,7 @@ interface Props {
 }
 
 type ModeFilter = 'all' | 'normal' | 'ranked';
+type RightTab = 'info' | 'create';
 
 const SERIF = Platform.select({ ios: 'Times New Roman', android: 'serif', default: 'serif' });
 
@@ -107,6 +108,9 @@ export function CustomMatchScreen({
   // 비밀번호 입력 모달 (Phase 5 에서 풀 통합 — 임시 placeholder)
   const [pwTarget, setPwTarget] = useState<FullRoom | null>(null);
 
+  // 우측 패널 탭
+  const [rightTab, setRightTab] = useState<RightTab>('info');
+
   function handleEnterRoom(room: FullRoom) {
     if (!savedPlayerId || !savedNickname) return;
     if (room.hasPassword) {
@@ -118,6 +122,19 @@ export function CustomMatchScreen({
 
   function handleRefresh() {
     onListRooms?.();
+  }
+
+  function handleCreateRoom(form: CreateRoomForm) {
+    if (!savedPlayerId || !savedNickname) return;
+    if (!form.name.trim()) return;
+    onCreateCustomRoom?.(
+      form.name.trim(),
+      form.password.trim() ? form.password.trim() : undefined,
+      savedPlayerId,
+      savedNickname,
+    );
+    // TODO: server — mode/scoreLimit/turnTimer/allowSpectators/aiFill 도 같이 보내려면
+    // useSocket의 createCustomRoom 시그니처 확장 필요. 지금은 이름+비번만 전송.
   }
 
   // ─── 상단 바 ─────────────────────────────────────────────
@@ -236,15 +253,48 @@ export function CustomMatchScreen({
     </View>
   );
 
-  // ─── 우측 (Phase 4 에서 채움) ────────────────────────────
+  // ─── 우측 상세 패널 ────────────────────────────────────
   const RightPanel = (
     <View style={[
       S.rightPanel,
       isDesktop && S.rightPanelDesktop,
       isTablet && S.rightPanelTablet,
     ]}>
-      <Text style={S.placeholderText}>{'[우측 상세 패널 — Phase 4]'}</Text>
-      <Text style={S.placeholderSub}>{selectedRoom?.name ?? '(선택 없음)'}</Text>
+      <View style={S.rightTabs}>
+        <Pressable
+          onPress={() => setRightTab('info')}
+          style={({ pressed }) => [
+            S.rightTab,
+            rightTab === 'info' && S.rightTabActive,
+            pressed && S.rightTabPressed,
+          ]}
+        >
+          <Text style={[S.rightTabText, rightTab === 'info' && S.rightTabTextActive]}>
+            {'방 정보'}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setRightTab('create')}
+          style={({ pressed }) => [
+            S.rightTab,
+            rightTab === 'create' && S.rightTabActive,
+            pressed && S.rightTabPressed,
+          ]}
+        >
+          <Text style={[S.rightTabText, rightTab === 'create' && S.rightTabTextActive]}>
+            {'＋ 방 만들기'}
+          </Text>
+        </Pressable>
+      </View>
+
+      {rightTab === 'info' ? (
+        <RoomInfoTab
+          room={selectedRoom}
+          onEnter={() => selectedRoom && handleEnterRoom(selectedRoom)}
+        />
+      ) : (
+        <RoomCreateTab onSubmit={handleCreateRoom} />
+      )}
     </View>
   );
 
@@ -464,6 +514,350 @@ function RoomCard({
           {enterBtn}
         </>
       )}
+    </Pressable>
+  );
+}
+
+// ────────────────────────────────────────────────────────
+// RoomInfoTab — 우측 패널의 "방 정보" 탭
+// ────────────────────────────────────────────────────────
+function RoomInfoTab({ room, onEnter }: { room: FullRoom | null; onEnter: () => void }) {
+  if (!room) {
+    return (
+      <View style={S.rightBody}>
+        <View style={S.emptyState}>
+          <Text style={S.emptyText}>{'방을 선택해 주세요'}</Text>
+          <Text style={S.emptySub}>{'좌측 목록에서 방을 클릭하면\n상세 정보가 표시됩니다.'}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const filled = room.players.filter(Boolean).length;
+  const team1Slots: (typeof room.players[number])[] = [
+    room.players[0] ?? null,
+    room.players[2] ?? null,
+  ];
+  const team2Slots: (typeof room.players[number])[] = [
+    room.players[1] ?? null,
+    room.players[3] ?? null,
+  ];
+
+  return (
+    <ScrollView
+      style={S.rightBody}
+      contentContainerStyle={S.rightBodyContent}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Preview head */}
+      <View style={S.previewHead}>
+        <View style={S.previewAvatar}>
+          <LinearGradient
+            colors={[COLORS.cmGold, COLORS.cmGoldDeep]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <Text style={S.previewAvatarChar}>{room.host.avatarChar}</Text>
+          <View style={S.avatarLvl}>
+            <Text style={S.avatarLvlText}>{room.host.level}</Text>
+          </View>
+        </View>
+        <View style={S.previewMeta}>
+          <Text style={S.previewName} numberOfLines={2}>{room.name}</Text>
+          <Text style={S.previewHost}>
+            {`방장 · ${room.host.name} · ⭐ ${room.host.rating.toLocaleString()}`}
+          </Text>
+        </View>
+      </View>
+
+      {/* Info grid 2x2 */}
+      <View style={S.infoGrid}>
+        <InfoCell label={'Mode'} value={room.mode === 'ranked' ? '랭크' : '일반전'} />
+        <InfoCell
+          label={'Score'}
+          value={`${room.scoreLimit.toLocaleString()} 점`}
+          gold
+        />
+        <InfoCell
+          label={'Turn Timer'}
+          value={room.turnTimer ? `${room.turnTimer} 초` : '무제한'}
+        />
+        <InfoCell
+          label={'Spectators'}
+          value={
+            room.allowSpectators
+              ? room.spectatorCount > 0
+                ? `허용 · ${room.spectatorCount}명 관전중`
+                : '허용'
+              : '비허용'
+          }
+        />
+      </View>
+
+      {/* Players section */}
+      <View>
+        <View style={S.playersTitle}>
+          <Text style={S.playersTitleText}>{'플레이어'}</Text>
+          <Text style={S.playersTitleText}>{`${filled} / 4`}</Text>
+        </View>
+        <View style={S.teams}>
+          <TeamBox label={'▲ 팀 1'} variant={'t1'} slots={team1Slots} />
+          <TeamBox label={'▼ 팀 2'} variant={'t2'} slots={team2Slots} />
+        </View>
+      </View>
+
+      {/* Enter button */}
+      <Pressable
+        onPress={onEnter}
+        style={({ pressed }) => [
+          S.enterBtnWrap,
+          pressed && S.enterBtnWrapPressed,
+        ]}
+      >
+        <LinearGradient
+          colors={[COLORS.cmGold, COLORS.cmGoldSoft]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={S.enterBtn}
+        >
+          <Text style={S.enterBtnText}>{filled >= 4 ? '관 전 하 기' : '입 장 하 기'}</Text>
+        </LinearGradient>
+      </Pressable>
+
+      <Text style={S.footnote}>{`평균 핑 ${room.ping}ms · 한국 서버`}</Text>
+    </ScrollView>
+  );
+}
+
+function InfoCell({ label, value, gold }: { label: string; value: string; gold?: boolean }) {
+  return (
+    <View style={S.infoCell}>
+      <Text style={S.infoCellLabel}>{label}</Text>
+      <Text style={[S.infoCellValue, gold && S.infoCellValueGold]} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function TeamBox({
+  label, variant, slots,
+}: {
+  label: string;
+  variant: 't1' | 't2';
+  slots: (FullRoom['players'][number] | null)[];
+}) {
+  return (
+    <View style={S.team}>
+      <Text style={[S.teamLabel, variant === 't1' ? S.teamLabelT1 : S.teamLabelT2]}>
+        {label}
+      </Text>
+      <View style={S.teamSlots}>
+        {slots.map((p, i) => (
+          <View
+            key={i}
+            style={[
+              S.playerSlot,
+              p ? S.playerSlotFilled : S.playerSlotEmpty,
+            ]}
+          >
+            {p ? (
+              <>
+                <View style={S.miniAvatar}>
+                  <LinearGradient
+                    colors={[COLORS.cmGold, COLORS.cmGoldDeep]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+                  <Text style={S.miniAvatarChar}>{p.avatarChar}</Text>
+                </View>
+                <Text style={S.playerSlotName} numberOfLines={1}>{p.name}</Text>
+              </>
+            ) : (
+              <Text style={S.playerSlotEmptyText}>{'＋ 빈자리'}</Text>
+            )}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// ────────────────────────────────────────────────────────
+// RoomCreateTab — "방 만들기" 탭
+// ────────────────────────────────────────────────────────
+export interface CreateRoomForm {
+  name: string;
+  password: string;
+  mode: FullRoomMode;
+  scoreLimit: 500 | 1000 | 1500;
+  turnTimer: number | null;
+  allowSpectators: boolean;
+  aiFill: boolean;
+}
+
+function RoomCreateTab({ onSubmit }: { onSubmit: (form: CreateRoomForm) => void }) {
+  const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  const [mode, setMode] = useState<FullRoomMode>('normal');
+  const [scoreLimit, setScoreLimit] = useState<CreateRoomForm['scoreLimit']>(1000);
+  const [turnTimer, setTurnTimer] = useState<number | null>(20);
+  const [allowSpectators, setAllowSpectators] = useState(true);
+  const [aiFill, setAiFill] = useState(false);
+
+  const canSubmit = name.trim().length > 0;
+
+  function submit() {
+    if (!canSubmit) return;
+    onSubmit({ name, password, mode, scoreLimit, turnTimer, allowSpectators, aiFill });
+  }
+
+  return (
+    <ScrollView
+      style={S.rightBody}
+      contentContainerStyle={S.rightBodyContent}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* 방 이름 */}
+      <View style={S.formGroup}>
+        <Text style={S.formLabel}>{'방 이름'}</Text>
+        <TextInput
+          value={name}
+          onChangeText={setName}
+          placeholder={'예: 초보 환영, 즐겜만!'}
+          placeholderTextColor={COLORS.cmInkMute}
+          style={S.formInput}
+          maxLength={30}
+        />
+      </View>
+
+      {/* 모드 */}
+      <View style={S.formGroup}>
+        <Text style={S.formLabel}>{'모드'}</Text>
+        <View style={S.formChipRow}>
+          <FormChip label={'일반전'} active={mode === 'normal'} onPress={() => setMode('normal')} />
+          <FormChip label={'랭크'} active={mode === 'ranked'} onPress={() => setMode('ranked')} />
+        </View>
+      </View>
+
+      {/* 점수 한도 */}
+      <View style={S.formGroup}>
+        <Text style={S.formLabel}>{'점수 한도'}</Text>
+        <View style={S.formChipRow}>
+          <FormChip label={'500'} active={scoreLimit === 500} onPress={() => setScoreLimit(500)} />
+          <FormChip label={'1000'} active={scoreLimit === 1000} onPress={() => setScoreLimit(1000)} />
+          <FormChip label={'1500'} active={scoreLimit === 1500} onPress={() => setScoreLimit(1500)} />
+        </View>
+      </View>
+
+      {/* 턴 타이머 */}
+      <View style={S.formGroup}>
+        <Text style={S.formLabel}>{'턴 타이머'}</Text>
+        <View style={S.formChipRow}>
+          <FormChip label={'15s'} active={turnTimer === 15} onPress={() => setTurnTimer(15)} />
+          <FormChip label={'20s'} active={turnTimer === 20} onPress={() => setTurnTimer(20)} />
+          <FormChip label={'30s'} active={turnTimer === 30} onPress={() => setTurnTimer(30)} />
+          <FormChip label={'무제한'} active={turnTimer === null} onPress={() => setTurnTimer(null)} />
+        </View>
+      </View>
+
+      {/* 토글들 */}
+      <View style={S.formGroup}>
+        <ToggleRow
+          label={'관전 허용'}
+          value={allowSpectators}
+          onChange={setAllowSpectators}
+        />
+        <ToggleRow
+          label={'AI로 빈자리 채움'}
+          value={aiFill}
+          onChange={setAiFill}
+        />
+      </View>
+
+      {/* 비밀번호 */}
+      <View style={S.formGroup}>
+        <Text style={S.formLabel}>{'비밀번호 (선택)'}</Text>
+        <TextInput
+          value={password}
+          onChangeText={setPassword}
+          placeholder={'비워두면 공개방'}
+          placeholderTextColor={COLORS.cmInkMute}
+          style={S.formInput}
+          secureTextEntry
+          maxLength={20}
+        />
+      </View>
+
+      {/* 제출 버튼 */}
+      <Pressable
+        onPress={submit}
+        disabled={!canSubmit}
+        style={({ pressed }) => [
+          S.enterBtnWrap,
+          pressed && canSubmit && S.enterBtnWrapPressed,
+          !canSubmit && S.enterBtnWrapDisabled,
+        ]}
+      >
+        <LinearGradient
+          colors={canSubmit ? [COLORS.cmGold, COLORS.cmGoldSoft] : ['#555', '#333']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={S.enterBtn}
+        >
+          <Text style={[S.enterBtnText, !canSubmit && S.enterBtnTextDisabled]}>
+            {'방  만  들  기'}
+          </Text>
+        </LinearGradient>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+function FormChip({
+  label, active, onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        S.formChip,
+        active && S.formChipActive,
+        pressed && S.chipPressed,
+      ]}
+    >
+      <Text style={[S.formChipText, active && S.formChipTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function ToggleRow({
+  label, value, onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <Pressable
+      onPress={() => onChange(!value)}
+      style={({ pressed }) => [
+        S.toggleRow,
+        pressed && S.chipPressed,
+      ]}
+    >
+      <Text style={S.toggleLabel}>{label}</Text>
+      <View style={[S.toggleBox, value && S.toggleBoxOn]}>
+        <Text style={[S.toggleBoxText, value && S.toggleBoxTextOn]}>
+          {value ? 'ON' : 'OFF'}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -1034,26 +1428,347 @@ const S = StyleSheet.create({
     gap: 12,
   },
 
-  // ─── Right (placeholder) ─────
+  // ─── Right ─────
   rightPanel: {
     backgroundColor: 'rgba(14,46,26,0.85)',
     borderWidth: 1,
     borderColor: COLORS.cmLine,
     borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
+    overflow: 'hidden',
   },
   rightPanelDesktop: { width: 420 },
   rightPanelTablet: { width: 360 },
 
-  placeholderText: {
-    color: COLORS.cmInkDim,
-    fontSize: 14,
+  rightTabs: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.cmLine,
+  },
+  rightTab: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+    minHeight: 44,
+  },
+  rightTabActive: {
+    borderBottomColor: COLORS.cmGold,
+    backgroundColor: 'rgba(255,210,74,0.05)',
+  },
+  rightTabPressed: {
+    opacity: 0.7,
+  },
+  rightTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.cmInkMute,
+    letterSpacing: 0.5,
+  },
+  rightTabTextActive: {
+    color: COLORS.cmGold,
+  },
+
+  rightBody: {
+    flex: 1,
+  },
+  rightBodyContent: {
+    padding: 24,
+    gap: 20,
+  },
+
+  // ─── RoomInfoTab ─────
+  previewHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingBottom: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.cmLine,
+  },
+  previewAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: COLORS.cmLineStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'visible',
+  },
+  previewAvatarChar: {
+    fontFamily: SERIF,
+    fontWeight: '700',
+    color: COLORS.cmBg0,
+    fontSize: 22,
+  },
+  previewMeta: {
+    flex: 1,
+    minWidth: 0,
+  },
+  previewName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.cmInk,
+  },
+  previewHost: {
+    fontSize: 12,
+    color: COLORS.cmInkMute,
+    marginTop: 3,
+  },
+
+  infoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  infoCell: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    padding: 12,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderWidth: 1,
+    borderColor: COLORS.cmLine,
+    borderRadius: 8,
+  },
+  infoCellLabel: {
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: COLORS.cmInkMute,
+    fontWeight: '700',
+    fontFamily: SERIF,
     marginBottom: 6,
   },
-  placeholderSub: {
+  infoCellValue: {
+    fontSize: 15,
+    color: COLORS.cmInk,
+    fontWeight: '600',
+  },
+  infoCellValueGold: {
+    color: COLORS.cmGold,
+  },
+
+  playersTitle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  playersTitleText: {
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
     color: COLORS.cmInkMute,
+    fontWeight: '700',
+    fontFamily: SERIF,
+  },
+
+  teams: {
+    flexDirection: 'column',
+    gap: 14,
+  },
+  team: {
+    padding: 14,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderWidth: 1,
+    borderColor: COLORS.cmLine,
+  },
+  teamLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+  },
+  teamLabelT1: { color: COLORS.cmDangerSoft },
+  teamLabelT2: { color: COLORS.cmNormalSoft },
+
+  teamSlots: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  playerSlot: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    minHeight: 40,
+  },
+  playerSlotFilled: {
+    borderWidth: 1,
+    borderColor: COLORS.cmLineStrong,
+    backgroundColor: 'rgba(255,210,74,0.05)',
+  },
+  playerSlotEmpty: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: COLORS.cmLine,
+    justifyContent: 'center',
+  },
+  playerSlotName: {
+    flex: 1,
     fontSize: 12,
+    color: COLORS.cmInk,
+  },
+  playerSlotEmptyText: {
+    fontSize: 12,
+    color: COLORS.cmInkMute,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+
+  miniAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  miniAvatarChar: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.cmBg0,
+    fontFamily: SERIF,
+  },
+
+  enterBtnWrap: {
+    marginTop: 8,
+    borderRadius: 10,
+    overflow: 'hidden',
+    shadowColor: COLORS.cmGold,
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  enterBtnWrapPressed: {
+    opacity: 0.9,
+    transform: [{ translateY: -1 }],
+  },
+  enterBtnWrapDisabled: {
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  enterBtn: {
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 56,
+  },
+  enterBtnText: {
+    color: COLORS.cmBg0,
+    fontWeight: '900',
+    fontSize: 16,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  enterBtnTextDisabled: {
+    color: '#999',
+  },
+
+  footnote: {
+    textAlign: 'center',
+    fontSize: 11,
+    color: COLORS.cmInkMute,
+    paddingTop: 8,
+  },
+
+  // ─── RoomCreateTab ─────
+  formGroup: {
+    gap: 10,
+  },
+  formLabel: {
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: COLORS.cmInkMute,
+    fontWeight: '700',
+    fontFamily: SERIF,
+  },
+  formInput: {
+    color: COLORS.cmInk,
+    fontSize: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderWidth: 1,
+    borderColor: COLORS.cmLine,
+    borderRadius: 8,
+    minHeight: 44,
+  },
+  formChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  formChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.cmLine,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  formChipActive: {
+    borderColor: COLORS.cmGold,
+    backgroundColor: 'rgba(255,210,74,0.12)',
+  },
+  formChipText: {
+    color: COLORS.cmInkDim,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  formChipTextActive: {
+    color: COLORS.cmGold,
+  },
+
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderWidth: 1,
+    borderColor: COLORS.cmLine,
+    borderRadius: 8,
+    minHeight: 44,
+    marginBottom: 8,
+  },
+  toggleLabel: {
+    color: COLORS.cmInk,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  toggleBox: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.cmLine,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  toggleBoxOn: {
+    borderColor: COLORS.cmGold,
+    backgroundColor: 'rgba(255,210,74,0.15)',
+  },
+  toggleBoxText: {
+    color: COLORS.cmInkMute,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  toggleBoxTextOn: {
+    color: COLORS.cmGold,
   },
 });
