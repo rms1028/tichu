@@ -356,7 +356,7 @@ export function ProfilePage({ onBack, onEdit, onStartGame, onAchievements, showN
         <View style={$.modalOvl}>
           <View style={$.modalBox}>
             <Text style={$.modalTitle}>{'✏️ 닉네임 변경'}</Text>
-            <TextInput style={$.modalInput} value={nick} onChangeText={setNick} placeholder="닉네임 입력" placeholderTextColor="rgba(255,255,255,0.3)" maxLength={12} />
+            <TextInput style={$.modalInput} value={nick} onChangeText={setNick} placeholder="닉네임 입력" placeholderTextColor="rgba(255,255,255,0.3)" maxLength={12} disableFullscreenUI />
             <TouchableOpacity style={[$.ctaBtn, !nick.trim() && { opacity: 0.4 }]} onPress={onSaveNick} disabled={!nick.trim()}><Text style={$.ctaBtnText}>{'확인'}</Text></TouchableOpacity>
           </View>
         </View>

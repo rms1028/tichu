@@ -3,7 +3,7 @@
     "name": "Tichu",
     "slug": "tichu",
     "version": "1.0.0",
-    "orientation": "landscape",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "scheme": "tichu",
     "userInterfaceStyle": "dark",

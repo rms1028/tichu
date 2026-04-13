@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Pressable } from 'react-native';
-import { isMobile } from '../utils/responsive';
+import { isMobile, useResponsive } from '../utils/responsive';
 import Animated, {
   FadeIn, ZoomIn, SlideInRight, SlideOutRight,
   useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing,
@@ -75,6 +75,10 @@ function FloatingSymbol({ symbol, x, delay }: { symbol: string; x: number; delay
 }
 
 export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRooms, onGetLeaderboard, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite, onBuyShopItem, onEquipShopItem, onChangeNickname, onGetGameHistory, onClaimAttendance, onDeleteAccount }: LobbyScreenProps) {
+  const { isLandscape, isShort, height: winHeight } = useResponsive();
+  // landscape phone 처럼 세로 공간이 부족할 때 로고/카드 축소.
+  // winHeight < 600 = landscape phone or very small screen.
+  const compact = isLandscape || isShort || winHeight < 600;
   const savedNickname = useUserStore((s) => s.nickname);
   const savedPlayerId = useUserStore((s) => s.playerId);
   const userSetNickname = useUserStore((s) => s.setNickname);
@@ -262,37 +266,41 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           </TouchableOpacity>
         </View>
       </Animated.View>
-      {/* 중앙 */}
-      <View style={S.center}>
-        <Animated.View entering={FadeIn.delay(200).duration(500)} style={S.logoArea}>
-          <Animated.Text style={[S.title, logoGlowStyle]}>TICHU</Animated.Text>
-          <Text style={S.subtitle}>Ultimate Card Battle</Text>
+      {/* 중앙 — ScrollView 로 감싸서 landscape / small screen 잘림 방지 */}
+      <ScrollView
+        style={{ flex: 1, zIndex: 5 }}
+        contentContainerStyle={[S.center, compact && S.centerCompact]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View entering={FadeIn.delay(200).duration(500)} style={[S.logoArea, compact && S.logoAreaCompact]}>
+          <Animated.Text style={[S.title, compact && S.titleCompact, logoGlowStyle]}>TICHU</Animated.Text>
+          {!compact && <Text style={S.subtitle}>Ultimate Card Battle</Text>}
           <View style={S.divider} />
         </Animated.View>
         {!matching ? (
           <Animated.View entering={FadeIn.delay(400).duration(500)} style={S.cardsWrap}>
             <View style={S.cards}>
-              <TouchableOpacity style={[S.card, S.cardG, !connected && { opacity: 0.4 }]} activeOpacity={0.85} onPress={() => setMatching(true)} disabled={!connected}>
+              <TouchableOpacity style={[S.card, compact && S.cardCompact, S.cardG, !connected && { opacity: 0.4 }]} activeOpacity={0.85} onPress={() => setMatching(true)} disabled={!connected}>
                 <View style={S.cardGlow} pointerEvents="none" />
-                <Text style={S.cIcon}>{'\u26A1'}</Text>
+                <Text style={[S.cIcon, compact && S.cIconCompact]}>{'\u26A1'}</Text>
                 <Text style={S.cTitle}>{'\uBE60\uB978 \uB9E4\uCE6D'}</Text>
-                <Text style={S.cSub}>{'\uBE44\uC2B7\uD55C \uC2E4\uB825\uC758 \uC720\uC800\uC640'}{'\n'}{'\uC989\uC2DC \uD50C\uB808\uC774'}</Text>
+                {!compact && <Text style={S.cSub}>{'\uBE44\uC2B7\uD55C \uC2E4\uB825\uC758 \uC720\uC800\uC640'}{'\n'}{'\uC989\uC2DC \uD50C\uB808\uC774'}</Text>}
                 <View style={S.playBtn}><Text style={S.playBtnText}>{'\u25B6  \uD50C\uB808\uC774'}</Text></View>
               </TouchableOpacity>
-              <TouchableOpacity style={[S.card, S.cardD]} activeOpacity={0.85} onPress={() => { setPage('customMatch'); }}>
-                <Text style={S.cIcon}>{'\uD83D\uDD12'}</Text>
+              <TouchableOpacity style={[S.card, compact && S.cardCompact, S.cardD]} activeOpacity={0.85} onPress={() => { setPage('customMatch'); }}>
+                <Text style={[S.cIcon, compact && S.cIconCompact]}>{'\uD83D\uDD12'}</Text>
                 <Text style={S.cTitle}>{'\uCEE4\uC2A4\uD140 \uBAA8\uB4DC'}</Text>
-                <Text style={S.cSub}>{'\uBC29 \uB9CC\uB4E4\uAE30 \uBC0F'}{'\n'}{'\uCF54\uB4DC\uB85C \uC785\uC7A5'}</Text>
+                {!compact && <Text style={S.cSub}>{'\uBC29 \uB9CC\uB4E4\uAE30 \uBC0F'}{'\n'}{'\uCF54\uB4DC\uB85C \uC785\uC7A5'}</Text>}
                 <View style={S.playBtnOutline}><Text style={S.playBtnOutlineText}>{'\u25B6  \uD50C\uB808\uC774'}</Text></View>
               </TouchableOpacity>
             </View>
             <Animated.View entering={FadeIn.delay(600).duration(500)}>
-              <TouchableOpacity style={S.rulesBtn} activeOpacity={0.8} onPress={() => setPage('rules')}>
+              <TouchableOpacity style={[S.rulesBtn, compact && S.rulesBtnCompact]} activeOpacity={0.8} onPress={() => setPage('rules')}>
                 <View style={S.rulesBtnInner}>
                   <Text style={S.rulesBtnIcon}>{'\uD83D\uDCD6'}</Text>
                   <View style={S.rulesBtnTextWrap}>
                     <Text style={S.rulesBtnTitle}>{'\uAC8C\uC784 \uADDC\uCE59'}</Text>
-                    <Text style={S.rulesBtnDesc}>{'\uD2F0\uCE04\uAC00 \uCC98\uC74C\uC774\uB77C\uBA74 \uC5EC\uAE30\uC11C \uBC30\uC6CC\uBCF4\uC138\uC694!'}</Text>
+                    {!compact && <Text style={S.rulesBtnDesc}>{'\uD2F0\uCE04\uAC00 \uCC98\uC74C\uC774\uB77C\uBA74 \uC5EC\uAE30\uC11C \uBC30\uC6CC\uBCF4\uC138\uC694!'}</Text>}
                   </View>
                   <Text style={S.rulesBtnArrow}>{'>'}</Text>
                 </View>
@@ -307,7 +315,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
             <TouchableOpacity style={S.matchCancel} onPress={() => setMatching(false)}><Text style={S.matchCancelT}>{'\uB9E4\uCE6D \uCDE8\uC18C'}</Text></TouchableOpacity>
           </Animated.View>
         )}
-      </View>
+      </ScrollView>
       {/* 하단 탭 */}
       <Animated.View entering={FadeIn.delay(800).duration(500)} style={S.nav}>
         {[{ i: '\uD83C\uDFE0', l: '\uD648', idx: 0 }, { i: '\uD83C\uDFC6', l: '\uB7AD\uD0B9', idx: 1 }, { i: '\u2699\uFE0F', l: '\uC124\uC815', idx: 2 }].map(t => (
@@ -340,6 +348,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                   placeholder={'친구 코드 입력'}
                   placeholderTextColor="rgba(255,255,255,0.3)"
                   maxLength={6}
+                  disableFullscreenUI
                 />
                 <TouchableOpacity
                   style={[S.fpAddBtn, { marginBottom: 0, paddingHorizontal: 12, paddingVertical: 6 }]}
@@ -449,7 +458,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
         <View style={[S.mOvl, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }]}>
           <View style={S.mBox}>
             <Text style={S.mTitle}>{'✏️ 닉네임 변경'}</Text>
-            <TextInput style={S.mInput} value={nick} onChangeText={setNick} placeholder={'닉네임 입력'} placeholderTextColor="rgba(255,255,255,0.3)" maxLength={12} />
+            <TextInput style={S.mInput} value={nick} onChangeText={setNick} placeholder={'닉네임 입력'} placeholderTextColor="rgba(255,255,255,0.3)" maxLength={12} disableFullscreenUI />
             <TouchableOpacity style={[S.mOk, !nick.trim() && { opacity: 0.4 }]} onPress={() => { if (nick.trim()) { userSetNickname(nick.trim()); onChangeNickname?.(nick.trim()); setShowNickEdit(false); } }} disabled={!nick.trim()}><Text style={S.mOkT}>{'확인'}</Text></TouchableOpacity>
           </View>
         </View>
@@ -477,10 +486,14 @@ const S = StyleSheet.create({
   badge: { position: 'absolute', top: -3, right: -3, backgroundColor: '#ef4444', borderRadius: 9, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: COLORS.bg },
   badgeText: { color: '#fff', fontSize: 9, fontWeight: '900' },
 
-  // 중앙
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', zIndex: 5, paddingHorizontal: 20 },
+  // 중앙 — ScrollView contentContainerStyle
+  center: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16 },
+  // compact (landscape phone / short screen): 위 정렬 + 여백 축소
+  centerCompact: { justifyContent: 'flex-start', paddingVertical: 8 },
   logoArea: { alignItems: 'center', marginBottom: 16 },
+  logoAreaCompact: { marginBottom: 8 },
   title: { color: '#FFD700', fontSize: 48, fontWeight: '900', letterSpacing: 10, textShadowColor: 'rgba(255,215,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 12, marginBottom: 2 },
+  titleCompact: { fontSize: 28, letterSpacing: 6, marginBottom: 0 },
   subtitle: { color: 'rgba(255,255,255,0.3)', fontSize: 12, fontWeight: '600', letterSpacing: 4, marginBottom: 8 },
   divider: { width: 50, height: 2, backgroundColor: 'rgba(255,215,0,0.3)', borderRadius: 1 },
 
@@ -488,6 +501,9 @@ const S = StyleSheet.create({
   cardsWrap: { alignItems: 'stretch' },
   cards: { flexDirection: 'row', gap: 16 },
   card: { width: 160, height: 240, borderRadius: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.6, shadowRadius: 28, elevation: 16, overflow: 'hidden' },
+  cardCompact: { width: 140, height: 140, paddingHorizontal: 10, paddingVertical: 10 },
+  cIconCompact: { fontSize: 28, marginBottom: 4 },
+  rulesBtnCompact: { marginTop: 8, paddingVertical: 10 },
   cardG: { backgroundColor: '#0d6b3f' },
   cardD: { backgroundColor: '#14332a' },
   cardGlow: { position: 'absolute', top: -20, left: -20, right: -20, bottom: -20, borderRadius: 30, backgroundColor: 'rgba(245,158,11,0.04)', shadowColor: '#F59E0B', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 30, elevation: 2 },

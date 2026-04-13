@@ -341,6 +341,7 @@ export function CustomMatchScreen({
           placeholder={'방 이름 검색'}
           placeholderTextColor={COLORS.cmInkMute}
           style={S.searchInput}
+          disableFullscreenUI
         />
       </View>
       <ScrollView
@@ -743,6 +744,7 @@ function CreateRoomModal({
           style={[S.formInput, !nameValid && S.formInputError]}
           maxLength={20}
           autoFocus={!isMobile}
+          disableFullscreenUI
         />
         <Text style={S.formHint}>{`${trimmedName.length}/20`}</Text>
       </View>
@@ -780,6 +782,7 @@ function CreateRoomModal({
           style={[S.formInput, !pwValid && S.formInputError]}
           secureTextEntry
           maxLength={20}
+          disableFullscreenUI
         />
         {!pwValid && <Text style={S.formError}>{'비밀번호는 4~20자여야 합니다.'}</Text>}
       </View>
@@ -925,6 +928,7 @@ function PasswordModal({
             onSubmitEditing={onSubmit}
             returnKeyType="done"
             maxLength={20}
+            disableFullscreenUI
           />
           {!!error && <Text style={S.formError}>{error}</Text>}
           <View style={S.pwBtnRow}>

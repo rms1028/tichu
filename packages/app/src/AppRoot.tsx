@@ -12,6 +12,13 @@ import {
 } from './utils/sentry';
 initSentry();
 
+// Orientation handling: app.json has "orientation": "default" set so the
+// next native rebuild will unlock rotation at the manifest level. We do
+// NOT import expo-screen-orientation at runtime here — it would require
+// a new native build (the android-dev swap-only workflow does not ship
+// new native libs), and attempting to use it against a stale base APK
+// crashes with "Cannot find native module 'ExpoScreenOrientation'".
+
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, LogBox, Platform } from 'react-native';
 import { useGameStore } from './stores/gameStore';
