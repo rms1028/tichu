@@ -582,9 +582,12 @@ export function registerSocketHandlers(io: Server): void {
         room.settings.targetScore = data.scoreLimit;
       }
       if (data.turnTimer !== undefined) {
-        // null = 무제한 (사실상 매우 큰 수). 0/null 은 게임 엔진에서 무한으로 처리되지 않으므로 큰 값 사용.
+        // null = 무제한. 큰 수를 쓰면 setTimeout 32-bit 한계(2,147,483,647ms ≈ 24.85일)
+        // 를 넘겨서 setTimeout 이 즉시 발화한다 — 이게 이전에 게임이 자동으로
+        // 광속 진행되던 버그의 원인. 0 을 sentinel 로 쓰고 startTurnTimer 에서
+        // 0 일 때 setTimeout 자체를 건너뛴다.
         room.settings.turnTimeLimit = data.turnTimer === null
-          ? 365 * 24 * 60 * 60 * 1000  // 1 year — 사실상 무제한
+          ? 0
           : data.turnTimer * 1000;
       }
       if (data.allowSpectators !== undefined) {
@@ -2134,6 +2137,9 @@ function startExchangeTimer(io: Server, room: GameRoom): void {
   scheduleBotExchange(io, room);
 }
 
+// setTimeout 의 32-bit signed int 한계. 이걸 넘기면 setTimeout 이 즉시 발화한다.
+const MAX_SAFE_TIMEOUT_MS = 2_147_483_647;
+
 function startTurnTimer(io: Server, room: GameRoom): void {
   if (room.phase !== 'TRICK_PLAY') return;
   if (room.bombWindow) return;
@@ -2144,18 +2150,25 @@ function startTurnTimer(io: Server, room: GameRoom): void {
   room.turnTimer.pausedRemainingMs = undefined;
 
   const currentTurnId = room.turnTimer.turnId;
+  const limit = room.settings.turnTimeLimit;
 
-  room.turnTimer.timeoutHandle = setTimeout(() => {
-    if (room.turnTimer.turnId !== currentTurnId) return; // stale
+  // 무제한(0) 또는 setTimeout 한계 초과 → 자동 타임아웃 비활성.
+  // 봇은 별도 scheduleBotAction 에서 처리되므로 영향 없음.
+  if (limit > 0 && limit <= MAX_SAFE_TIMEOUT_MS) {
+    room.turnTimer.timeoutHandle = setTimeout(() => {
+      if (room.turnTimer.turnId !== currentTurnId) return; // stale
 
-    const result = handleTurnTimeout(room);
-    if (result.ok) {
-      broadcastEvents(io, room, result.events);
-      handlePostPlay(io, room);
-    }
-  }, room.settings.turnTimeLimit);
+      const result = handleTurnTimeout(room);
+      if (result.ok) {
+        broadcastEvents(io, room, result.events);
+        handlePostPlay(io, room);
+      }
+    }, limit);
+  } else {
+    room.turnTimer.timeoutHandle = null;
+  }
 
-  // 봇 자동 플레이
+  // 봇 자동 플레이 (타이머 무관)
   const currentSeat = room.currentTurn;
   const player = room.players[currentSeat];
   if (player?.isBot) {
