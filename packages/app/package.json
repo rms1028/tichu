@@ -6,6 +6,7 @@
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
+    "android:dev": "node scripts/android-dev.mjs",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "build": "npx expo export --platform web"
