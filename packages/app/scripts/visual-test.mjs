@@ -101,18 +101,42 @@ function getDevice() {
 const DEVICE_ID = getDevice();
 ok(`Device: ${DEVICE_ID}`);
 
-function launchApp() {
+function launchApp({ resetData = false } = {}) {
   adb(`logcat -c`, { silent: true });
   adb(`shell input keyevent KEYCODE_WAKEUP`, { silent: true });
+  // Samsung lockscreen: WAKEUP 만으로는 해제 안 됨. 위로 스와이프 필수.
+  // 이미 unlock 상태면 swipe 는 무해 (홈 화면 제스처 무시).
+  adb(`shell input swipe 540 1800 540 400 200`, { silent: true, allowFail: true });
   // Force-stop ensures a clean cold start, so screenshots capture the same
-  // state every run regardless of whether the app was already foregrounded
+  // state every run regardless of whether the app was already foregrounded.
+  // Also force-stop any app that tends to steal foreground on this dev phone —
+  // injected taps go to the focused window, so a stray app eats the scenario.
+  adb(`shell am force-stop com.openai.chatgpt`, { silent: true, allowFail: true });
   adb(`shell am force-stop com.tichu.app`, { silent: true });
+  if (resetData) {
+    // `pm clear` wipes MMKV + app files so the 03-lobby / 04-custom-match
+    // scenarios always start from a fresh login screen. Without this, a saved
+    // nickname routes straight to lobby and the login-step taps hit garbage,
+    // corrupting the baseline (learned 2026-04-14 during fix/lobby).
+    adb(`shell pm clear com.tichu.app`, { silent: true, allowFail: true });
+  }
   adb(`shell am start -n com.tichu.app/.MainActivity`, { silent: true });
 }
 
 function captureScreenshot(outPath) {
-  adb(`shell screencap -p /sdcard/visual.png`, { silent: true });
-  adb(`pull /sdcard/visual.png "${outPath}"`, { silent: true });
+  // `shell screencap -p <file>` 는 일부 Samsung One UI 빌드에서 -p 가
+  // stdout-pipe 플래그로 잘못 해석돼 usage 에러가 난다 (2026-04-14 확인).
+  // `exec-out` 로 PNG 를 바이너리 stdout 으로 뽑아 파일에 직접 쓰면 우회됨.
+  // spawnSync 는 shell:false + 인자 배열로 불러야 Windows 에서 안전하게 바이너리 stdout 이 잡힌다.
+  const res = spawnSync(ADB, ['-s', DEVICE_ID, 'exec-out', 'screencap', '-p'], {
+    shell: false,
+    encoding: 'buffer',
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  if (res.status !== 0 || !res.stdout || res.stdout.length === 0) {
+    die(`screencap failed (status=${res.status}): ${res.stderr?.toString() || '(no stderr)'}`);
+  }
+  writeFileSync(outPath, res.stdout);
 }
 
 function tap(x, y) {
@@ -226,7 +250,7 @@ async function runScenario(scenario) {
   log(`Scenario: ${scenario.name}`);
 
   if (scenario.relaunch !== false) {
-    launchApp();
+    launchApp({ resetData: scenario.resetData === true });
   }
 
   for (const step of scenario.steps || []) {
@@ -297,16 +321,19 @@ const FILTER = filterIdx >= 0 ? args[filterIdx + 1] : null;
 const SCENARIOS = [
   {
     name: '01-splash',
+    resetData: true,    // 매 실행 cold start 해야 splash → login 전환이 재현 가능
     settle: 1000,
     steps: [{ wait: 1500 }],
   },
   {
     name: '02-login',
+    resetData: true,    // pm clear → saved nickname 날려서 항상 login 부터 시작
     settle: 500,
     steps: [{ wait: 5000 }], // wait for splash → login transition
   },
   {
     name: '03-lobby',
+    resetData: true,
     settle: 1500,
     // Login screen → type nickname → tap guest start → arrive at lobby →
     // dismiss attendance popup ("보상 받기") so the baseline captures the
@@ -338,6 +365,7 @@ const SCENARIOS = [
     // 2026-04-13 의 <Modal> touch-lockout 버그 (commit 05fabec / 05cd04a)
     // 재발 시 이 시나리오가 제일 먼저 빨간불을 켜게 된다.
     name: '04-custom-match',
+    resetData: true,
     settle: 1500,
     steps: [
       { wait: 5000 },
@@ -351,8 +379,9 @@ const SCENARIOS = [
       { wait: 6000 },
       { tap: [1170, 788] },         // 출석 팝업 "보상 받기"
       { wait: 1000 },
-      // 커스텀 모드 card (right card). 빠른 매칭 (left) 은 socket 연결
-      // 없을 때 disabled 이므로 커스텀 모드 쪽을 탭해야 시나리오가 확정적.
+      // 커스텀 모드 card (right card). 2026-04-14 commit 60019c3 이후 빠른
+      // 매칭도 disabled 아니지만, 커스텀 쪽이 socket 없이도 페이지 이동이
+      // 확실해서 시나리오 안정성을 위해 유지.
       { tap: [1200, 540] },
       { wait: 2500 },               // setPage('customMatch') + 화면 mount
     ],
