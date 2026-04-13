@@ -1,0 +1,34 @@
+#!/bin/sh
+#
+# pre-commit — block commits that introduce known crash patterns.
+#
+# Activated by:  git config core.hooksPath .githooks
+# (run scripts/install-git-hooks.sh once after cloning, or do it manually)
+#
+# Currently runs:
+#   - lint-rn-safety: top-level Web API calls that crash on React Native
+#     (the bug class that ate a day on 2026-04-13 — sound.ts:239
+#      window.addEventListener at module load with no function-existence guard)
+
+set -e
+
+# Find staged TypeScript files under packages/app/{src,app}
+STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^packages/app/(src|app)/.*\.tsx?$' || true)
+
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+
+# Run the RN safety linter against the staged files only
+echo "› lint-rn-safety: scanning $(echo "$STAGED" | wc -l) staged file(s)..."
+node packages/app/scripts/lint-rn-safety.mjs $STAGED
+LINT_EXIT=$?
+
+if [ $LINT_EXIT -ne 0 ]; then
+  echo ""
+  echo "Pre-commit blocked. Fix the violations above, then re-stage and commit."
+  echo "Bypass (NOT recommended): git commit --no-verify"
+  exit 1
+fi
+
+exit 0
