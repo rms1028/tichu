@@ -308,28 +308,55 @@ const SCENARIOS = [
   {
     name: '03-lobby',
     settle: 1500,
-    // Login screen → type nickname → tap guest start → arrive at lobby
+    // Login screen → type nickname → tap guest start → arrive at lobby →
+    // dismiss attendance popup ("보상 받기") so the baseline captures the
+    // lobby proper and not the daily-reward overlay.
+    //
+    // NOTE: coords tuned for Samsung 2340x1080 landscape 2026-04-13. Old
+    // coords (1144,434 / 1144,625 / 1170,780) drifted off-target because
+    // login-screen layout subtly shifted, which caused the guest tap to
+    // miss and the scenario to end on the system Google account picker —
+    // baselines captured in that state were garbage. Re-run
+    // `npm run android:visual -- --update-baselines` to re-capture with
+    // these corrected coords.
     steps: [
       { wait: 5000 },               // wait for login screen
-      { tap: [1144, 434] },         // tap nickname input (center of input field)
+      { tap: [1170, 378] },         // tap nickname input
       { wait: 800 },
       { text: 'Tester' },
       { wait: 300 },
       { key: 'KEYCODE_BACK' },      // dismiss keyboard
       { wait: 600 },
-      { tap: [1144, 625] },         // tap "게스트로 시작" button
-      { wait: 3500 },               // wait for guest_login round-trip + lobby render
+      { tap: [1170, 562] },         // tap "게스트로 시작"
+      { wait: 6000 },               // guest_login round-trip + lobby render
+      { tap: [1170, 788] },         // dismiss attendance popup ("보상 받기")
+      { wait: 1000 },
     ],
   },
-  // TODO — scenarios beyond the lobby (custom match → create room →
-  // matchmaking → game → result) were attempted and did not complete
-  // because ADB-injected taps don't seem to reach Reanimated-wrapped
-  // touchables on the lobby cards (or the coordinates need more work
-  // — this needs investigation). When extending:
-  //   1. Run `npm run android:visual` and inspect baselines/03-lobby.png
-  //   2. Find the "커스텀 모드 플레이" button center in the screenshot
-  //   3. Add the next scenario, mirroring 03-lobby's tap pattern
-  //   4. Verify by re-running `npm run android:visual`
+  {
+    // 로비 터치 회귀 차단 — 로비 카드 탭이 customMatch 화면으로 네비되는지.
+    // 2026-04-13 의 <Modal> touch-lockout 버그 (commit 05fabec / 05cd04a)
+    // 재발 시 이 시나리오가 제일 먼저 빨간불을 켜게 된다.
+    name: '04-custom-match',
+    settle: 1500,
+    steps: [
+      { wait: 5000 },
+      { tap: [1170, 378] },
+      { wait: 800 },
+      { text: 'Tester' },
+      { wait: 300 },
+      { key: 'KEYCODE_BACK' },
+      { wait: 600 },
+      { tap: [1170, 562] },         // "게스트로 시작"
+      { wait: 6000 },
+      { tap: [1170, 788] },         // 출석 팝업 "보상 받기"
+      { wait: 1000 },
+      // 커스텀 모드 card (right card). 빠른 매칭 (left) 은 socket 연결
+      // 없을 때 disabled 이므로 커스텀 모드 쪽을 탭해야 시나리오가 확정적.
+      { tap: [1200, 540] },
+      { wait: 2500 },               // setPage('customMatch') + 화면 mount
+    ],
+  },
 ];
 
 // ── Main ──────────────────────────────────────────────────────────────
