@@ -1,41 +1,78 @@
-// 🩺 PHASE 1 — firebase 단독 참조 검증.
+// Phase 5 — 실제 AppRoot 마운트.
 //
-// PHASE 0 (Hello World) 가 정상 렌더되었다. JS/RN/expo-router 파이프라인 OK.
-// 이제 firebase 를 lazy require 형태로만 추가해서 — 호출은 안 함 — 단순히
-// dep 그래프에 있는 것만으로 깨지는지 확인.
+// sound.ts 의 window.addEventListener 가드 누락이 흰 화면의 root cause 였다.
+// Phase 4 probe 에서 21개 모듈 전부 통과 확인. 이제 AppRoot 를 정상 렌더한다.
 
 import React, { useEffect, useState } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, ScrollView, Platform } from 'react-native';
 
-console.error('[DIAG-P1] index.tsx module evaluating');
+interface LoadError {
+  message: string;
+  stack: string;
+}
 
 export default function App() {
-  console.error('[DIAG-P1] App rendering');
-  const [step, setStep] = useState('start');
+  const [Inner, setInner] = useState<React.ComponentType | null>(null);
+  const [error, setError] = useState<LoadError | null>(null);
 
   useEffect(() => {
-    console.error('[DIAG-P1] useEffect fired');
-    setStep('useEffect ok');
-
-    // dep 그래프에는 추가되지만 실제 호출은 안 함.
-    const refs: { name: string; load: () => any }[] = [
-      { name: 'firebase/app', load: () => require('firebase/app') },
-      { name: 'firebase/auth', load: () => require('firebase/auth') },
-    ];
-    console.error('[DIAG-P1] refs count =', refs.length, '(NOT calling them)');
-    setStep('refs declared, not called');
+    try {
+      const mod = require('../src/AppRoot');
+      const Component: React.ComponentType = mod && (mod.default || mod);
+      if (typeof Component !== 'function') {
+        setError({
+          message: 'AppRoot module loaded but default export is not a component',
+          stack: `typeof default = ${typeof Component}\nkeys = ${Object.keys(mod || {}).join(',')}`,
+        });
+        return;
+      }
+      setInner(() => Component);
+    } catch (e: any) {
+      setError({
+        message: (e && e.message) ? String(e.message) : String(e),
+        stack: (e && e.stack) ? String(e.stack) : '(no stack)',
+      });
+    }
   }, []);
 
+  if (error) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#1a1a2e', paddingTop: 60 }}>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
+          <Text style={{ color: '#ff5555', fontSize: 22, fontWeight: '900', marginBottom: 8 }}>
+            {'⚠️ AppRoot 로드 실패'}
+          </Text>
+          <Text style={{ color: '#888', fontSize: 12, marginBottom: 20 }}>
+            {`Platform: ${Platform.OS} ${Platform.Version}`}
+          </Text>
+          <Text style={{ color: '#FFD700', fontSize: 14, fontWeight: '800', marginTop: 8, marginBottom: 6 }}>
+            {'Error Message'}
+          </Text>
+          <Text style={{ color: '#ffaaaa', fontSize: 14, fontWeight: '700', marginBottom: 12 }}>
+            {error.message}
+          </Text>
+          <Text style={{ color: '#FFD700', fontSize: 14, fontWeight: '800', marginTop: 8, marginBottom: 6 }}>
+            {'Stack'}
+          </Text>
+          <Text style={{ color: '#ccc', fontSize: 11, lineHeight: 16 }}>
+            {error.stack}
+          </Text>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (Inner) {
+    return <Inner />;
+  }
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#0a1f12', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-      <Text style={{ color: '#5dff9d', fontSize: 32, fontWeight: '900', letterSpacing: 4, textAlign: 'center' }}>
-        {'PHASE 1'}
+    <View style={{ flex: 1, backgroundColor: '#0a1f12', alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ color: '#FFD24A', fontSize: 18, fontWeight: '900', letterSpacing: 4 }}>
+        {'TICHU'}
       </Text>
-      <Text style={{ color: '#FFD24A', fontSize: 14, marginTop: 12, textAlign: 'center' }}>
-        {'firebase 참조만 (호출 X)'}
-      </Text>
-      <Text style={{ color: '#5dff9d', fontSize: 16, marginTop: 24, textAlign: 'center' }}>
-        {step}
+      <Text style={{ color: '#FFD700', fontSize: 11, fontWeight: '700', marginTop: 8 }}>
+        {'LOADING APP...'}
       </Text>
     </View>
   );

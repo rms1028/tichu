@@ -236,7 +236,13 @@ function unlockAudio() {
   } catch {}
 }
 
-if (typeof window !== 'undefined') {
+// React Native 에서 typeof window !== 'undefined' 는 true 지만
+// window.addEventListener 는 undefined → TypeError. 실제 DOM API 존재
+// 여부로 가드. (bgm.ts 와 동일 패턴 — 흰 화면 원인.)
+if (
+  typeof window !== 'undefined' &&
+  typeof (window as any).addEventListener === 'function'
+) {
   window.addEventListener('touchstart', unlockAudio, { once: true });
   window.addEventListener('click', unlockAudio, { once: true });
 }
