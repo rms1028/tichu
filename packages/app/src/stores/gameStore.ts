@@ -449,7 +449,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     trickWonEvent: null,
     // 용 양도 대기 중이면 리셋하지 않음 (dragon_give_required가 우선)
     ...(state.dragonGiveRequired ? {} : { dragonGiveRequired: false, dragonGiveSeat: -1 }),
-    ...(turnDuration ? { turnDuration } : {}),
+    // 0 = 무제한 sentinel. truthy 체크면 0이 무시되어 기본 30000ms 가 남는다.
+    ...(turnDuration !== undefined ? { turnDuration } : {}),
   })),
 
   onBombWindowStart: (remainingMs, canSubmitBomb) => set({

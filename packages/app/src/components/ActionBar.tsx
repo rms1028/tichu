@@ -107,6 +107,14 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu, onSubmitBomb }: Acti
   const [playLock, setPlayLock] = useState(false);
   useEffect(() => { if (!isMyTurn) setPlayLock(false); }, [isMyTurn]);
 
+  // playLock 은 더블탭 방지용. 서버가 invalid_play 로 거부하면 턴이
+  // 안 바뀌어서 isMyTurn 기반 해제가 못 풀고 Play 버튼이 영구 잠긴다.
+  // 1초 후 자동 해제로 retry 허용.
+  const lockBriefly = () => {
+    setPlayLock(true);
+    setTimeout(() => setPlayLock(false), 1000);
+  };
+
   const handlePlay = () => {
     // 턴 외 폭탄 → submit_bomb
     if (canBombOutOfTurn) {
@@ -119,14 +127,14 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu, onSubmitBomb }: Acti
       setShowWishPicker(true);
       return;
     }
-    setPlayLock(true);
+    lockBriefly();
     onPlay(selectedCards, getPhoenixAs());
     clearSelection();
   };
 
   const handleWishSelect = (wish?: Rank) => {
     setShowWishPicker(false);
-    setPlayLock(true);
+    lockBriefly();
     onPlay(selectedCards, getPhoenixAs(), wish);
     clearSelection();
   };
