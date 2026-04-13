@@ -5,6 +5,7 @@ import { useGameStore, loadSession } from '../stores/gameStore';
 import { SFX, TTS, cancelAllSounds, unmuteSounds } from '../utils/sound';
 import { haptics } from '../utils/haptics';
 import { registerForPushNotifications, setupNotificationChannel, configureForegroundHandler, addNotificationResponseListener } from '../utils/notifications';
+import { addBreadcrumb } from '../utils/sentry';
 
 const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL ?? 'http://localhost:3001';
 
@@ -631,6 +632,7 @@ export function useSocket() {
       console.warn('Invalid play:', data.reason);
       // race condition으로 인한 phase 불일치 에러는 유저에게 표시하지 않음
       if (data.reason === 'wrong_phase') return;
+      addBreadcrumb('invalid_play', 'game-error', { reason: data.reason });
       store.onError(data.reason);
     });
 
@@ -638,6 +640,7 @@ export function useSocket() {
     socket.on('error', (data: { message?: string }) => {
       const msg = data?.message;
       if (msg && msg !== 'rate_limited') {
+        addBreadcrumb('server_error', 'socket-error', { message: msg });
         const errorMap: Record<string, string> = {
           not_logged_in: '로그인이 필요합니다',
           auth_mismatch: '인증 정보가 일치하지 않습니다',

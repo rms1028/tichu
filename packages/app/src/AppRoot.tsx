@@ -3,6 +3,15 @@
 import { installGlobalErrorHandler, captureManual } from './utils/globalErrorCapture';
 installGlobalErrorHandler();
 
+// Sentry — production crash reporting. Init BEFORE any other src imports
+// so native crash handlers attach before RN module graph fully loads.
+// DSN missing → no-op. Dev build → events enabled=false, still installed
+// so breadcrumbs/setUser calls don't throw elsewhere.
+import {
+  initSentry, setSentryUser, clearSentryUser, reportError, addBreadcrumb,
+} from './utils/sentry';
+initSentry();
+
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, LogBox, Platform } from 'react-native';
 import { useGameStore } from './stores/gameStore';
@@ -131,6 +140,11 @@ function AppInner() {
   // gameOver 시 결과 화면으로
   useEffect(() => {
     if (gameOver && screen === 'game') {
+      addBreadcrumb('game over', 'game', {
+        winner: gameOver.winner,
+        t1: gameOver.scores?.team1,
+        t2: gameOver.scores?.team2,
+      });
       // 약간의 딜레이 후 결과 화면
       const t = setTimeout(() => setScreen('result'), 2000);
       return () => clearTimeout(t);
@@ -160,6 +174,8 @@ function AppInner() {
     us.setNickname(nick);
     setNickname(nick);
     guestLogin(us.playerId, nick);
+    setSentryUser(us.playerId, nick);
+    addBreadcrumb('guest login', 'auth', { playerId: us.playerId });
     setLoginLoading(false);
     setScreen('lobby');
   };
@@ -177,10 +193,13 @@ function AppInner() {
         us.setNickname(nick);
         setNickname(nick);
         firebaseLogin(idToken, nick);
+        setSentryUser(us.playerId, nick);
+        addBreadcrumb('google login', 'auth', { playerId: us.playerId });
         setScreen('lobby');
       } catch (err: any) {
         console.error('Google login error:', err);
         setLoginError('Google 로그인에 실패했습니다');
+        reportError(err, { where: 'handleGoogleLogin' });
       } finally {
         setLoginLoading(false);
       }
@@ -237,11 +256,13 @@ function AppInner() {
             setMatchMode('quick');
             setMatchRoomCode('');
             setScreen('matchmaking');
+            addBreadcrumb('quick match queued', 'room');
             queueMatch(playerId, nick);
           } else {
             setMatchMode('custom');
             setMatchRoomCode(room);
             setScreen('matchmaking');
+            addBreadcrumb('custom room join', 'room', { roomCode: room });
             joinRoom(room, playerId, nick, password);
           }
         }}
@@ -249,6 +270,7 @@ function AppInner() {
           setNickname(nick);
           setMatchMode('custom');
           setScreen('matchmaking');
+          addBreadcrumb('custom room create', 'room', { roomName, hasPassword: !!password });
           createCustomRoom(roomName, password, playerId, nick, options);
         }}
         onListRooms={listRooms}
@@ -266,7 +288,7 @@ function AppInner() {
         onChangeNickname={changeNickname}
         onGetGameHistory={getGameHistory}
         onClaimAttendance={claimAttendance}
-        onDeleteAccount={() => { deleteAccount(); setScreen('login'); }}
+        onDeleteAccount={() => { deleteAccount(); clearSentryUser(); addBreadcrumb('account deleted', 'auth'); setScreen('login'); }}
       />
       <TutorialModal visible={showTutorial} onClose={() => setShowTutorial(false)} />
       </>
@@ -282,10 +304,12 @@ function AppInner() {
         nickname={nickname}
         onCancel={() => {
           if (matchMode === 'quick') cancelMatch();
+          addBreadcrumb('room leave', 'room', { mode: matchMode });
           leaveRoom();
           setScreen('lobby');
         }}
         onStart={() => {
+          addBreadcrumb('game start', 'game', { mode: matchMode });
           setScreen('game');
         }}
         onAddBots={addBots}

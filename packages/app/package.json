@@ -13,6 +13,7 @@
     "build": "npx expo export --platform web"
   },
   "dependencies": {
+    "@sentry/react-native": "~6.10.0",
     "@tichu/shared": "*",
     "expo": "~52.0.0",
     "expo-application": "~6.0.2",
