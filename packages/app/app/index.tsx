@@ -1,25 +1,41 @@
-// 🩺 PHASE 0 — 절대 최소 Hello World.
+// 🩺 PHASE 1 — firebase 단독 참조 검증.
 //
-// 이 파일은 React + react-native 의 가장 기본 컴포넌트만 import 한다.
-// useEffect 없음. require 없음. AppRoot 참조 없음. 외부 라이브러리 0개.
-//
-// 목적: 우리 JS 코드가 단 한 줄이라도 실행되는지 확인.
-//   - 'PHASE 0 OK' 가 화면에 보이면 → 렌더 파이프라인 정상.
-//     문제는 우리가 추가한 그 어떤 것 (useEffect, require, AppRoot import 등).
-//   - 여전히 흰 화면 → 우리 JS 가 한 줄도 실행 안 됨.
-//     문제는 expo-router / 네이티브 모듈 등록 / Bridgeless 초기화 단계.
+// PHASE 0 (Hello World) 가 정상 렌더되었다. JS/RN/expo-router 파이프라인 OK.
+// 이제 firebase 를 lazy require 형태로만 추가해서 — 호출은 안 함 — 단순히
+// dep 그래프에 있는 것만으로 깨지는지 확인.
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 
+console.error('[DIAG-P1] index.tsx module evaluating');
+
 export default function App() {
+  console.error('[DIAG-P1] App rendering');
+  const [step, setStep] = useState('start');
+
+  useEffect(() => {
+    console.error('[DIAG-P1] useEffect fired');
+    setStep('useEffect ok');
+
+    // dep 그래프에는 추가되지만 실제 호출은 안 함.
+    const refs: { name: string; load: () => any }[] = [
+      { name: 'firebase/app', load: () => require('firebase/app') },
+      { name: 'firebase/auth', load: () => require('firebase/auth') },
+    ];
+    console.error('[DIAG-P1] refs count =', refs.length, '(NOT calling them)');
+    setStep('refs declared, not called');
+  }, []);
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#0a1f12', justifyContent: 'center', alignItems: 'center' }}>
-      <Text style={{ color: '#5dff9d', fontSize: 36, fontWeight: '900', letterSpacing: 4 }}>
-        {'PHASE 0 OK'}
+    <View style={{ flex: 1, backgroundColor: '#0a1f12', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+      <Text style={{ color: '#5dff9d', fontSize: 32, fontWeight: '900', letterSpacing: 4, textAlign: 'center' }}>
+        {'PHASE 1'}
       </Text>
-      <Text style={{ color: '#FFD24A', fontSize: 14, marginTop: 12 }}>
-        {'우리 JS 코드가 실행되고 있다.'}
+      <Text style={{ color: '#FFD24A', fontSize: 14, marginTop: 12, textAlign: 'center' }}>
+        {'firebase 참조만 (호출 X)'}
+      </Text>
+      <Text style={{ color: '#5dff9d', fontSize: 16, marginTop: 24, textAlign: 'center' }}>
+        {step}
       </Text>
     </View>
   );
