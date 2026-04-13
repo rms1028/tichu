@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Pressable, Platform,
-  TextInput, ScrollView, useWindowDimensions, SafeAreaView, Modal,
+  TextInput, ScrollView, useWindowDimensions, SafeAreaView,
   KeyboardAvoidingView, Animated as RNAnimated, Easing, LayoutAnimation,
   UIManager,
 } from 'react-native';
@@ -807,46 +807,42 @@ function CreateRoomModal({
     </ScrollView>
   );
 
-  return (
-    <Modal
-      visible={visible}
-      animationType={isMobile ? 'slide' : 'fade'}
-      transparent={!isMobile}
-      onRequestClose={onClose}
-    >
-      {isMobile ? (
-        <SafeAreaView style={S.sheetRoot}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={{ flex: 1 }}
-          >
-            <View style={S.sheetHeader}>
-              <TouchableOpacity onPress={onClose} style={S.backBtn}>
-                <Text style={S.backText}>{'← 닫기'}</Text>
-              </TouchableOpacity>
-              <Text style={S.sheetTitle}>{'방 만들기'}</Text>
-              <View style={{ width: 60 }} />
-            </View>
-            {body}
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      ) : (
-        <View style={S.pwBackdrop}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={S.createModalCard}
-          >
-            <View style={S.createModalHeader}>
-              <Text style={S.createModalTitle}>{'방 만들기'}</Text>
-              <TouchableOpacity onPress={onClose} style={S.createModalClose}>
-                <Text style={S.createModalCloseText}>{'✕'}</Text>
-              </TouchableOpacity>
-            </View>
-            {body}
-          </KeyboardAvoidingView>
+  // In-tree overlay (not RN <Modal>) — RN 0.76 + New Arch + Bridgeless
+  // Modal 은 Android Dialog focus steal 로 parent 터치가 stuck 됨. commit 05fabec.
+  if (!visible) return null;
+  return isMobile ? (
+    <View style={[S.sheetRoot, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }]}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          <View style={S.sheetHeader}>
+            <TouchableOpacity onPress={onClose} style={S.backBtn}>
+              <Text style={S.backText}>{'← 닫기'}</Text>
+            </TouchableOpacity>
+            <Text style={S.sheetTitle}>{'방 만들기'}</Text>
+            <View style={{ width: 60 }} />
+          </View>
+          {body}
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
+  ) : (
+    <View style={[S.pwBackdrop, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={S.createModalCard}
+      >
+        <View style={S.createModalHeader}>
+          <Text style={S.createModalTitle}>{'방 만들기'}</Text>
+          <TouchableOpacity onPress={onClose} style={S.createModalClose}>
+            <Text style={S.createModalCloseText}>{'✕'}</Text>
+          </TouchableOpacity>
         </View>
-      )}
-    </Modal>
+        {body}
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -906,14 +902,10 @@ function PasswordModal({
   onClose: () => void;
   onSubmit: () => void;
 }) {
+  // In-tree overlay (see commit 05fabec)
+  if (room === null) return null;
   return (
-    <Modal
-      visible={room !== null}
-      animationType="fade"
-      transparent
-      onRequestClose={onClose}
-    >
-      <View style={S.pwBackdrop}>
+    <View style={[S.pwBackdrop, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={S.pwCard}
@@ -963,8 +955,7 @@ function PasswordModal({
             </Pressable>
           </View>
         </KeyboardAvoidingView>
-      </View>
-    </Modal>
+    </View>
   );
 }
 

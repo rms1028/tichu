@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Modal, Pressable } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Pressable } from 'react-native';
 import { isMobile } from '../utils/responsive';
 import Animated, {
   FadeIn, ZoomIn, SlideInRight, SlideOutRight,

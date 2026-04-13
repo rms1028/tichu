@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { COLORS } from '../utils/theme';
 
 interface Props {
@@ -7,9 +7,12 @@ interface Props {
   onClose: () => void;
 }
 
+// NOTE: In-tree overlay (not RN <Modal>) — RN 0.76 + New Arch + Bridgeless
+// has a bug where native Modal's Android Dialog steals parent window focus
+// and freezes gesture state. See commit 05fabec.
 export function TutorialModal({ visible, onClose }: Props) {
+  if (!visible) return null;
   return (
-    <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
         <View style={styles.container}>
           <Text style={styles.title}>How to Play Tichu</Text>
@@ -42,16 +45,17 @@ export function TutorialModal({ visible, onClose }: Props) {
           </TouchableOpacity>
         </View>
       </View>
-    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: {
-    flex: 1,
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1000,
   },
   container: {
     width: '85%',

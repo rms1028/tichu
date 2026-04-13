@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Modal, TextInput, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, TextInput, Dimensions } from 'react-native';
 import Animated, {
   FadeInUp, useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, Easing,
 } from 'react-native-reanimated';
@@ -351,37 +351,41 @@ export function ProfilePage({ onBack, onEdit, onStartGame, onAchievements, showN
         <View style={{ height: 24 }} />
       </ScrollView>
 
-      {/* 닉네임 모달 */}
-      <Modal visible={showNickEdit} transparent animationType="fade">
-        <View style={$.modalOvl}><View style={$.modalBox}>
-          <Text style={$.modalTitle}>{'✏️ 닉네임 변경'}</Text>
-          <TextInput style={$.modalInput} value={nick} onChangeText={setNick} placeholder="닉네임 입력" placeholderTextColor="rgba(255,255,255,0.3)" maxLength={12} />
-          <TouchableOpacity style={[$.ctaBtn, !nick.trim() && { opacity: 0.4 }]} onPress={onSaveNick} disabled={!nick.trim()}><Text style={$.ctaBtnText}>{'확인'}</Text></TouchableOpacity>
-        </View></View>
-      </Modal>
-
-      {/* 칭호 모달 */}
-      <Modal visible={showTitlePicker} transparent animationType="fade">
-        <View style={$.modalOvl}><View style={[$.modalBox, { maxWidth: 380 }]}>
-          <Text style={$.modalTitle}>{'🏅 칭호 선택'}</Text>
-          <View style={{ gap: 6 }}>
-            {ALL_TITLES.map(t => {
-              const ok = unlockedTitles.some(u => u.id === t.id);
-              const sel = us.selectedTitle === t.id;
-              return (
-                <TouchableOpacity key={t.id} style={[$.titleRow, sel && $.titleRowSel, !ok && { opacity: 0.5 }]}
-                  onPress={() => { if (ok) { useUserStore.getState().setTitle(t.id); setShowTitlePicker(false); } }} disabled={!ok}>
-                  <Text style={{ fontSize: 18, opacity: ok ? 1 : 0.3 }}>{t.icon}</Text>
-                  <View style={{ flex: 1 }}><Text style={{ color: ok ? '#fff' : C.sub, fontSize: 13, fontWeight: '700' }}>{t.name}</Text><Text style={{ color: C.sub, fontSize: 11 }}>{t.desc}</Text></View>
-                  {sel && <Text style={{ color: C.mint }}>{'✓'}</Text>}
-                  {!ok && <Text>{'🔒'}</Text>}
-                </TouchableOpacity>
-              );
-            })}
+      {/* 닉네임 팝업 — in-tree overlay (RN Modal touch-lock 회피, commit 05fabec) */}
+      {showNickEdit && (
+        <View style={$.modalOvl}>
+          <View style={$.modalBox}>
+            <Text style={$.modalTitle}>{'✏️ 닉네임 변경'}</Text>
+            <TextInput style={$.modalInput} value={nick} onChangeText={setNick} placeholder="닉네임 입력" placeholderTextColor="rgba(255,255,255,0.3)" maxLength={12} />
+            <TouchableOpacity style={[$.ctaBtn, !nick.trim() && { opacity: 0.4 }]} onPress={onSaveNick} disabled={!nick.trim()}><Text style={$.ctaBtnText}>{'확인'}</Text></TouchableOpacity>
           </View>
-          <TouchableOpacity style={[$.ctaBtn, { marginTop: 12 }]} onPress={() => setShowTitlePicker(false)}><Text style={$.ctaBtnText}>{'닫기'}</Text></TouchableOpacity>
-        </View></View>
-      </Modal>
+        </View>
+      )}
+
+      {/* 칭호 팝업 — in-tree overlay */}
+      {showTitlePicker && (
+        <View style={$.modalOvl}>
+          <View style={[$.modalBox, { maxWidth: 380 }]}>
+            <Text style={$.modalTitle}>{'🏅 칭호 선택'}</Text>
+            <View style={{ gap: 6 }}>
+              {ALL_TITLES.map(t => {
+                const ok = unlockedTitles.some(u => u.id === t.id);
+                const sel = us.selectedTitle === t.id;
+                return (
+                  <TouchableOpacity key={t.id} style={[$.titleRow, sel && $.titleRowSel, !ok && { opacity: 0.5 }]}
+                    onPress={() => { if (ok) { useUserStore.getState().setTitle(t.id); setShowTitlePicker(false); } }} disabled={!ok}>
+                    <Text style={{ fontSize: 18, opacity: ok ? 1 : 0.3 }}>{t.icon}</Text>
+                    <View style={{ flex: 1 }}><Text style={{ color: ok ? '#fff' : C.sub, fontSize: 13, fontWeight: '700' }}>{t.name}</Text><Text style={{ color: C.sub, fontSize: 11 }}>{t.desc}</Text></View>
+                    {sel && <Text style={{ color: C.mint }}>{'✓'}</Text>}
+                    {!ok && <Text>{'🔒'}</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <TouchableOpacity style={[$.ctaBtn, { marginTop: 12 }]} onPress={() => setShowTitlePicker(false)}><Text style={$.ctaBtnText}>{'닫기'}</Text></TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -523,7 +527,7 @@ const $ = StyleSheet.create({
   sideCol: { flex: 3 },
 
   // 모달
-  modalOvl: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  modalOvl: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
   modalBox: { backgroundColor: '#1e321e', borderRadius: 16, padding: 24, width: 340, maxWidth: '90%' as any, borderWidth: 1, borderColor: C.border },
   modalTitle: { color: '#fff', fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 16 },
   modalInput: { backgroundColor: 'rgba(0,0,0,0.3)', color: '#fff', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', textAlign: 'center', marginBottom: 14 },
