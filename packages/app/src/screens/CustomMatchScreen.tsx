@@ -289,7 +289,7 @@ export function CustomMatchScreen({
           colors={[COLORS.cmGold, COLORS.cmGoldDeep]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
-          style={S.titleAccent}
+          style={[S.titleAccent, isMobile && S.titleAccentMobile]}
         />
         <Text style={[S.titleKo, isMobile && S.titleKoMobile]}>{'커스텀 매치'}</Text>
       </View>
@@ -1004,7 +1004,8 @@ const S = StyleSheet.create({
   },
   sectionHeadMobile: { marginBottom: 12 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, flexShrink: 1 },
-  titleAccent: { width: 6, height: 28, borderRadius: 2 },
+  titleAccent: { width: 6, height: 30, borderRadius: 2 },
+  titleAccentMobile: { width: 5, height: 24 },
   titleKo: { fontSize: 26, fontWeight: '900', color: COLORS.cmInk, letterSpacing: 1 },
   titleKoMobile: { fontSize: 22 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 14 },
@@ -1112,7 +1113,7 @@ const S = StyleSheet.create({
 
   // Rooms list
   rooms: { flex: 1 },
-  roomsContent: { paddingBottom: 20, gap: 10 },
+  roomsContent: { paddingBottom: 90, gap: 10 },
 
   // Room card
   room: {

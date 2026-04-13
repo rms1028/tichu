@@ -208,8 +208,37 @@ onCreateCustomRoom({
 
 ---
 
+## 3차 작업 (빈 상태 + 디테일 정리)
+
+UI 정제 4 phase. `CustomMatchScreen.tsx` 한 파일 안에서만 작업.
+
+| Phase | 커밋 | 내용 |
+|---|---|---|
+| 1. 에셋 교체 | `e588e05` | 한자 배경 → `BackgroundWatermark`(splash.png) 재사용. 깨진 🎴 placeholder → `CardView` Dragon large + 골드 shadow. `LayoutAnimation` 준비. |
+| 2. 빈 상태 마무리 | `812b381` | `isEmpty` 계산. 빈 상태일 때 카운터 / 우상단 만들기 버튼 / 필터 바 전체 숨김(조건부 렌더링). 로딩→빈→리스트 전환 `LayoutAnimation.easeInEaseOut`. |
+| 3. 필터 바 정리 | `93442e7` | 토글(빈자리만 / 비밀방 제외)과 정렬(최신순 / 빈자리 많은 순 / 곧 시작) 사이 세로 구분선. 정렬 칩에 ↕ 아이콘. 검색 placeholder → `방 이름 검색`. 자동 갱신 `🟢 자동` 제거 → 새로고침 버튼 우상단 코너 초록 점. |
+| 4. 디테일 | (아래) | 골드 액센트 바 30px + 모바일 24px 변형. `roomsContent.paddingBottom` 20 → 90 (OS 바 회피). |
+
+**Phase 4 변경 파일**: `packages/app/src/screens/CustomMatchScreen.tsx`
+- `titleAccent`: height 28 → 30
+- `titleAccentMobile` 추가: width 5, height 24 (모바일 타이틀 22px와 균형)
+- `roomsContent.paddingBottom`: 20 → 90
+
+**검증**:
+- `npx tsc --noEmit`: 0 errors
+- `npx expo-doctor`: 17/17
+
+**의도적으로 스킵**:
+- 변경 6 (빈 상태 메시지 미세 조정) — 현재 문구가 충분히 명확해서 손대지 않음
+- 변경 9 (빈 → 방 카드 Reanimated 전환) — Phase 2에서 `LayoutAnimation` 으로 대체
+
+---
+
 ## 전체 커밋 히스토리 (브랜치)
 ```
+(v3) 93442e7  Phase 3 — filter bar cleanup
+(v3) 812b381  Phase 2 — clean empty state
+(v3) e588e05  Phase 1 — lobby bg + CardView for empty state
 b8999d3  Phase 7 - keyboard shortcuts (web only)
 566f1f5  Phase 1-4 - strip rank/mock/right-panel, card-click entry
 d9969e0  fix: white screen — bgm + MMKV lazy
