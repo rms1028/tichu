@@ -85,6 +85,33 @@ const DANGEROUS_CALLS = new Set([
   'navigator.clipboard.readText',
 ]);
 
+// Receivers that don't exist (or only partially exist) on React Native.
+// Any top-level property access or call on these at module-eval time will
+// either throw or return undefined — same failure class as the sound.ts
+// white screen. Enforced *in addition to* DANGEROUS_CALLS so an author
+// using a method we didn't pre-list (e.g. `location.reload()`) still
+// gets caught.
+const DANGEROUS_RECEIVERS = new Set([
+  'document',
+  'localStorage',
+  'sessionStorage',
+  'location',
+  'history',
+  // `navigator` is partially polyfilled by RN (navigator.product, etc.) but
+  // anything real-web (navigator.geolocation, navigator.clipboard, etc.) is
+  // absent. Safer to flag and require a guard.
+  'navigator',
+]);
+
+// Exempt identifiers that look dangerous but are safe in this project.
+// Keep this list empty unless a false positive proves otherwise.
+const EXEMPT_LOCAL_NAMES = new Set([
+  // e.g. a local variable named `location` that shadows the global — common
+  // in route code. The linter is module-scope-conservative; if this causes
+  // noise we can plumb full binding resolution. For now: block and require
+  // rename.
+]);
+
 // `new X()` patterns — same idea
 const DANGEROUS_NEWS = new Set([
   'AudioContext',
@@ -93,6 +120,16 @@ const DANGEROUS_NEWS = new Set([
   'WebSocket',  // RN has its own WebSocket; constructing the global is OK actually, but flag for review
   'XMLHttpRequest', // RN has fetch; XHR exists but is awkward
 ]);
+
+// Root identifier of a property-access chain: `a.b.c.d` → `a`.
+function findRootIdentifier(node) {
+  let cur = node;
+  while (ts.isPropertyAccessExpression(cur)) {
+    cur = cur.expression;
+  }
+  if (ts.isIdentifier(cur)) return cur.text;
+  return null;
+}
 
 // Receiver dotted-name we care about (left side of access)
 function dottedName(node) {
@@ -138,6 +175,32 @@ function isGuarded(callNode, methodName, enclosingIfConditions) {
   return false;
 }
 
+// Looser guard check: accept any enclosing condition that gates on the
+// existence of a specific receiver (e.g. `document`) or on the web
+// platform. Used by the receiver-level rule, which doesn't care which
+// specific method is called — only that the module does not touch the
+// receiver unconditionally.
+function isReceiverGuarded(receiver, enclosingIfConditions) {
+  const typeofReceiver = `typeof ${receiver}`;
+  const hasTypeofReceiver = (cond) =>
+    cond.includes(typeofReceiver) && (
+      cond.includes("!== 'undefined'") ||
+      cond.includes('!== "undefined"') ||
+      cond.includes("=== 'object'") ||
+      cond.includes('=== "object"') ||
+      cond.includes("=== 'function'") ||
+      cond.includes('=== "function"')
+    );
+  const isPlatformWebGuard = (cond) =>
+    /Platform\.OS\s*===\s*['"]web['"]/.test(cond);
+
+  for (const cond of enclosingIfConditions) {
+    if (hasTypeofReceiver(cond)) return true;
+    if (isPlatformWebGuard(cond)) return true;
+  }
+  return false;
+}
+
 function lintFile(absPath) {
   const source = readFileSync(absPath, 'utf8');
   const sf = ts.createSourceFile(absPath, source, ts.ScriptTarget.Latest, true);
@@ -167,6 +230,41 @@ function lintFile(absPath) {
         }
       }
     }
+
+    // Top-level dangerous-receiver access (call OR property read)?
+    //
+    // Any PropertyAccessExpression where the root identifier is a
+    // dangerous receiver (document, localStorage, sessionStorage,
+    // location, history, navigator) is flagged unless guarded by an
+    // enclosing `typeof <receiver> !== 'undefined'` or
+    // `Platform.OS === 'web'`.
+    //
+    // This catches cases the specific-method whitelist misses —
+    // e.g. `const href = location.href` or `history.replaceState(...)`.
+    if (depth === 0 && ts.isPropertyAccessExpression(node)) {
+      // Only flag the OUTERMOST access in a chain to avoid duplicate
+      // reports: `document.body.style` should report `document.body` and
+      // not also `document` when visiting the inner node.
+      const parent = node.parent;
+      if (!parent || !ts.isPropertyAccessExpression(parent)) {
+        const root = findRootIdentifier(node);
+        if (root && DANGEROUS_RECEIVERS.has(root) && !EXEMPT_LOCAL_NAMES.has(root)) {
+          if (!isReceiverGuarded(root, enclosingIfConditions)) {
+            const dotted = dottedName(node) ?? root;
+            const pos = sf.getLineAndCharacterOfPosition(node.getStart());
+            violations.push({
+              file: absPath,
+              line: pos.line + 1,
+              col: pos.character + 1,
+              rule: 'top-level-web-receiver',
+              message: `\`${dotted}\` touches \`${root}\` which does not exist on React Native. Move inside a function, or guard with \`typeof ${root} !== 'undefined'\` / \`Platform.OS === 'web'\`.`,
+              snippet: source.split('\n')[pos.line]?.trim().slice(0, 120),
+            });
+          }
+        }
+      }
+    }
+
     if (depth === 0 && ts.isNewExpression(node)) {
       const ctor = node.expression;
       if (ts.isIdentifier(ctor) && DANGEROUS_NEWS.has(ctor.text)) {

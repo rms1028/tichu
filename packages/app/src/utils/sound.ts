@@ -156,10 +156,23 @@ let bestVoice: SpeechSynthesisVoice | null = null;
 export function setTtsEnabled(on: boolean) { ttsEnabled = on; }
 export function isTtsEnabled() { return ttsEnabled; }
 
-// 플랫폼 감지 (iOS: Safari, Chrome, WebView 모두 포함)
-const isIOS = typeof navigator !== 'undefined' &&
-  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
-   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+// 플랫폼 감지 (iOS: Safari, Chrome, WebView 모두 포함) — lazy-memoized.
+// Top-level `navigator.userAgent` 같은 접근은 RN 에서 module-load 시점에
+// 터질 수 있어서 금지 (lint-rn-safety 의 top-level-web-receiver 규칙).
+// 첫 호출 시점에만 접근하고 결과를 캐시한다.
+let _isIOSCache: boolean | null = null;
+function isIOS(): boolean {
+  if (_isIOSCache !== null) return _isIOSCache;
+  if (typeof navigator === 'undefined') return (_isIOSCache = false);
+  try {
+    const nav = navigator as { userAgent?: string; platform?: string; maxTouchPoints?: number };
+    _isIOSCache = /iPad|iPhone|iPod/.test(nav.userAgent ?? '') ||
+      (nav.platform === 'MacIntel' && (nav.maxTouchPoints ?? 0) > 1);
+  } catch {
+    _isIOSCache = false;
+  }
+  return _isIOSCache;
+}
 
 // 가장 자연스러운 한국어 음성 찾기
 function findBestVoice(): SpeechSynthesisVoice | null {
@@ -177,7 +190,7 @@ function findBestVoice(): SpeechSynthesisVoice | null {
     console.log('[TTS] No Korean voices found. All voices:', voices.map(v => `${v.name} (${v.lang})`).slice(0, 10).join(', '));
   }
 
-  if (isIOS) {
+  if (isIOS()) {
     // iOS: Yuna(여성) 우선. 남성 음성(Jian 등) 제외
     const yunaEnh = koVoices.find(v => /yuna/i.test(v.name) && /enhanced|premium/i.test(v.name));
     if (yunaEnh) return yunaEnh;
@@ -249,10 +262,12 @@ if (
 
 type TtsStyle = 'normal' | 'excited' | 'calm' | 'urgent';
 
-// 플랫폼별 rate/pitch 보정 (iOS Yuna는 빠르고 높아서 낮춤)
-const VOICE_STYLES: Record<TtsStyle, { rate: number; pitch: number }> = isIOS
-  ? { normal: { rate: 0.9, pitch: 1.0 }, excited: { rate: 1.1, pitch: 1.15 }, calm: { rate: 0.8, pitch: 0.85 }, urgent: { rate: 1.2, pitch: 1.2 } }
-  : { normal: { rate: 1.1, pitch: 1.1 }, excited: { rate: 1.3, pitch: 1.3 }, calm: { rate: 1.0, pitch: 0.9 }, urgent: { rate: 1.5, pitch: 1.4 } };
+// 플랫폼별 rate/pitch 보정 (iOS Yuna는 빠르고 높아서 낮춤). isIOS() 를
+// 호출 시점에 평가하도록 Record 대신 getter 로.
+const VOICE_STYLES_IOS: Record<TtsStyle, { rate: number; pitch: number }> =
+  { normal: { rate: 0.9, pitch: 1.0 }, excited: { rate: 1.1, pitch: 1.15 }, calm: { rate: 0.8, pitch: 0.85 }, urgent: { rate: 1.2, pitch: 1.2 } };
+const VOICE_STYLES_DEFAULT: Record<TtsStyle, { rate: number; pitch: number }> =
+  { normal: { rate: 1.1, pitch: 1.1 }, excited: { rate: 1.3, pitch: 1.3 }, calm: { rate: 1.0, pitch: 0.9 }, urgent: { rate: 1.5, pitch: 1.4 } };
 
 function speak(text: string, style: TtsStyle = 'normal') {
   if (!ttsEnabled || muted) return;
@@ -267,7 +282,7 @@ function speak(text: string, style: TtsStyle = 'normal') {
         u.lang = 'ko-KR';
         if (bestVoice) u.voice = bestVoice;
         u.volume = 0.8;
-        const vs = VOICE_STYLES[style];
+        const vs = (isIOS() ? VOICE_STYLES_IOS : VOICE_STYLES_DEFAULT)[style];
         u.rate = vs.rate;
         u.pitch = vs.pitch;
         window.speechSynthesis.speak(u);
@@ -276,7 +291,7 @@ function speak(text: string, style: TtsStyle = 'normal') {
 
     window.speechSynthesis.cancel();
     // iOS에서 cancel() 직후 speak()하면 무시되는 버그 → 딜레이
-    if (isIOS) {
+    if (isIOS()) {
       const gen = cancelGeneration;
       sfxTimeout(() => { if (cancelGeneration === gen && !muted) doSpeak(); }, 50);
     } else {
