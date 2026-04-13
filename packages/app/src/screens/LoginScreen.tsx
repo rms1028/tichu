@@ -36,13 +36,13 @@ export function LoginScreen({ onGuestLogin, onGoogleLogin, loading, error }: Log
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* 로고 */}
+          {/* 로고 — compact 에서는 공간 절약을 위해 작게만 표시 */}
           <Animated.View
             entering={ZoomIn.duration(500).springify()}
             style={[S.logoArea, compact && S.logoAreaCompact]}
           >
             <Text style={[S.title, compact && S.titleCompact]}>{'TICHU'}</Text>
-            <Text style={S.subtitle}>{'멀티플레이어 보드게임'}</Text>
+            {!compact && <Text style={S.subtitle}>{'멀티플레이어 보드게임'}</Text>}
           </Animated.View>
           {/* 로그인 카드 */}
           <Animated.View entering={FadeIn.delay(300).duration(400)} style={S.card}>
@@ -91,9 +91,11 @@ export function LoginScreen({ onGuestLogin, onGoogleLogin, loading, error }: Log
               </>
             )}
           </Animated.View>
-          <Text style={[S.footer, compact && S.footerCompact]}>
-            {'게스트 데이터는 기기에만 저장됩니다.\nGoogle 로그인 시 다른 기기에서도 이어 플레이할 수 있습니다.'}
-          </Text>
+          {!compact && (
+            <Text style={S.footer}>
+              {'게스트 데이터는 기기에만 저장됩니다.\nGoogle 로그인 시 다른 기기에서도 이어 플레이할 수 있습니다.'}
+            </Text>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -122,7 +124,7 @@ const S = StyleSheet.create({
   title: { color: '#FFD700', fontSize: 52, fontWeight: '900', letterSpacing: 12, textShadowColor: 'rgba(255,215,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 12 },
   titleCompact: { fontSize: 32, letterSpacing: 8 },
   subtitle: { color: 'rgba(255,255,255,0.3)', fontSize: 13, fontWeight: '600', letterSpacing: 4, marginTop: 4 },
-  card: { width: '100%', maxWidth: 380, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  card: { width: '100%', maxWidth: 420, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   cardTitle: { color: '#fff', fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 16 },
   input: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, color: '#fff', fontSize: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', marginBottom: 16 },
   error: { color: '#ef4444', fontSize: 12, textAlign: 'center', marginBottom: 8 },
@@ -131,7 +133,7 @@ const S = StyleSheet.create({
   guestBtn: { backgroundColor: '#D97706' },
   guestIcon: { fontSize: 20 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 16 },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 12 },
   dividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
   dividerText: { color: 'rgba(255,255,255,0.3)', fontSize: 12 },
   googleBtn: { backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },

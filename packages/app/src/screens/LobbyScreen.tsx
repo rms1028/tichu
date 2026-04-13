@@ -272,11 +272,13 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
         contentContainerStyle={[S.center, compact && S.centerCompact]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View entering={FadeIn.delay(200).duration(500)} style={[S.logoArea, compact && S.logoAreaCompact]}>
-          <Animated.Text style={[S.title, compact && S.titleCompact, logoGlowStyle]}>TICHU</Animated.Text>
-          {!compact && <Text style={S.subtitle}>Ultimate Card Battle</Text>}
-          <View style={S.divider} />
-        </Animated.View>
+        {!compact && (
+          <Animated.View entering={FadeIn.delay(200).duration(500)} style={S.logoArea}>
+            <Animated.Text style={[S.title, logoGlowStyle]}>TICHU</Animated.Text>
+            <Text style={S.subtitle}>Ultimate Card Battle</Text>
+            <View style={S.divider} />
+          </Animated.View>
+        )}
         {!matching ? (
           <Animated.View entering={FadeIn.delay(400).duration(500)} style={S.cardsWrap}>
             <View style={S.cards}>
@@ -284,13 +286,13 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                 <View style={S.cardGlow} pointerEvents="none" />
                 <Text style={[S.cIcon, compact && S.cIconCompact]}>{'\u26A1'}</Text>
                 <Text style={S.cTitle}>{'\uBE60\uB978 \uB9E4\uCE6D'}</Text>
-                {!compact && <Text style={S.cSub}>{'\uBE44\uC2B7\uD55C \uC2E4\uB825\uC758 \uC720\uC800\uC640'}{'\n'}{'\uC989\uC2DC \uD50C\uB808\uC774'}</Text>}
+                <Text style={S.cSub}>{'\uBE44\uC2B7\uD55C \uC2E4\uB825\uC758 \uC720\uC800\uC640'}{'\n'}{'\uC989\uC2DC \uD50C\uB808\uC774'}</Text>
                 <View style={S.playBtn}><Text style={S.playBtnText}>{'\u25B6  \uD50C\uB808\uC774'}</Text></View>
               </TouchableOpacity>
               <TouchableOpacity style={[S.card, compact && S.cardCompact, S.cardD]} activeOpacity={0.85} onPress={() => { setPage('customMatch'); }}>
                 <Text style={[S.cIcon, compact && S.cIconCompact]}>{'\uD83D\uDD12'}</Text>
                 <Text style={S.cTitle}>{'\uCEE4\uC2A4\uD140 \uBAA8\uB4DC'}</Text>
-                {!compact && <Text style={S.cSub}>{'\uBC29 \uB9CC\uB4E4\uAE30 \uBC0F'}{'\n'}{'\uCF54\uB4DC\uB85C \uC785\uC7A5'}</Text>}
+                <Text style={S.cSub}>{'\uBC29 \uB9CC\uB4E4\uAE30 \uBC0F'}{'\n'}{'\uCF54\uB4DC\uB85C \uC785\uC7A5'}</Text>
                 <View style={S.playBtnOutline}><Text style={S.playBtnOutlineText}>{'\u25B6  \uD50C\uB808\uC774'}</Text></View>
               </TouchableOpacity>
             </View>
@@ -300,7 +302,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                   <Text style={S.rulesBtnIcon}>{'\uD83D\uDCD6'}</Text>
                   <View style={S.rulesBtnTextWrap}>
                     <Text style={S.rulesBtnTitle}>{'\uAC8C\uC784 \uADDC\uCE59'}</Text>
-                    {!compact && <Text style={S.rulesBtnDesc}>{'\uD2F0\uCE04\uAC00 \uCC98\uC74C\uC774\uB77C\uBA74 \uC5EC\uAE30\uC11C \uBC30\uC6CC\uBCF4\uC138\uC694!'}</Text>}
+                    <Text style={S.rulesBtnDesc}>{'\uD2F0\uCE04\uAC00 \uCC98\uC74C\uC774\uB77C\uBA74 \uC5EC\uAE30\uC11C \uBC30\uC6CC\uBCF4\uC138\uC694!'}</Text>
                   </View>
                   <Text style={S.rulesBtnArrow}>{'>'}</Text>
                 </View>
@@ -473,7 +475,7 @@ const S = StyleSheet.create({
   particleLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 },
 
   // 상단 바
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, zIndex: 10 },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 10, zIndex: 10 },
   profileBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
   av: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
   nick: { color: '#fff', fontSize: 14, fontWeight: '700' },
@@ -489,21 +491,20 @@ const S = StyleSheet.create({
   // 중앙 — ScrollView contentContainerStyle
   center: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16 },
   // compact (landscape phone / short screen): 위 정렬 + 여백 축소
-  centerCompact: { justifyContent: 'flex-start', paddingVertical: 8 },
+  centerCompact: { justifyContent: 'center', paddingVertical: 4, paddingHorizontal: 24 },
   logoArea: { alignItems: 'center', marginBottom: 16 },
-  logoAreaCompact: { marginBottom: 8 },
   title: { color: '#FFD700', fontSize: 48, fontWeight: '900', letterSpacing: 10, textShadowColor: 'rgba(255,215,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 12, marginBottom: 2 },
-  titleCompact: { fontSize: 28, letterSpacing: 6, marginBottom: 0 },
   subtitle: { color: 'rgba(255,255,255,0.3)', fontSize: 12, fontWeight: '600', letterSpacing: 4, marginBottom: 8 },
   divider: { width: 50, height: 2, backgroundColor: 'rgba(255,215,0,0.3)', borderRadius: 1 },
 
-  // 카드 (1.5배 높이)
+  // 카드
   cardsWrap: { alignItems: 'stretch' },
-  cards: { flexDirection: 'row', gap: 16 },
+  cards: { flexDirection: 'row', gap: 20, justifyContent: 'center' },
   card: { width: 160, height: 240, borderRadius: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.6, shadowRadius: 28, elevation: 16, overflow: 'hidden' },
-  cardCompact: { width: 140, height: 140, paddingHorizontal: 10, paddingVertical: 10 },
-  cIconCompact: { fontSize: 28, marginBottom: 4 },
-  rulesBtnCompact: { marginTop: 8, paddingVertical: 10 },
+  // compact = landscape phone. 내용은 유지하되 살짝 작게.
+  cardCompact: { width: 200, height: 175, paddingHorizontal: 14, paddingVertical: 10 },
+  cIconCompact: { fontSize: 28, marginBottom: 2 },
+  rulesBtnCompact: { marginTop: 8, paddingVertical: 8, paddingHorizontal: 14 },
   cardG: { backgroundColor: '#0d6b3f' },
   cardD: { backgroundColor: '#14332a' },
   cardGlow: { position: 'absolute', top: -20, left: -20, right: -20, bottom: -20, borderRadius: 30, backgroundColor: 'rgba(245,158,11,0.04)', shadowColor: '#F59E0B', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 30, elevation: 2 },
