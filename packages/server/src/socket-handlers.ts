@@ -135,6 +135,16 @@ export function getRoomCount(): number {
   return rooms.size;
 }
 
+// Test-only knobs — production uses 30s / 10s. Integration tests override
+// to something small (e.g. 200ms) so the 30s WAITING disconnect timer and
+// the 10s TRICK_PLAY bot-replace timer don't stall the suite.
+let WAITING_DISCONNECT_MS = 30_000;
+let TRICK_BOT_REPLACE_MS = 10_000;
+export function __setDisconnectTimeoutsForTest(opts: { waitingMs?: number; trickMs?: number }): void {
+  if (opts.waitingMs !== undefined) WAITING_DISCONNECT_MS = opts.waitingMs;
+  if (opts.trickMs !== undefined) TRICK_BOT_REPLACE_MS = opts.trickMs;
+}
+
 /** 방 목록을 보고 있는 소켓에게만 rooms_updated 발송 */
 function notifyLobby(io: Server): void {
   io.to(ROOM_LIST_SOCKET_ROOM).emit('rooms_updated');
@@ -1013,7 +1023,7 @@ export function registerSocketHandlers(io: Server): void {
             const capturedSeat = savedSeat;
             player.botReplaceTimer = setTimeout(() => {
               replaceWithBot(io, capturedRoomId, capturedSeat);
-            }, 10_000);
+            }, TRICK_BOT_REPLACE_MS);
             // 커스텀 방: 모든 인간이 나갔으면 방 삭제
             if (room.settings.isCustom) checkAndDestroyEmptyRoom(io, room);
           }
@@ -1771,7 +1781,7 @@ export function registerSocketHandlers(io: Server): void {
               broadcastSeats(io, r);
             }
             notifyLobby(io);
-          }, 30_000);
+          }, WAITING_DISCONNECT_MS);
         } else if (!player.isBot) {
           if (room.phase !== 'GAME_OVER') {
             // 게임 진행 중이면 10초 후 봇 대체 예약
@@ -1781,7 +1791,7 @@ export function registerSocketHandlers(io: Server): void {
             const savedSeat = playerSeat;
             player.botReplaceTimer = setTimeout(() => {
               replaceWithBot(io, savedRoomId, savedSeat);
-            }, 10_000);
+            }, TRICK_BOT_REPLACE_MS);
           }
           // 커스텀 방: 모든 인간이 나갔으면 방 삭제 (GAME_OVER 포함)
           if (room.settings.isCustom) checkAndDestroyEmptyRoom(io, room);

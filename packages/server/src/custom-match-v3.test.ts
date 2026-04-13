@@ -55,8 +55,9 @@ function captureEvents(socket: Socket, events: string[]): { [event: string]: any
 async function makeClient(playerId: string, nickname: string): Promise<Socket> {
   const socket = ioClient(SERVER_URL, { transports: ['websocket'], forceNew: true });
   await waitForEvent(socket, 'connect', 3000);
+  const loggedIn = waitForEvent(socket, 'login_success', 5000);
   socket.emit('guest_login', { guestId: playerId, nickname });
-  await delay(100); // let server process login
+  await loggedIn;
   return socket;
 }
 
@@ -104,7 +105,16 @@ beforeAll(async () => {
       resolve();
     });
   });
-}, 15000);
+
+  // Warmup: Firebase Admin lazily initializes on the first guest_login,
+  // which can push the first test's room_joined latency past 3000ms on a
+  // cold start. Burn that cost here so per-test timeouts stay tight.
+  const warm = ioClient(SERVER_URL, { transports: ['websocket'], forceNew: true });
+  await waitForEvent(warm, 'connect', 3000);
+  warm.emit('guest_login', { guestId: 'p_warmup', nickname: 'Warmup' });
+  await delay(500);
+  warm.disconnect();
+}, 20000);
 
 afterAll(async () => {
   ioServer?.close();
@@ -262,4 +272,197 @@ describe('custom match v3 — wish enforcement', () => {
     expect(room!.settings.turnTimeLimit).toBe(0);
     host.disconnect();
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// S3/S4 release-blocker integration tests (5차 작업, 2026-04-13)
+//
+// S3: host disconnect handling (WAITING vs in-game)
+// S4: room_full enforcement
+//
+// These verify release-blocking behaviors claimed in PROGRESS.md are
+// actually wired up end-to-end, not just "probably handled somewhere".
+// ─────────────────────────────────────────────────────────────────────
+
+describe('S3 — host disconnect during WAITING_FOR_PLAYERS', () => {
+  it('transfers host to next human when host socket drops in WAITING', async () => {
+    const { __setDisconnectTimeoutsForTest, getRooms } = await import('./socket-handlers');
+    // Shrink the 30s waiting-disconnect timer so the test doesn't stall.
+    __setDisconnectTimeoutsForTest({ waitingMs: 200 });
+    try {
+      const host = await makeClient('p_s3hostA', 'S3HostA');
+      const guest = await makeClient('p_s3guestA', 'S3GuestA');
+      const roomId = await createCustomRoom(host, {
+        playerId: 'p_s3hostA', nickname: 'S3HostA',
+      });
+      guest.emit('join_room', { roomId, playerId: 'p_s3guestA', nickname: 'S3GuestA' });
+      await waitForEvent(guest, 'room_joined', 3000);
+
+      // Sanity: host is the first player
+      const preRoom = getRooms().get(roomId);
+      expect(preRoom?.hostPlayerId).toBe('p_s3hostA');
+
+      // Actual socket drop (not graceful leave_room)
+      const hostChanged = waitForEvent<{ hostPlayerId: string }>(guest, 'host_changed', 2000);
+      host.disconnect();
+
+      const hc = await hostChanged;
+      expect(hc.hostPlayerId).toBe('p_s3guestA');
+
+      // Post-transfer: room still exists, host is guest
+      const postRoom = getRooms().get(roomId);
+      expect(postRoom).toBeTruthy();
+      expect(postRoom!.hostPlayerId).toBe('p_s3guestA');
+
+      guest.disconnect();
+    } finally {
+      __setDisconnectTimeoutsForTest({ waitingMs: 30_000 });
+    }
+  }, 10_000);
+
+  it('destroys the room when the sole host socket drops in WAITING (no other humans)', async () => {
+    const { __setDisconnectTimeoutsForTest, getRooms } = await import('./socket-handlers');
+    __setDisconnectTimeoutsForTest({ waitingMs: 200 });
+    try {
+      const host = await makeClient('p_s3solo', 'S3Solo');
+      const roomId = await createCustomRoom(host, {
+        playerId: 'p_s3solo', nickname: 'S3Solo',
+      });
+      expect(getRooms().get(roomId)).toBeTruthy();
+
+      host.disconnect();
+      // Wait past the (shrunk) waiting timer + room cleanup
+      await delay(500);
+
+      expect(getRooms().get(roomId)).toBeUndefined();
+    } finally {
+      __setDisconnectTimeoutsForTest({ waitingMs: 30_000 });
+    }
+  }, 10_000);
+});
+
+describe('S3 — player disconnect during an active game (bot replacement)', () => {
+  it('replaces a disconnected human with a bot mid-game; room survives', async () => {
+    const { __setDisconnectTimeoutsForTest, getRooms } = await import('./socket-handlers');
+    // Shrink the 10s trick-phase replace timer to 300ms.
+    __setDisconnectTimeoutsForTest({ trickMs: 300 });
+    try {
+      // 2 humans + 2 bots. One human drops mid-game → bot replacement.
+      // Need at least one remaining human so checkAndDestroyEmptyRoom
+      // doesn't wipe the room before the bot-replace timer fires.
+      const host = await makeClient('p_s3gHost', 'S3GHost');
+      const mate = await makeClient('p_s3gMate', 'S3GMate');
+      const roomId = await createCustomRoom(host, {
+        playerId: 'p_s3gHost', nickname: 'S3GHost',
+      });
+      mate.emit('join_room', { roomId, playerId: 'p_s3gMate', nickname: 'S3GMate' });
+      await waitForEvent(mate, 'room_joined', 3000);
+
+      // Fill remaining seats 2, 3 with bots.
+      host.emit('add_bot_to_seat', { seat: 2 });
+      host.emit('add_bot_to_seat', { seat: 3 });
+      await delay(150);
+
+      host.emit('start_game');
+      await delay(300);
+
+      const preRoom = getRooms().get(roomId);
+      expect(preRoom).toBeTruthy();
+      expect(preRoom!.phase).not.toBe('WAITING_FOR_PLAYERS');
+      expect(preRoom!.players[0]?.isBot).toBe(false);
+      expect(preRoom!.players[1]?.isBot).toBe(false);
+      expect(preRoom!.players[2]?.isBot).toBe(true);
+
+      host.disconnect();
+      await delay(600);
+
+      const postRoom = getRooms().get(roomId);
+      expect(postRoom).toBeTruthy();
+      expect(postRoom!.players[0]?.isBot).toBe(true);
+
+      mate.disconnect();
+    } finally {
+      __setDisconnectTimeoutsForTest({ trickMs: 10_000 });
+    }
+  }, 15_000);
+});
+
+describe('S4 — room capacity enforcement', () => {
+  it('rejects the 5th player with room_full error once 4 seats are taken', async () => {
+    const host = await makeClient('p_s4host', 'S4Host');
+    const p2 = await makeClient('p_s4p2', 'S4P2');
+    const p3 = await makeClient('p_s4p3', 'S4P3');
+    const p4 = await makeClient('p_s4p4', 'S4P4');
+    const p5 = await makeClient('p_s4p5', 'S4P5');
+
+    const roomId = await createCustomRoom(host, {
+      playerId: 'p_s4host', nickname: 'S4Host',
+    });
+
+    for (const [c, pid, nick] of [
+      [p2, 'p_s4p2', 'S4P2'],
+      [p3, 'p_s4p3', 'S4P3'],
+      [p4, 'p_s4p4', 'S4P4'],
+    ] as const) {
+      c.emit('join_room', { roomId, playerId: pid, nickname: nick });
+      await waitForEvent(c, 'room_joined', 3000);
+    }
+
+    // 5번째 입장 시도 — invalid error 받아야 함
+    const errPromise = waitForEvent<{ message: string }>(p5, 'error', 3000);
+    p5.emit('join_room', { roomId, playerId: 'p_s4p5', nickname: 'S4P5' });
+    const err = await errPromise;
+    expect(err.message).toBe('room_full');
+
+    // 기존 4명 좌석은 그대로
+    const { getRooms } = await import('./socket-handlers');
+    const room = getRooms().get(roomId);
+    expect(room).toBeTruthy();
+    expect([0, 1, 2, 3].every(s => room!.players[s] !== null)).toBe(true);
+
+    host.disconnect();
+    p2.disconnect();
+    p3.disconnect();
+    p4.disconnect();
+    p5.disconnect();
+  }, 15_000);
+
+  it('concurrent 5-way join race: exactly 4 succeed, 1 gets room_full', async () => {
+    const host = await makeClient('p_s4rHost', 'S4RaceHost');
+    const roomId = await createCustomRoom(host, {
+      playerId: 'p_s4rHost', nickname: 'S4RaceHost',
+    });
+
+    // Four rivals racing to the three remaining seats (host holds seat 0).
+    const racers = await Promise.all([
+      makeClient('p_s4r1', 'R1'),
+      makeClient('p_s4r2', 'R2'),
+      makeClient('p_s4r3', 'R3'),
+      makeClient('p_s4r4', 'R4'),
+    ]);
+
+    const outcomes = await Promise.all(racers.map(async (sock, i) => {
+      const nick = `R${i + 1}`;
+      const playerId = `p_s4r${i + 1}`;
+      const joined = waitForEvent(sock, 'room_joined', 3000).then(() => 'joined' as const).catch(() => null);
+      const errored = waitForEvent<{ message: string }>(sock, 'error', 3000).then((e) => e.message).catch(() => null);
+      sock.emit('join_room', { roomId, playerId, nickname: nick });
+      const first = await Promise.race([joined, errored]);
+      return first;
+    }));
+
+    const joined = outcomes.filter(o => o === 'joined').length;
+    const roomFull = outcomes.filter(o => o === 'room_full').length;
+    expect(joined).toBe(3);
+    expect(roomFull).toBe(1);
+
+    // Server state: exactly 4 seats filled.
+    const { getRooms } = await import('./socket-handlers');
+    const room = getRooms().get(roomId);
+    expect(room).toBeTruthy();
+    expect([0, 1, 2, 3].filter(s => room!.players[s] !== null).length).toBe(4);
+
+    host.disconnect();
+    racers.forEach(r => r.disconnect());
+  }, 15_000);
 });
