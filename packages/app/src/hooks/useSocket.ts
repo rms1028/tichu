@@ -648,6 +648,15 @@ export function useSocket() {
           invalid_score_limit: '점수 한도가 올바르지 않습니다',
           invalid_turn_timer: '턴 타이머가 올바르지 않습니다',
           invalid_input: '입력이 올바르지 않습니다',
+          room_name_too_long: '방 이름이 너무 깁니다',
+          password_too_long: '비밀번호가 너무 깁니다',
+          too_many_rooms: '서버에 방이 너무 많습니다. 잠시 후 다시 시도해주세요',
+          too_many_rooms_per_user: '같은 계정으로 만들 수 있는 방 수를 초과했습니다',
+          not_room_host: '방장만 할 수 있는 동작입니다',
+          not_enough_players: '플레이어가 부족합니다',
+          invalid_seat: '유효하지 않은 좌석입니다',
+          seat_occupied: '이미 사용 중인 좌석입니다',
+          delete_failed: '계정 삭제에 실패했습니다',
         };
         useGameStore.setState({ toastMsg: errorMap[msg] ?? msg });
       }
