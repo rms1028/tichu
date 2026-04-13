@@ -53,7 +53,36 @@ cd packages/app
 npx expo start                     # Expo 개발 서버
 npx expo run:ios                   # iOS 빌드
 npx expo run:android               # Android 빌드
+
+# ── Android 모바일 자동화 (EAS 없이, base APK + JS 스왑) ──
+cd packages/app
+npm run android:dev                # bundle → APK 리패킹 → install → 스크린샷 + logcat 캡처
+npm run android:visual             # 시나리오 기반 visual regression (pixelmatch 기반)
+npm run android:visual -- --update-baselines     # baseline 갱신
+npm run android:visual -- --filter lobby         # 특정 시나리오만 실행
 ```
+
+### 모바일 UI 검증 (필수 루틴)
+
+UI/레이아웃 수정 후에는 **코드 레벨 검증만으로 끝내지 말고** 반드시 실제 디바이스에서 확인한다.
+ADB 로 연결된 폰에서 직접 스크린샷을 받아 눈으로 확인하는 자동화가 이미 준비되어 있다.
+
+**표준 사이클** (UI 변경 시):
+1. `npm run android:dev` — 변경된 JS 번들로 APK 리패킹 후 설치 → 첫 페인트 스크린샷이 `packages/app/.android-dev/screenshots/` 에 저장
+2. `npm run android:visual -- --filter <scenario>` — 기존 baseline 대비 diff 확인
+3. diff 가 의도된 변경이면 `--update-baselines` 로 새 baseline 채택
+4. 실제 스크린샷을 `Read` 툴로 열어 **눈으로** 레이아웃 확인 후 커밋
+
+**시나리오 정의:** `packages/app/scripts/visual-test.mjs` 의 `SCENARIOS` 배열. 각 시나리오는 launch → tap/text/key step → settle → 캡처 → pixelmatch diff 순. 좌표는 Samsung 2340x1080 landscape 기준이며 **디바이스마다 재튜닝 필요**.
+
+**알려진 제약:**
+- React Native + Reanimated 뷰는 UIAutomator 에 노출되지 않음 → `uiautomator dump` 로 내부 버튼을 찾을 수 없다. PNG 에서 픽셀 좌표를 읽어 tap 한다.
+- Logo glow / particle 애니메이션 때문에 `uiautomator dump` 가 "could not get idle state" 로 부분 덤프만 반환한다. 로비 이후 화면에서는 PNG 기반 좌표가 유일한 신뢰 수단.
+- `showAttendance` / 출석 팝업은 `useEffect` 에서 한 틱 늦춰 마운트된다 (RN 0.76 Bridgeless Modal focus-steal 회피). 시나리오 timing 이 이에 의존.
+- `adb shell input tap` 은 현재 포커스 윈도우에 이벤트를 보낸다. 다른 앱이 foreground 면 **그 앱** 에 전달되므로 실행 전 `am force-stop` 으로 방해 앱 정리 필수.
+- 저장된 nickname (`useUserStore.nickname`) 이 있으면 login 스크린을 건너뛴다 → `03-lobby` 시나리오의 login-단계 탭이 의미 없이 lobby 에 입력되어 baseline 이 깨질 수 있다. 깨끗한 baseline 은 `pm clear com.tichu.app` 으로 초기화 후 재생성.
+
+**ADB 위치 (자동 감지):** `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe` / `$ANDROID_HOME` / `$ANDROID_SDK_ROOT`.
 
 ### 코드 컨벤션
 - **언어:** TypeScript strict 모드, any 사용 금지
