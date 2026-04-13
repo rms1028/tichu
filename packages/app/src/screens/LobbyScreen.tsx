@@ -13,7 +13,7 @@ import { RulesScreen } from './RulesScreen';
 interface LobbyScreenProps {
   onJoin: (roomId: string, playerId: string, nickname: string, password?: string) => void;
   onTutorial?: () => void;
-  onCreateCustomRoom?: (roomName: string, password: string | undefined, playerId: string, nickname: string) => void;
+  onCreateCustomRoom?: (roomName: string, password: string | undefined, playerId: string, nickname: string, options?: { scoreLimit?: number; turnTimer?: number | null; allowSpectators?: boolean }) => void;
   onListRooms?: () => void;
   onGetLeaderboard?: () => void;
   onFriendInit?: (playerId: string, nickname: string) => void;

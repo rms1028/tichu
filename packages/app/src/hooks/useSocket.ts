@@ -644,6 +644,9 @@ export function useSocket() {
           already_in_room: '이미 방에 참가 중입니다',
           room_not_found: '방을 찾을 수 없습니다',
           room_full: '방이 가득 찼습니다',
+          wrong_password: '비밀번호가 올바르지 않습니다',
+          invalid_score_limit: '점수 한도가 올바르지 않습니다',
+          invalid_turn_timer: '턴 타이머가 올바르지 않습니다',
           invalid_input: '입력이 올바르지 않습니다',
         };
         useGameStore.setState({ toastMsg: errorMap[msg] ?? msg });

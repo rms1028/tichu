@@ -245,11 +245,11 @@ function AppInner() {
             joinRoom(room, playerId, nick, password);
           }
         }}
-        onCreateCustomRoom={(roomName, password, playerId, nick) => {
+        onCreateCustomRoom={(roomName, password, playerId, nick, options) => {
           setNickname(nick);
           setMatchMode('custom');
           setScreen('matchmaking');
-          createCustomRoom(roomName, password, playerId, nick);
+          createCustomRoom(roomName, password, playerId, nick, options);
         }}
         onListRooms={listRooms}
         onGetLeaderboard={getLeaderboard}

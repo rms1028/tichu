@@ -34,6 +34,11 @@ interface Props {
     password: string | undefined,
     playerId: string,
     nickname: string,
+    options?: {
+      scoreLimit?: number;
+      turnTimer?: number | null;
+      allowSpectators?: boolean;
+    },
   ) => void;
   onListRooms?: () => void;
 }
@@ -251,10 +256,13 @@ export function CustomMatchScreen({
       pw ? pw : undefined,
       savedPlayerId,
       savedNickname,
+      {
+        scoreLimit: form.scoreLimit,
+        turnTimer: form.turnTimer,
+        allowSpectators: form.allowSpectators,
+      },
     );
     setCreateOpen(false);
-    // TODO: server — 서버 API 가 scoreLimit/turnTimer/allowSpectators 를 받아들이면
-    // 여기서 함께 전송. 현재 useSocket 시그니처는 (name, password, playerId, nickname).
   }, [savedPlayerId, savedNickname, onCreateCustomRoom]);
 
   // ─── 상단 바 ─────────────────────────────────────────
