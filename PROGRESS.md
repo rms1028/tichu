@@ -234,8 +234,107 @@ UI 정제 4 phase. `CustomMatchScreen.tsx` 한 파일 안에서만 작업.
 
 ---
 
+## 4차 작업 (출시 차단 해소 + 흰 화면 디버깅 + 자동화 인프라)
+
+날짜: 2026-04-13 세션. 한 세션에 출시 차단 항목 마무리, 어제부터 못 잡은 흰 화면 root cause 발견, 게임 버그 4개 fix, 자동화 도구 4종 구축까지.
+
+### 4-1. 출시 차단 (S1~S4) — 거의 다 이미 끝나있었음
+
+- `S1` `room_list` 확장 (hostName/hostId/scoreLimit/turnTimer/allowSpectators/createdAt) — 이미 서버에 구현됨
+- `S2` `create_custom_room` 옵션 배선 — 서버 OK, **클라가 form → useSocket 까지 전달 안 함** → 한 줄짜리 fix `dd1bb9d`
+- `S3` 방장 떠나기 → `transferHost` — 이미 구현됨
+- `S4` 풀방 입장 거절 토스트 — 이미 구현됨, **9개 추가 에러 코드 한국어 매핑** `ff80741`
+- `S+` 차단 사용자 방 필터링 — `dbGetBlockedFirebaseUids` 헬퍼 + `list_rooms` 가드 `19322a9`
+
+### 4-2. 게임 버그 4개
+
+| 커밋 | 버그 | 원인 |
+|---|---|---|
+| `3ab5f19` | 무제한 타이머 + 본인 입력 없이 게임 광속 자동 진행 | `setTimeout(31_536_000_000)` 32-bit signed int 한계 초과 → 즉시 1ms 후 발화. fix: 0 sentinel + `MAX_SAFE_TIMEOUT_MS` 가드 |
+| `819c150` | 소원 카드 강제 시 어떤 카드도 못 냄 | `ActionBar.tsx` `playLock` 영구 잠김. 서버가 `must_fulfill_wish` 거부 → 턴 안 바뀜 → playLock release 안 됨. fix: `lockBriefly()` 1초 자동 해제 |
+| `819c150` | 무제한 타이머가 클라에 30초로 표시 | `gameStore.onTurnChanged` 의 `turnDuration ? ...` truthy 체크가 0 무시. fix: `!== undefined` |
+| `ff80741` | 9개 서버 에러 코드 한국어 토스트 누락 | `useSocket.ts` errorMap 확장 |
+
+### 4-3. 흰 화면 — 어제부터 7번 넘게 시도해도 못 잡던 버그
+
+**Root cause**: `packages/app/src/utils/sound.ts:239-242` 의 top-level `window.addEventListener` 가드 누락. 같은 클래스 버그가 이전 세션에 `bgm.ts`에서 fix 됐었지만 sound.ts 는 놓침. 
+
+```js
+// ❌ Before — RN에서 typeof window === 'object' 지만 window.addEventListener === undefined
+if (typeof window !== 'undefined') {
+  window.addEventListener('touchstart', unlockAudio, { once: true });
+}
+
+// ✅ After — 함수 존재 자체를 검사
+if (
+  typeof window !== 'undefined' &&
+  typeof window.addEventListener === 'function'
+) {
+  window.addEventListener(...);
+}
+```
+
+위 한 줄짜리 `TypeError: undefined is not a function` 이 sound.ts 모듈 평가를 깨뜨리고, 그게 useSocket / GameResultScreen / AppRoot 의 정적 import 체인 전부를 무너뜨려서 React mount 가 한 프레임도 못 일어나고 → 순백색 Activity 배경만 남았음. Bridgeless 모드의 에러 swallowing 때문에 빨간 에러 화면도 안 떠서 디버깅이 거의 불가능.
+
+**진단 방법** (이 세션의 핵심 발견): EAS 빌드는 quota + 시간이 많이 들어서 가설 검증 사이클이 느림. 그래서 ADB 자동화 워크플로우를 만들어서 한 사이클 30초~1분으로 줄임:
+1. 기존 EAS-built APK 를 "shell" 로 두고
+2. `expo export` 로 새 Hermes bytecode 만 생성
+3. APK 안의 `assets/index.android.bundle` 만 swap
+4. zipalign + apksigner debug 서명
+5. adb install + 실행 + screencap + logcat
+
+이걸로 5단계 phase probe 를 빠르게 돌려서 `app/index.tsx` → `app/_layout.tsx` → 라이브러리 로드 → AppRoot import → 마침내 sound.ts 에서 throw 함을 특정함.
+
+**커밋**: `b0a5abf`
+
+### 4-4. 자동화 인프라 (4종)
+
+| # | 도구 | 위치 | 효과 |
+|---|---|---|---|
+| 1 | `npm run android:dev` | `packages/app/scripts/android-dev.mjs` | EAS 없는 dev 사이클: expo export → APK swap → install → 실행 → 스크린샷 → logcat. 한 사이클 30~60초. EAS quota 0 사용. 위 흰 화면 진단도 이걸로 했음. |
+| 2 | `npm run android:visual` | `packages/app/scripts/visual-test.mjs` | pixelmatch + pngjs 시각 회귀. 시나리오 기반, top 100px 마스킹(상태바 배제), 0.1% tolerance. 현재 시나리오 3개: `01-splash`, `02-login`, `03-lobby` (게스트 로그인 풀 체인 자동). |
+| 3 | pre-commit hook | `.githooks/pre-commit` + `packages/app/scripts/lint-rn-safety.mjs` | TypeScript AST 기반. top-level Web API 호출 (`window.addEventListener` 등) 을 가드 없이 쓰면 commit 차단. 오늘의 sound.ts 사고 재발 방지. 51 파일 0 violations. 활성화: `sh scripts/install-git-hooks.sh` |
+| 4 | `custom-match-v3.test.ts` | `packages/server/src/` | 서버 통합 테스트 7개. v3 기능 (scoreLimit / turnTimer / allowSpectators / room_list 확장 / host transfer) + 4-2 의 setTimeout overflow fix 회귀 차단. 9.5초/run. |
+
+**관련 커밋**:
+- `62b096a` android-dev 스크립트
+- `1d8d089` visual-test (pixelmatch)
+- `e2749bd` 03-lobby interactive 시나리오 추가
+- `1164aa7` pre-commit hook + lint-rn-safety
+- `4f53859` custom-match-v3 통합 테스트
+
+### 4-5. UI 정리
+
+- `app/_layout.tsx` 의 `LAYOUT OK · android XX` 진단 배지를 `__DEV__` 가드 뒤로 숨김. Production APK 에서는 안 보임. 기저 진단 인프라 (early error capture, lazy AppRoot require try/catch) 는 안전망으로 유지.
+
+### 검증
+
+- `npx tsc --noEmit` (app + server): 0 errors
+- `npx vitest run src/custom-match-v3.test.ts`: 7/7 passing
+- `npm run android:visual`: 3/3 passing (back-to-back, diff < 0.05%)
+- 폰 실기기 검증: Samsung R3CXC0JPRBF, Android 16 (API 36), New Architecture + Bridgeless + Hermes 에서 LoginScreen → Lobby 풀 렌더 확인
+
+### 알려진 미해결 / 이월
+
+- **EAS quota 무료 한도 소진** — May 01 까지 새 EAS 빌드 불가. 그 동안은 `npm run android:dev` 의 dev APK (debug-signed) 로 작업.
+- **Visual test scenarios 04+** (커스텀 매치 → 방 생성 → 게임 → 결과) 는 ADB tap 이 Reanimated 카드를 안 받아서 stall. TODO 로 기록. 추후 좌표 / pointer-events 디버깅 필요.
+- **`googleOAuth` 모바일 native flow** — 메모리 룰 미해결. 현재 popup (web) 만 작동. expo-auth-session 비활성 상태.
+
+---
+
 ## 전체 커밋 히스토리 (브랜치)
 ```
+(4차) e2749bd  visual-test: 03-lobby interactive scenario
+(4차) 1d8d089  visual-test: pixelmatch + masking
+(4차) 4f53859  custom-match-v3 integration tests (7 passing)
+(4차) 1164aa7  pre-commit hook + lint-rn-safety (TS AST)
+(4차) 62b096a  scripts/android-dev.mjs — one-command dev cycle
+(4차) b0a5abf  fix: white screen — sound.ts window.addEventListener guard
+(4차) 819c150  fix: wish-card play lockout + turn timer 0 sentinel
+(4차) 3ab5f19  fix: turn timer "unlimited" → setTimeout overflow
+(4차) ff80741  feat(errors): 9 server error codes → Korean toasts
+(4차) 19322a9  feat: filter blocked hosts from room_list
+(4차) dd1bb9d  feat: wire v2 room options from form to server
 (v3) 93442e7  Phase 3 — filter bar cleanup
 (v3) 812b381  Phase 2 — clean empty state
 (v3) e588e05  Phase 1 — lobby bg + CardView for empty state

@@ -78,24 +78,30 @@ export default function RootLayout() {
   return (
     <View style={{ flex: 1, backgroundColor: '#0a1f12' }}>
       <StatusBar style="light" />
-      <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 9999,
-          backgroundColor: 'rgba(0,100,0,0.95)',
-          paddingTop: 38,
-          paddingBottom: 6,
-          alignItems: 'center',
-        }}
-        pointerEvents="none"
-      >
-        <Text style={{ color: '#5dff9d', fontSize: 11, fontWeight: '700' }}>
-          {`LAYOUT OK · ${Platform.OS} ${Platform.Version}`}
-        </Text>
-      </View>
+      {/* Dev-only LAYOUT OK banner. The early-error diagnostic infra
+       * (this file, app/index.tsx, src/utils/globalErrorCapture.ts) stays
+       * in place as a safety net for future white-screen incidents — only
+       * the visible banner is hidden in production. */}
+      {__DEV__ && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 9999,
+            backgroundColor: 'rgba(0,100,0,0.95)',
+            paddingTop: 38,
+            paddingBottom: 6,
+            alignItems: 'center',
+          }}
+          pointerEvents="none"
+        >
+          <Text style={{ color: '#5dff9d', fontSize: 11, fontWeight: '700' }}>
+            {`LAYOUT OK · ${Platform.OS} ${Platform.Version}`}
+          </Text>
+        </View>
+      )}
       <Stack
         screenOptions={{
           headerShown: false,
