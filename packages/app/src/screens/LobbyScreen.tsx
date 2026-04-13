@@ -282,7 +282,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
         {!matching ? (
           <Animated.View entering={FadeIn.delay(400).duration(500)} style={S.cardsWrap}>
             <View style={S.cards}>
-              <TouchableOpacity style={[S.card, compact && S.cardCompact, S.cardG, !connected && { opacity: 0.4 }]} activeOpacity={0.85} onPress={() => setMatching(true)} disabled={!connected}>
+              <TouchableOpacity style={[S.card, compact && S.cardCompact, S.cardG]} activeOpacity={0.85} onPress={() => setMatching(true)}>
                 <View style={S.cardGlow} pointerEvents="none" />
                 <Text style={[S.cIcon, compact && S.cIconCompact]}>{'\u26A1'}</Text>
                 <Text style={S.cTitle}>{'\uBE60\uB978 \uB9E4\uCE6D'}</Text>
@@ -490,8 +490,9 @@ const S = StyleSheet.create({
 
   // 중앙 — ScrollView contentContainerStyle
   center: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16 },
-  // compact (landscape phone / short screen): 위 정렬 + 여백 축소
-  centerCompact: { justifyContent: 'center', paddingVertical: 4, paddingHorizontal: 24 },
+  // compact (landscape phone / short screen): 위 정렬 + 여백 축소.
+  // flex-start 로 둬야 content 가 nav 아래로 밀려서 게임 규칙 버튼이 가려지는 일이 없다.
+  centerCompact: { justifyContent: 'flex-start', paddingTop: 6, paddingBottom: 12, paddingHorizontal: 24 },
   logoArea: { alignItems: 'center', marginBottom: 16 },
   title: { color: '#FFD700', fontSize: 48, fontWeight: '900', letterSpacing: 10, textShadowColor: 'rgba(255,215,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 12, marginBottom: 2 },
   subtitle: { color: 'rgba(255,255,255,0.3)', fontSize: 12, fontWeight: '600', letterSpacing: 4, marginBottom: 8 },
@@ -501,10 +502,10 @@ const S = StyleSheet.create({
   cardsWrap: { alignItems: 'stretch' },
   cards: { flexDirection: 'row', gap: 20, justifyContent: 'center' },
   card: { width: 160, height: 240, borderRadius: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.6, shadowRadius: 28, elevation: 16, overflow: 'hidden' },
-  // compact = landscape phone. 내용은 유지하되 살짝 작게.
-  cardCompact: { width: 200, height: 175, paddingHorizontal: 14, paddingVertical: 10 },
-  cIconCompact: { fontSize: 28, marginBottom: 2 },
-  rulesBtnCompact: { marginTop: 8, paddingVertical: 8, paddingHorizontal: 14 },
+  // compact = landscape phone. 내용은 유지하되 nav 와 겹치지 않도록 충분히 작게.
+  cardCompact: { width: 190, height: 140, paddingHorizontal: 12, paddingVertical: 8 },
+  cIconCompact: { fontSize: 24, marginBottom: 0 },
+  rulesBtnCompact: { marginTop: 6, paddingVertical: 6, paddingHorizontal: 14 },
   cardG: { backgroundColor: '#0d6b3f' },
   cardD: { backgroundColor: '#14332a' },
   cardGlow: { position: 'absolute', top: -20, left: -20, right: -20, bottom: -20, borderRadius: 30, backgroundColor: 'rgba(245,158,11,0.04)', shadowColor: '#F59E0B', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 30, elevation: 2 },
