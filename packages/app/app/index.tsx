@@ -39,6 +39,7 @@ export default function App() {
 
   const [mounted, setMounted] = useState(false);
   const [results, setResults] = useState<Step[]>([]);
+  const [AppRootComponent, setAppRootComponent] = useState<React.ComponentType | null>(null);
 
   useEffect(() => {
     console.error('[DIAG-P1] useEffect firing — this proves passive effects work');
@@ -77,7 +78,37 @@ export default function App() {
     }
     console.error('[DIAG-P1] probes done. failed index:', stopAt);
     setResults(collected);
+
+    // 모든 probe 통과 → AppRoot 로드. 실패 시 진단 화면 유지.
+    if (stopAt === -1) {
+      try {
+        console.error('[DIAG-P1] all probes ok — loading AppRoot');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const mod = require('../src/AppRoot');
+        const Comp: React.ComponentType = mod && (mod.default || mod);
+        if (typeof Comp === 'function') {
+          console.error('[DIAG-P1] AppRoot resolved — mounting');
+          setAppRootComponent(() => Comp);
+        } else {
+          console.error('[DIAG-P1] AppRoot module loaded but default export is not a function');
+        }
+      } catch (e: any) {
+        console.error('[DIAG-P1] AppRoot require failed:', e?.message, '\n', e?.stack);
+        setResults((prev) => [
+          ...prev,
+          {
+            label: '../src/AppRoot',
+            status: 'fail',
+            error: (e?.message ? String(e.message) : String(e)) + '\n' + (e?.stack ?? ''),
+          },
+        ]);
+      }
+    }
   }, []);
+
+  if (AppRootComponent) {
+    return <AppRootComponent />;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0a1f12' }}>
