@@ -82,8 +82,19 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
   const [friendMsg, setFriendMsg] = useState('');
   const [page, setPage] = useState<Page>('main');
   const [showFriends, setShowFriends] = useState(false);
-  const [showNickEdit, setShowNickEdit] = useState(!savedNickname);
-  const [showAttendance, setShowAttendance] = useState(() => useUserStore.getState().checkAttendance());
+  // ⚠️ showNickEdit / showAttendance 는 초기값을 false 로 두고 mount 후
+  // useEffect 에서 결정한다. 이유: RN 0.76 + New Arch + Bridgeless 에서
+  // `<Modal visible={true}>` 이 첫 렌더에 활성화되면 네이티브 Dialog 가
+  // 부모 window focus 를 훔쳐 gesture state 가 "DOWN" 으로 stuck — 이후
+  // 모든 탭이 "Got DOWN touch before receiving UP or CANCEL" 로 거부됨.
+  // 한 틱 늦춰서 마운트하면 회피 가능.
+  const [showNickEdit, setShowNickEdit] = useState(false);
+  const [showAttendance, setShowAttendance] = useState(false);
+  useEffect(() => {
+    if (!savedNickname) setShowNickEdit(true);
+    if (useUserStore.getState().checkAttendance()) setShowAttendance(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [searchCode, setSearchCode] = useState('');
   const [lbTab, setLbTab] = useState<'all' | 'friends' | 'weekly'>('all');
   const [showTitlePicker, setShowTitlePicker] = useState(false);
@@ -262,7 +273,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           <Animated.View entering={FadeIn.delay(400).duration(500)} style={S.cardsWrap}>
             <View style={S.cards}>
               <TouchableOpacity style={[S.card, S.cardG, !connected && { opacity: 0.4 }]} activeOpacity={0.85} onPress={() => setMatching(true)} disabled={!connected}>
-                <View style={S.cardGlow} />
+                <View style={S.cardGlow} pointerEvents="none" />
                 <Text style={S.cIcon}>{'\u26A1'}</Text>
                 <Text style={S.cTitle}>{'\uBE60\uB978 \uB9E4\uCE6D'}</Text>
                 <Text style={S.cSub}>{'\uBE44\uC2B7\uD55C \uC2E4\uB825\uC758 \uC720\uC800\uC640'}{'\n'}{'\uC989\uC2DC \uD50C\uB808\uC774'}</Text>
@@ -408,9 +419,14 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           </Animated.View>
         </Pressable>
       )}
-      {/* ═══ 출석 체크 팝업 ═══ */}
-      <Modal visible={showAttendance} transparent animationType="fade">
-        <View style={S.attOverlay}>
+      {/* ═══ 출석 체크 팝업 ═══
+        * RN 0.76 + New Arch + Bridgeless 에서 네이티브 `<Modal>` 는
+        * Android Dialog 를 띄우면서 부모 window focus 를 가로채
+        * gesture state 가 "DOWN" 으로 stuck 되는 버그가 있다. 그래서
+        * 이 팝업은 Modal 대신 absolute overlay View 로 렌더한다 —
+        * BACK 키/시스템 Dialog 시맨틱은 불필요. */}
+      {showAttendance && (
+        <View style={[S.attOverlay, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }]}>
           <Animated.View entering={ZoomIn.duration(350).springify()} style={S.attModal}>
             <Text style={S.attTitle}>{'🎁 오늘의 출석 보상!'}</Text>
             <View style={S.attGrid}>
@@ -427,15 +443,17 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
             </TouchableOpacity>
           </Animated.View>
         </View>
-      </Modal>
-      {/* 닉네임 편집 모달 */}
-      <Modal visible={showNickEdit} transparent animationType="fade">
-        <View style={S.mOvl}><View style={S.mBox}>
-          <Text style={S.mTitle}>{'✏️ 닉네임 변경'}</Text>
-          <TextInput style={S.mInput} value={nick} onChangeText={setNick} placeholder={'닉네임 입력'} placeholderTextColor="rgba(255,255,255,0.3)" maxLength={12} />
-          <TouchableOpacity style={[S.mOk, !nick.trim() && { opacity: 0.4 }]} onPress={() => { if (nick.trim()) { userSetNickname(nick.trim()); onChangeNickname?.(nick.trim()); setShowNickEdit(false); } }} disabled={!nick.trim()}><Text style={S.mOkT}>{'확인'}</Text></TouchableOpacity>
-        </View></View>
-      </Modal>
+      )}
+      {/* 닉네임 편집 팝업 — Modal 대신 overlay View (위 주석 참조) */}
+      {showNickEdit && (
+        <View style={[S.mOvl, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }]}>
+          <View style={S.mBox}>
+            <Text style={S.mTitle}>{'✏️ 닉네임 변경'}</Text>
+            <TextInput style={S.mInput} value={nick} onChangeText={setNick} placeholder={'닉네임 입력'} placeholderTextColor="rgba(255,255,255,0.3)" maxLength={12} />
+            <TouchableOpacity style={[S.mOk, !nick.trim() && { opacity: 0.4 }]} onPress={() => { if (nick.trim()) { userSetNickname(nick.trim()); onChangeNickname?.(nick.trim()); setShowNickEdit(false); } }} disabled={!nick.trim()}><Text style={S.mOkT}>{'확인'}</Text></TouchableOpacity>
+          </View>
+        </View>
+      )}
       {/* 커스텀 매치는 CustomMatchScreen 풀스크린 페이지로 이전됨 (page === 'customMatch') */}
     </SafeAreaView>
   );

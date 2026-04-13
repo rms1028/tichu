@@ -48,5 +48,11 @@ try {
   }
 } catch (_) { /* swallow */ }
 
+// Initialize gesture-handler BEFORE anything else that may touch the RN
+// touch pipeline. Required for RN 0.76 + New Architecture — without this,
+// the first frame's gesture state gets stuck in DOWN and every subsequent
+// tap is rejected with "Got DOWN touch before receiving UP or CANCEL".
+require('react-native-gesture-handler');
+
 // Now load expo-router. Use require, not import — see comment above.
 require('expo-router/entry');

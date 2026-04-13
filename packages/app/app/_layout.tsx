@@ -13,6 +13,7 @@ import React from 'react';
 import { View, Text, ScrollView, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 interface EarlyError {
   message: string;
@@ -76,7 +77,7 @@ export default function RootLayout() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0a1f12' }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#0a1f12' }}>
       <StatusBar style="light" />
       {/* Dev-only LAYOUT OK banner. The early-error diagnostic infra
        * (this file, app/index.tsx, src/utils/globalErrorCapture.ts) stays
@@ -108,6 +109,6 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: '#1a472a', overflow: 'hidden' },
         }}
       />
-    </View>
+    </GestureHandlerRootView>
   );
 }
