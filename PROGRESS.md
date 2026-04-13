@@ -354,3 +354,102 @@ f6798e8  Phase 3 - left room list
 52cbe6f  Phase 2 - page skeleton + responsive
 ba33880  Phase 1 - design tokens + deps
 ```
+
+---
+
+## 5차 작업 — 출시 전 마지막 안전망 (2026-04-13)
+
+**목표**: "안 하면 망함" 영역의 마지막 안전망을 출시 전에 마무리.
+**진행**: Phase 1~3 완료, Phase 4 사용자 입력 대기.
+
+### Phase 1 — S3/S4 통합 테스트 ✅
+**커밋**: `6d2c677`
+
+PROGRESS.md 출시 차단 항목 S3/S4 를 실제 소켓 경로로 검증. 테스트 5개 추가 (+ 기존 7개 → 총 12개 pass).
+
+- **S3-1 WAITING host drop → host_changed** ✅
+  실제 `socket.disconnect()` 로 떨어뜨리고 남은 인간에게 방장 위임되는지 확인. 30초 기본 타이머를 200ms 로 줄이기 위해 `__setDisconnectTimeoutsForTest` 훅 신설.
+- **S3-1b sole host drop → 방 파괴** ✅
+  혼자 있던 방장이 끊기면 방이 실제로 삭제 (getRooms 비어있음).
+- **S3-2 mid-game human drop → 봇 대체** ✅
+  2인간+2봇 세팅에서 start_game 후 한 명 disconnect → 10초 타이머(300ms 로 축소) 후 seat 0 이 isBot=true. 방도 유지.
+- **S4-1 5번째 join_room → room_full** ✅
+  4자리 채운 뒤 다섯 번째 시도는 `error: room_full` 로 거부, 기존 4명 seat 보존.
+- **S4-2 동시 5인 입장 race** ✅
+  `Promise.all` 로 동시에 4명이 race → 정확히 3명 joined / 1명 room_full. 서버 state 에 4석 채워짐.
+
+**부수 수정**:
+- `socket-handlers.ts`: `WAITING_DISCONNECT_MS` / `TRICK_BOT_REPLACE_MS` 모듈-탑 const + `__setDisconnectTimeoutsForTest` 내보냄. 테스트는 try/finally 로 원복.
+- `custom-match-v3.test.ts` `makeClient`: 100ms 고정 delay → `waitForEvent('login_success')` 로 변경. 기존 첫 테스트의 cold-start flakiness 수정.
+- 서버 Firebase Admin cold-start 워밍업 추가 (beforeAll).
+
+**vitest**: `12/12 passing`, duration 17.4s.
+
+### Phase 2 — lint-rn-safety 확장 ✅
+**커밋**: `6ba7a54`
+
+기존 linter (`window.addEventListener` 등 특정 메서드 whitelist) 위에 **receiver-level 규칙** 추가. top-level 에서 `document` / `localStorage` / `sessionStorage` / `location` / `history` / `navigator` 어느 것이든 접근하면 차단 (call 과 property read 양쪽).
+
+**가드로 인정**:
+- `if (typeof <receiver> !== 'undefined') { ... }` (또는 `=== 'object'` / `=== 'function'`)
+- `if (Platform.OS === 'web') { ... }`
+
+**새 위험 패턴 발견 (실제 잠재 버그)**:
+- `packages/app/src/utils/sound.ts:160-162` top-level `const isIOS = typeof navigator !== 'undefined' && (/iPad.../.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));`
+  - `typeof navigator` 가드는 있지만 `&&` 단락 안의 property access 들은 guard 한정이 linter 관점에서 약함 + RN 에서 `navigator` 는 `{}` 로 polyfill 되어 있어 typeof 가드를 통과하지만 `.userAgent` 등은 존재하지 않음. 언젠가 터질 잠재 2차 흰 화면.
+  - **수정**: `isIOS()` 를 lazy-memoized 함수로 전환. 첫 호출 시점에만 `navigator` 접근, 결과 캐시. `VOICE_STYLES` 는 `VOICE_STYLES_IOS` / `VOICE_STYLES_DEFAULT` 로 분리해 호출 시점에 선택.
+
+**검증**:
+- `lint-rn-safety: 51 file(s) scanned, 0 violations` (리팩터 후)
+- 임시 bad.ts 에 5개 위험 패턴 (document.title / localStorage.getItem / history.pushState / location.href / navigator.userAgent) 넣고 돌리면 6개 violation 나옴 (localStorage 는 기존 + 신규 규칙 양쪽이 잡음)
+- 가드된 good.ts (`typeof document !== 'undefined'` / `Platform.OS === 'web'` / function body) → 0 violations
+
+### Phase 3 — android-dev smoke test ✅
+**커밋**: `5accdd7`
+
+`scripts/android-dev.mjs` 끝에 regression gate 추가. 설치+런치 후 자동 실행되며 다음 중 하나라도 걸리면 `process.exit(1)`:
+
+1. **fatal 패턴 detection** — 기존 JS-error 검사는 `-s ReactNativeJS:V *:S` 로 필터해서 native crash 를 놓침. smoke 단계는 `AndroidRuntime:E ReactNative:E ReactNativeJS:E *:S` 로 넓게 잡음. 7개 패턴:
+   - `FATAL EXCEPTION`
+   - `AndroidRuntime.*Process.*has died`
+   - `TypeError: undefined is not`
+   - `ReferenceError`
+   - `Unable to load script`
+   - `JavaScript code execution failed`
+   - `BUNDLE.*Loading failed`
+2. **white-screen 픽셀 분석** — `pngjs` 로 방금 찍은 `dev.png` 를 읽어 `(R, G, B)` 모두 ≥ 240 인 픽셀 비율 계산. 90% 초과면 fail. 어제 `sound.ts` 사건 같은 silent failure 재발 차단.
+
+실패 시 `smoke-fail-<ts>.log` 에 fatal line + full logcat 덤프.
+
+**옵션**: `--no-smoke` 플래그 또는 `NO_SMOKE=1` 환경변수로 스킵 (빠른 dev 사이클 용).
+
+**검증**:
+- 정상 빌드: `Smoke test passed (white: 6.0%, fatal: 0)` ✅
+- `NO_SMOKE=1`: `! Smoke test skipped (--no-smoke)` ✅
+- fatal 패턴 regex 단위 검증: 6개 샘플 로그 라인 중 4개 flag, 2개 (정상 로그 + RN gesture warning) OK ✅
+
+### Phase 4 — Sentry 크래시 추적 ⏸ 보류 (DSN 필요)
+
+**사전 작업 필요 (사람)**:
+1. https://sentry.io 계정 생성 (무료 플랜)
+2. New Project → React Native, 이름 `tichu-app`
+3. DSN 복사 (`https://xxx@xxx.ingest.sentry.io/xxx`)
+4. `packages/app/.env` 에 `SENTRY_DSN=` 추가
+
+위 작업이 끝나면 다음 세션에 재개. 구현 계획은 작업 지시서(Phase 4 section) 유지.
+
+**이유**: 임의 더미 DSN 삽입 금지. `.env` 에 없으면 `initSentry()` 가 no-op 이라 실질적으로 0% 보호 — 그 상태로 commit 하면 "설치됐지만 안 돌아가는" 거짓 안전 상태가 된다.
+
+### 최종 검증
+- `npx tsc --noEmit` (app + server): 0 errors ✅
+- `npx vitest run src/custom-match-v3.test.ts`: 12/12 passing ✅
+- `node packages/app/scripts/lint-rn-safety.mjs`: 51 files, 0 violations ✅
+- `npm run android:dev`: smoke test 통과 ✅
+- Phase 4 Sentry: **보류** (DSN 대기)
+
+### 출시 가능 여부 판정
+
+**조건부 출시 가능.**
+- Phase 1~3 은 출시 전 추가 안전망 역할을 수행하도록 자리 잡음. 회귀/흰 화면/방 정원/host 위임은 자동화로 방어됨.
+- Phase 4 Sentry 가 빠져 있어서 **출시 후 첫 크래시는 사용자 제보로만 알 수 있음**. 베타/소프트런치라면 수용 가능, 정식 출시라면 DSN 먼저 넣고 Phase 4 마무리 권장.
+
