@@ -1,108 +1,156 @@
-// 🩺 Lazy loader entry point.
+// 🩺 DIAGNOSTIC MODE — Phase 1
 //
-// 이 파일은 의도적으로 minimal 합니다. src/* 어떤 파일도 직접 import 하지 않습니다.
-// 실제 앱은 useEffect 안에서 require() 로 로드됩니다.
+// AppRoot 로드 완전 차단. 순수 RN 컴포넌트만 렌더.
 //
-// 이렇게 하면:
-// - expo-router 가 이 route 를 import 할 때 throw 되지 않음
-//   (이 파일의 import graph 는 React + react-native 만 있음)
-// - _layout.tsx 의 LAYOUT OK 띠가 정상 표시됨 (route 로드 성공)
-// - 첫 렌더 시 "LOADING..." 표시
-// - useEffect 안에서 require('../src/AppRoot') 시도
-//   - 성공: 실제 앱 마운트
-//   - throw: 에러 메시지를 화면에 표시 (try/catch 가 잡음)
+// 목적: 렌더 파이프라인 자체가 정상인지 검증.
+//   - 이 화면이 뜨면: _layout + route 마운트 OK. 문제는 AppRoot 의 import 체인.
+//   - 이 화면도 흰색이면: expo-router / RN 초기화 레벨 문제.
 //
-// 이 패턴이 module-load 단계 throw 를 잡을 수 있는 유일한 방법입니다.
+// 추가 진단: 각 단계를 console.error 로 찍어 logcat 에서 확인 가능하게 함.
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Platform } from 'react-native';
 
-interface LoadError {
-  message: string;
-  stack: string;
+console.error('[DIAG-P1] index.tsx module evaluating');
+
+interface Step {
+  label: string;
+  status: 'pending' | 'ok' | 'fail';
+  error?: string;
+}
+
+function tryRequire(label: string, fn: () => any): { ok: boolean; error?: string } {
+  try {
+    console.error('[DIAG-P1] trying:', label);
+    fn();
+    console.error('[DIAG-P1] OK:', label);
+    return { ok: true };
+  } catch (e: any) {
+    const msg = e?.message ? String(e.message) : String(e);
+    const stack = e?.stack ? String(e.stack) : '(no stack)';
+    console.error('[DIAG-P1] FAIL:', label, '::', msg);
+    console.error('[DIAG-P1] STACK:', stack);
+    return { ok: false, error: msg + '\n' + stack };
+  }
 }
 
 export default function App() {
-  const [Inner, setInner] = useState<React.ComponentType | null>(null);
-  const [error, setError] = useState<LoadError | null>(null);
+  console.error('[DIAG-P1] App component rendering');
+
+  const [mounted, setMounted] = useState(false);
+  const [results, setResults] = useState<Step[]>([]);
 
   useEffect(() => {
-    // require() 는 동기적이고 throw 를 던지므로 try/catch 로 잡힘.
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const mod = require('../src/AppRoot');
-      const Component: React.ComponentType = mod && (mod.default || mod);
-      if (typeof Component !== 'function') {
-        setError({
-          message: 'AppRoot module loaded but default export is not a component',
-          stack: `typeof default = ${typeof Component}\nkeys = ${Object.keys(mod || {}).join(',')}`,
-        });
-        return;
-      }
-      setInner(() => Component);
-    } catch (e: any) {
-      setError({
-        message: (e && e.message) ? String(e.message) : String(e),
-        stack: (e && e.stack) ? String(e.stack) : '(no stack)',
-      });
+    console.error('[DIAG-P1] useEffect firing — this proves passive effects work');
+    setMounted(true);
+
+    const probes: { label: string; fn: () => any }[] = [
+      { label: 'react-native', fn: () => require('react-native') },
+      { label: 'react-native-reanimated', fn: () => require('react-native-reanimated') },
+      { label: 'react-native-gesture-handler', fn: () => require('react-native-gesture-handler') },
+      { label: 'react-native-mmkv', fn: () => require('react-native-mmkv') },
+      { label: 'react-native-screens', fn: () => require('react-native-screens') },
+      { label: 'react-native-safe-area-context', fn: () => require('react-native-safe-area-context') },
+      { label: 'expo-notifications', fn: () => require('expo-notifications') },
+      { label: 'expo-constants', fn: () => require('expo-constants') },
+      { label: 'expo-haptics', fn: () => require('expo-haptics') },
+      { label: 'expo-blur', fn: () => require('expo-blur') },
+      { label: 'expo-linear-gradient', fn: () => require('expo-linear-gradient') },
+      { label: 'firebase/app', fn: () => require('firebase/app') },
+      { label: 'firebase/auth', fn: () => require('firebase/auth') },
+      { label: 'zustand', fn: () => require('zustand') },
+      { label: 'socket.io-client', fn: () => require('socket.io-client') },
+    ];
+
+    const collected: Step[] = [];
+    let stopAt = -1;
+    for (let i = 0; i < probes.length; i++) {
+      const p = probes[i]!;
+      const r = tryRequire(p.label, p.fn);
+      collected.push({ label: p.label, status: r.ok ? 'ok' : 'fail', error: r.error });
+      if (!r.ok) { stopAt = i; break; }
     }
+    // 나머지는 pending 으로
+    for (let i = stopAt + 1; i < probes.length; i++) {
+      if (stopAt === -1) break;
+      collected.push({ label: probes[i]!.label, status: 'pending' });
+    }
+    console.error('[DIAG-P1] probes done. failed index:', stopAt);
+    setResults(collected);
   }, []);
 
-  // 에러 화면
-  if (error) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#1a1a2e', paddingTop: 60 }}>
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
-          <Text style={{ color: '#ff5555', fontSize: 22, fontWeight: '900', marginBottom: 8 }}>
-            {'⚠️ AppRoot 로드 실패'}
-          </Text>
-          <Text style={{ color: '#888', fontSize: 12, marginBottom: 20 }}>
-            {`Platform: ${Platform.OS} ${Platform.Version}`}
-          </Text>
-
-          <Text style={{ color: '#FFD700', fontSize: 14, fontWeight: '800', marginTop: 8, marginBottom: 6 }}>
-            {'Error Message'}
-          </Text>
-          <Text style={{ color: '#ffaaaa', fontSize: 14, fontWeight: '700', marginBottom: 12 }}>
-            {error.message}
-          </Text>
-
-          <Text style={{ color: '#FFD700', fontSize: 14, fontWeight: '800', marginTop: 8, marginBottom: 6 }}>
-            {'Stack'}
-          </Text>
-          <Text style={{ color: '#ccc', fontSize: 11, lineHeight: 16 }}>
-            {error.stack}
-          </Text>
-
-          <Text style={{ color: '#666', fontSize: 12, marginTop: 24, textAlign: 'center' }}>
-            {'이 화면 전체를 스크린샷으로 개발자에게 보내주세요.'}
-          </Text>
-        </ScrollView>
-      </View>
-    );
-  }
-
-  // 실제 앱 마운트
-  if (Inner) {
-    return <Inner />;
-  }
-
-  // 로딩 화면
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: '#0a1f12',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <Text style={{ color: '#FFD24A', fontSize: 18, fontWeight: '900', letterSpacing: 4 }}>
-        {'TICHU'}
-      </Text>
-      <Text style={{ color: '#FFD700', fontSize: 11, fontWeight: '700', marginTop: 8 }}>
-        {'LOADING APP...'}
-      </Text>
+    <View style={{ flex: 1, backgroundColor: '#0a1f12' }}>
+      <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 60, paddingBottom: 60 }}>
+        <Text style={{ color: '#5dff9d', fontSize: 28, fontWeight: '900', marginBottom: 6 }}>
+          {'✓ RENDER OK'}
+        </Text>
+        <Text style={{ color: '#FFD24A', fontSize: 14, marginBottom: 4 }}>
+          {`Platform: ${Platform.OS} ${Platform.Version}`}
+        </Text>
+        <Text style={{ color: mounted ? '#5dff9d' : '#FFD24A', fontSize: 14, marginBottom: 20 }}>
+          {mounted ? '✓ useEffect fired' : '· waiting for useEffect...'}
+        </Text>
+
+        <Text style={{ color: '#FFD24A', fontSize: 16, fontWeight: '800', marginBottom: 10 }}>
+          {'모듈 로드 진단'}
+        </Text>
+
+        {results.length === 0 ? (
+          <Text style={{ color: '#888', fontSize: 12 }}>
+            {mounted ? '진단 실행 중...' : '-'}
+          </Text>
+        ) : null}
+
+        {results.map((s, i) => (
+          <View
+            key={i}
+            style={{
+              marginBottom: 6,
+              padding: 8,
+              backgroundColor:
+                s.status === 'fail'
+                  ? 'rgba(255,85,85,0.15)'
+                  : s.status === 'ok'
+                  ? 'rgba(93,255,157,0.08)'
+                  : 'rgba(255,255,255,0.04)',
+              borderLeftWidth: 2,
+              borderLeftColor:
+                s.status === 'fail'
+                  ? '#ff5555'
+                  : s.status === 'ok'
+                  ? '#5dff9d'
+                  : '#555',
+            }}
+          >
+            <Text
+              style={{
+                color:
+                  s.status === 'fail'
+                    ? '#ffaaaa'
+                    : s.status === 'ok'
+                    ? '#5dff9d'
+                    : '#888',
+                fontSize: 13,
+                fontWeight: '700',
+              }}
+            >
+              {s.status === 'ok' ? '✓' : s.status === 'fail' ? '✗' : '·'}
+              {' '}
+              {s.label}
+            </Text>
+            {s.error ? (
+              <Text style={{ color: '#ffaaaa', fontSize: 10, marginTop: 4, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                {s.error.slice(0, 600)}
+              </Text>
+            ) : null}
+          </View>
+        ))}
+
+        <Text style={{ color: '#666', fontSize: 11, marginTop: 30, textAlign: 'center' }}>
+          {'이 화면이 뜨면 렌더 파이프라인 정상. 실패한 모듈 라벨 + 에러 메시지를 개발자에게 보내주세요.'}
+        </Text>
+      </ScrollView>
     </View>
   );
 }
