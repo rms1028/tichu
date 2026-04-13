@@ -32,7 +32,7 @@ import {
   recordGameResult as dbRecordGameResult, getLeaderboard, getGameHistory,
   dbSendFriendRequest, dbAcceptFriendRequest, dbRejectFriendRequest,
   dbRemoveFriend, dbGetFriendsWithNickname, dbGetPendingRequests,
-  dbFindUserByCode, dbReportUser, dbBlockUser, dbUnblockUser, dbGetBlockedIds,
+  dbFindUserByCode, dbReportUser, dbBlockUser, dbUnblockUser, dbGetBlockedIds, dbGetBlockedFirebaseUids,
 } from './db.js';
 import {
   getSeasonInfo, getSeasonLeaderboard, updateSeasonRating,
@@ -438,12 +438,23 @@ export function registerSocketHandlers(io: Server): void {
     });
 
     // ── 커스텀 방 목록 (로비 구독 + 페이지네이션) ─────────────
-    socket.on('list_rooms', (data?: { limit?: number; offset?: number }) => {
+    socket.on('list_rooms', async (data?: { limit?: number; offset?: number }) => {
       // 로비 소켓 룸에 참가 (rooms_updated를 여기만 수신)
       socket.join(ROOM_LIST_SOCKET_ROOM);
 
       const limit = Math.min(data?.limit ?? 50, 100);
       const offset = data?.offset ?? 0;
+
+      // 차단 사용자가 호스트인 방 필터링 — 인증된 유저만, 실패 시 빈 목록으로 대체
+      let blockedHostIds = new Set<string>();
+      if (dbUserId) {
+        try {
+          const uids = await dbGetBlockedFirebaseUids(dbUserId);
+          blockedHostIds = new Set(uids);
+        } catch (err) {
+          console.error('[list_rooms] blocked lookup failed:', err);
+        }
+      }
       // 확장된 응답 형태 — Custom Match 화면이 사용하는 모든 필드
       interface RoomListEntry {
         roomId: string;
@@ -462,6 +473,7 @@ export function registerSocketHandlers(io: Server): void {
       for (const [id, room] of rooms) {
         if (!room.settings.isCustom) continue;
         if (room.phase !== 'WAITING_FOR_PLAYERS') continue;
+        if (room.hostPlayerId && blockedHostIds.has(room.hostPlayerId)) continue;
         const playerCount = [0, 1, 2, 3].filter(s => room.players[s] !== null).length;
         if (playerCount >= 4) continue; // 풀방은 숨기지만, 0명(방금 생성)도 표시
         if (skipped < offset) { skipped++; continue; }

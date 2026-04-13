@@ -220,6 +220,16 @@ export async function dbGetBlockedByIds(userId: string): Promise<string[]> {
   return blocks.map(b => b.blockerId);
 }
 
+export async function dbGetBlockedFirebaseUids(userId: string): Promise<string[]> {
+  const blocks = await prisma.block.findMany({
+    where: { blockerId: userId },
+    select: { blocked: { select: { firebaseUid: true } } },
+  });
+  return blocks
+    .map(b => b.blocked?.firebaseUid)
+    .filter((uid): uid is string => !!uid);
+}
+
 // ── 랭킹 ────────────────────────────────────────────────────
 
 export async function getLeaderboard(limit = 20) {
