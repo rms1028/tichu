@@ -35,11 +35,12 @@
 import { spawnSync } from 'node:child_process';
 import {
   existsSync, mkdirSync, readdirSync, statSync,
-  rmSync, writeFileSync, copyFileSync,
+  rmSync, writeFileSync, copyFileSync, readFileSync,
 } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { PNG } from 'pngjs';
 
 // ── Paths ─────────────────────────────────────────────────────────────
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -270,6 +271,98 @@ if (errors.length > 0) {
   if (errors.length > 15) console.log(`  ${c.gray}... and ${errors.length - 15} more${c.reset}`);
 } else {
   ok('No JS errors detected in logcat');
+}
+
+// ── Step 7: smoke test (regression gate) ─────────────────────────────
+//
+// After a successful install+launch, verify two things:
+//  1. No fatal/native crash in logcat (AndroidRuntime:E, ReactNative:E,
+//     TypeError, bundle load failure). These are NOT filtered by the
+//     `-s ReactNativeJS:V` capture above, so we grab a wider slice now.
+//  2. The screenshot isn't a white/blank screen — the canonical
+//     silent-failure mode when a module-load throw breaks AppRoot.
+//
+// Skip with `--no-smoke` (or `NO_SMOKE=1`) for a fast dev cycle.
+const skipSmoke = process.argv.includes('--no-smoke') || process.env.NO_SMOKE === '1';
+if (skipSmoke) {
+  warn('Smoke test skipped (--no-smoke).');
+} else {
+  log('Running smoke test...');
+
+  // 1) Wider logcat pull for native/fatal signals
+  const fatalLogcat = sh(
+    `"${ADB}" -s ${deviceId} logcat -d AndroidRuntime:E ReactNative:E ReactNativeJS:E *:S`,
+    { silent: true },
+  );
+  const fatalPatterns = [
+    /FATAL EXCEPTION/,
+    /AndroidRuntime.*Process.*has died/i,
+    /TypeError: undefined is not/,
+    /ReferenceError/,
+    /Unable to load script/i,
+    /JavaScript code execution failed/i,
+    /BUNDLE.*Loading failed/i,
+  ];
+  const fatalLines = [];
+  for (const p of fatalPatterns) {
+    for (const line of fatalLogcat.split('\n')) {
+      if (p.test(line)) fatalLines.push(line);
+    }
+  }
+
+  // 2) White-screen pixel analysis. Reads the freshly pulled dev.png
+  //    and counts pixels where R/G/B are all ≥ 240 (≈ white or very
+  //    bright gray). > 90% → flagged as a white-screen failure.
+  let whiteRatio = 0;
+  try {
+    const png = PNG.sync.read(readFileSync(shotPath));
+    const total = png.width * png.height;
+    let whitePixels = 0;
+    for (let i = 0; i < png.data.length; i += 4) {
+      const r = png.data[i];
+      const g = png.data[i + 1];
+      const b = png.data[i + 2];
+      if (r >= 240 && g >= 240 && b >= 240) whitePixels++;
+    }
+    whiteRatio = whitePixels / total;
+  } catch (e) {
+    warn(`Smoke test: could not read screenshot for pixel analysis: ${e.message}`);
+  }
+  const whiteScreen = whiteRatio > 0.9;
+
+  if (fatalLines.length > 0 || whiteScreen) {
+    const smokeLogPath = join(LOGS_DIR, `smoke-fail-${ts}.log`);
+    const parts = [];
+    if (fatalLines.length > 0) {
+      parts.push(`# Fatal/native errors (${fatalLines.length})`);
+      parts.push(...fatalLines);
+      parts.push('');
+    }
+    if (whiteScreen) {
+      parts.push(`# White screen detected`);
+      parts.push(`  screenshot: ${shotPath}`);
+      parts.push(`  white pixel ratio: ${(whiteRatio * 100).toFixed(1)}% (threshold 90%)`);
+      parts.push('');
+    }
+    parts.push('# Full logcat');
+    parts.push(fatalLogcat);
+    writeFileSync(smokeLogPath, parts.join('\n'));
+
+    console.error(`\n${c.red}🚨 SMOKE TEST FAILED${c.reset}`);
+    if (fatalLines.length > 0) {
+      console.error(`${c.red}▼ fatal errors in logcat (${fatalLines.length}):${c.reset}`);
+      fatalLines.slice(0, 10).forEach((l) => console.error(`  ${c.gray}${l}${c.reset}`));
+      if (fatalLines.length > 10) console.error(`  ${c.gray}... and ${fatalLines.length - 10} more${c.reset}`);
+    }
+    if (whiteScreen) {
+      console.error(`${c.red}▼ white screen detected (${(whiteRatio * 100).toFixed(1)}% white pixels)${c.reset}`);
+      console.error(`  Screenshot: ${shotPath}`);
+    }
+    console.error(`\n  Full log: ${smokeLogPath}`);
+    console.error(`  Rerun with --no-smoke to bypass for a fast cycle.`);
+    process.exit(1);
+  }
+  ok(`Smoke test passed (white: ${(whiteRatio * 100).toFixed(1)}%, fatal: 0)`);
 }
 
 console.log(`\n${c.green}Done.${c.reset}`);
