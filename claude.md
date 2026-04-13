@@ -636,3 +636,72 @@ BOMB_WINDOW용. 핸드에서 currentTable보다 강한 모든 폭탄 반환.
 | 55 | BOMB_WINDOW 중 끊김 | 폭탄 미제출, 윈도우 진행 |
 | 56 | DRAGON_GIVE 중 끊김 | 타임아웃→랜덤 양도 |
 | 57 | 소원 선택 중 끊김 | 타임아웃→소원 안 함 |
+
+---
+
+## 자동화
+
+현재 repo 에 실제로 존재하는 자동화 전부. 추측 없이 파일 기반으로만 작성.
+
+### 1. Git pre-commit hook — RN 크래시 패턴 차단
+
+- **무엇을 하는지:** `packages/app/{src,app}/**/*.{ts,tsx}` 중 스테이징된 파일을 TypeScript AST 로 walk 해서 **모듈 최상위** 에서 호출되는 Web 전용 API (`window.addEventListener`, `document.*`, `localStorage.*`, `speechSynthesis.*`, `navigator.clipboard.*`, `new AudioContext()` 등) 를 차단. 2026-04-13 에 `sound.ts` 의 top-level `window.addEventListener` 가 RN Bridgeless 에서 TypeError 를 던져 흰 화면을 만든 사건 이후 회귀 방지용으로 도입.
+- **어떻게 실행되는지:** `git commit` 시 자동. 일회성 셋업 한 번만 필요 — `sh scripts/install-git-hooks.sh` 로 `git config core.hooksPath .githooks` 를 적용. 수동 검사는 `node packages/app/scripts/lint-rn-safety.mjs <files...>` 또는 인자 없이 실행해 `packages/app/{src,app}/**/*.{ts,tsx}` 전부 스캔.
+- **관련 파일:**
+  - `scripts/install-git-hooks.sh` — 한 번만 실행하는 훅 설치 스크립트
+  - `.githooks/pre-commit` — 스테이징 파일 필터링 + linter 호출
+  - `packages/app/scripts/lint-rn-safety.mjs` — 실제 AST linter (DANGEROUS_CALLS / DANGEROUS_RECEIVERS / DANGEROUS_NEWS 세트 관리)
+
+### 2. `npm run android:dev` — EAS 없는 Android 개발 사이클
+
+- **무엇을 하는지:** (1) `expo export --platform android` 로 Hermes bytecode 생성 → (2) 기존 base APK (`packages/app/.android-dev/base.apk`, 이전 EAS 빌드 산출물) 를 "shell" 로 두고 `assets/index.android.bundle` 만 교체 → (3) `zipalign` + `apksigner` 로 debug 키 서명 → (4) ADB 로 install + launch → (5) `screencap` + `logcat` 캡처 → (6) logcat 에서 `ReactNativeJS` 에러 자동 추출. 한 사이클 ≈ 30~60 초, EAS quota 0 사용.
+- **어떻게 실행:** `cd packages/app && npm run android:dev`. 옵션: `WAIT_MS=12000 npm run android:dev` (첫 페인트 대기 연장), `SKIP_INSTALL=1 npm run android:dev` (APK 만 만들고 설치 생략). 네이티브 의존성이 바뀌면 base APK 재생성 필요 — 새 EAS 빌드 후 `.android-dev/base.apk` 로 복사.
+- **관련 파일:**
+  - `packages/app/scripts/android-dev.mjs` — 빌드 파이프라인 본체
+  - `packages/app/scripts/README.md` — 셋업/트러블슈팅 가이드
+  - `packages/app/.android-dev/base.apk` — base APK (gitignored)
+  - `packages/app/.android-dev/screenshots/` — 매 실행 스크린샷 (타임스탬프)
+  - `packages/app/.android-dev/logs/` — 매 실행 logcat
+
+### 3. `npm run android:visual` — 시나리오 기반 visual regression
+
+- **무엇을 하는지:** 이미 설치된 APK 를 launch → 시나리오마다 `tap` / `text` / `keyevent` step 수행 → 스크린샷 캡처 → pixelmatch 로 `visual-tests/baselines/<scenario>.png` 대비 diff 계산 (`includeAA:false`, `threshold:0.1`, 상단 100px 마스킹해서 시계/배터리 변화 무시) → `DIFF_TOLERANCE_PCT=0.1` 이내면 pass. Samsung One UI 의 status bar 안정화 위해 실행 전후로 `systemui demo` 브로드캐스트로 시계/배터리/네트워크 pin. 현재 정의된 시나리오: `01-splash`, `02-login`, `03-lobby`, `04-custom-match`.
+- **어떻게 실행:** `cd packages/app && npm run android:visual` (전체). 옵션: `-- --filter lobby` (시나리오 이름 부분일치), `-- --update-baselines` / `-u` (현재 캡처를 새 baseline 으로 채택). 종료 코드: fail 한 시나리오 개수.
+- **관련 파일:**
+  - `packages/app/scripts/visual-test.mjs` — 러너 + `SCENARIOS` 배열 (tap 좌표는 2340x1080 landscape 기준, 디바이스마다 재튜닝 필요)
+  - `packages/app/visual-tests/baselines/` — 커밋된 정답 이미지 (현재 `01-splash.png`, `02-login.png`, `03-lobby.png`)
+  - `packages/app/visual-tests/current/` — 매 실행 캡처 + `.diff.png` (gitignored)
+
+### 4. GitHub Actions CI — `.github/workflows/ci.yml`
+
+- **무엇을 하는지:** `master` 로의 push/PR 에서 순차 실행:
+  1. `test-shared` — `npm run build -w packages/shared` + `npm test -w packages/shared` (vitest)
+  2. `test-server` — shared 빌드 + `prisma generate` + vitest (단, `socket-sim.test.ts` 와 `socket-sim-100.test.ts` 는 CI 자원 초과로 제외)
+  3. `typecheck-app` — shared 빌드 + `cd packages/app && npx tsc --noEmit`
+  4. `build` — shared + prisma + `npm run build -w packages/server` (test-server / typecheck-app 의존)
+- **어떻게 실행:** GitHub 가 자동. 로컬 재현은 각 job 의 명령을 개별 실행.
+- **관련 파일:** `.github/workflows/ci.yml`
+
+### 5. 루트 workspace 스크립트 — `package.json`
+
+- **무엇을 하는지:** 모노레포 워크스페이스 위임 + `postinstall` 에서 `packages/shared` 자동 빌드 (shared 가 app/server 양쪽에 static dependency 라 설치 직후 빌드 안 돼 있으면 이후 명령들이 전부 터진다).
+- **어떻게 실행:**
+  - `npm install` — 자동 postinstall 로 shared 빌드
+  - `npm run build:shared` / `npm run test:shared`
+  - `npm run dev:server` / `npm run test:server`
+  - `npm test` — 모든 워크스페이스 `test --if-present`
+- **관련 파일:** `package.json` (루트)
+
+### 6. 패키지별 개발/테스트 스크립트
+
+- **`packages/shared`:** `build` (tsc), `test` (vitest run), `test:watch` (vitest)
+- **`packages/server`:** `dev` (tsx watch src/index.ts), `build` (prisma generate + tsc), `start` (prisma db push + node dist), `test` (vitest run)
+- **`packages/app`:** `start` (expo), `android` (expo run:android), `ios` (expo run:ios), `typecheck` (tsc --noEmit), `build` (expo export web), 그리고 위 #2·#3 의 `android:dev`·`android:visual`
+- **관련 파일:** 각 `packages/*/package.json`
+
+### 이 repo 에 **없는** 것 (혼동 방지)
+
+- Husky / lint-staged — 훅은 `.githooks/` + `core.hooksPath` 로 직접 관리
+- Makefile — 루트에 없음 (`node_modules` 안 말고)
+- Prettier / ESLint 자동화 훅 — pre-commit 은 RN safety 만 실행
+- 자동 배포 워크플로우 — CI 는 test/build 까지만, 배포는 Railway 의 GitHub 연동이 별도로 처리
