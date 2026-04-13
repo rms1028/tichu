@@ -280,9 +280,20 @@ const FILTER = filterIdx >= 0 ? args[filterIdx + 1] : null;
 // from scratch by default (`relaunch: true`) so failures in one don't
 // cascade. Set `relaunch: false` to chain steps from the previous state.
 //
-// Coordinates for `tap` are device-specific. Use Android Studio's Layout
-// Inspector or `adb shell uiautomator dump && adb shell cat /sdcard/window_dump.xml`
-// to find element bounds.
+// IMPORTANT — coordinates are device-specific (this set is for a Samsung
+// Galaxy with 2340x1080 landscape). For a different device, recapture
+// each baseline, find button centers, and update the tap [x,y] entries.
+//
+// React Native + Reanimated views are NOT exposed to UIAutomator so
+// `adb shell uiautomator dump` won't surface inner buttons. Use the
+// PNG screenshots from `npm run android:dev` and read pixel coords off
+// the image with any image viewer.
+//
+// HOST PREREQ for scenarios beyond `02-login`:
+//   1. Local server running:  cd packages/server && npm run dev
+//   2. ADB reverse:           adb reverse tcp:3001 tcp:3001
+//   3. .env points to:        EXPO_PUBLIC_SERVER_URL=http://localhost:3001
+//   4. Rebuild + install:     npm run android:dev
 const SCENARIOS = [
   {
     name: '01-splash',
@@ -294,19 +305,31 @@ const SCENARIOS = [
     settle: 500,
     steps: [{ wait: 5000 }], // wait for splash → login transition
   },
-  // Example interactive (commented — coordinates need to be filled in
-  // for the user's device after running once and inspecting the screenshot):
-  //
-  // {
-  //   name: '03-lobby',
-  //   steps: [
-  //     { wait: 5000 },
-  //     { text: 'TestUser' },
-  //     { wait: 200 },
-  //     { tap: [540, 1500] },  // "guest start" button — get coords from screenshot
-  //     { wait: 2000 },
-  //   ],
-  // },
+  {
+    name: '03-lobby',
+    settle: 1500,
+    // Login screen → type nickname → tap guest start → arrive at lobby
+    steps: [
+      { wait: 5000 },               // wait for login screen
+      { tap: [1144, 434] },         // tap nickname input (center of input field)
+      { wait: 800 },
+      { text: 'Tester' },
+      { wait: 300 },
+      { key: 'KEYCODE_BACK' },      // dismiss keyboard
+      { wait: 600 },
+      { tap: [1144, 625] },         // tap "게스트로 시작" button
+      { wait: 3500 },               // wait for guest_login round-trip + lobby render
+    ],
+  },
+  // TODO — scenarios beyond the lobby (custom match → create room →
+  // matchmaking → game → result) were attempted and did not complete
+  // because ADB-injected taps don't seem to reach Reanimated-wrapped
+  // touchables on the lobby cards (or the coordinates need more work
+  // — this needs investigation). When extending:
+  //   1. Run `npm run android:visual` and inspect baselines/03-lobby.png
+  //   2. Find the "커스텀 모드 플레이" button center in the screenshot
+  //   3. Add the next scenario, mirroring 03-lobby's tap pattern
+  //   4. Verify by re-running `npm run android:visual`
 ];
 
 // ── Main ──────────────────────────────────────────────────────────────
