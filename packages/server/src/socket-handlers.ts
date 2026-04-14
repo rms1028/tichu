@@ -2,7 +2,7 @@ import type { Server, Socket } from 'socket.io';
 import type { Card, Rank, PlayedHand } from '@tichu/shared';
 import {
   isNormalCard, isBomb,
-  getAvailableBombs, validateHand, canBeat,
+  validateHand, canBeat,
 } from '@tichu/shared';
 import { logger } from './logger.js';
 import type { GameRoom, PlayerInfo } from './game-room.js';
@@ -177,7 +177,6 @@ interface ClientGameState {
   scores: { team1: number; team2: number };
   wonTrickSummary: Record<number, { count: number; points: number }>;
   canDeclareTichu: boolean;
-  bombWindow: { remainingMs: number; canSubmitBomb: boolean } | null;
   players: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null>;
   mySeat: number;
 }
@@ -214,19 +213,6 @@ function buildClientState(room: GameRoom, seat: number): ClientGameState {
     !room.hasPlayedCards[seat] &&
     (room.phase === 'PASSING' || room.phase === 'TRICK_PLAY');
 
-  let bombWindowInfo: ClientGameState['bombWindow'] = null;
-  if (room.bombWindow && room.bombWindow.excludedSeat !== seat) {
-    const elapsed = Date.now() - room.bombWindow.startedAt;
-    const remaining = Math.max(0, room.bombWindow.duration - elapsed);
-    const bombs = room.hands[seat]!.length > 0
-      ? getAvailableBombs(room.hands[seat]!, room.bombWindow.currentTopPlay)
-      : [];
-    bombWindowInfo = {
-      remainingMs: remaining,
-      canSubmitBomb: bombs.length > 0,
-    };
-  }
-
   const players: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
   for (let s = 0; s < 4; s++) {
     const p = room.players[s];
@@ -246,7 +232,6 @@ function buildClientState(room: GameRoom, seat: number): ClientGameState {
     scores: room.scores,
     wonTrickSummary,
     canDeclareTichu,
-    bombWindow: bombWindowInfo,
     players,
     mySeat: seat,
   };
@@ -2658,23 +2643,10 @@ function broadcastEvents(io: Server, room: GameRoom, events: GameEvent[]): void 
         }
         break;
 
-      case 'bomb_window_start':
-        // Send personalized bomb window info to each player (모든 플레이어에게)
-        for (let s = 0; s < 4; s++) {
-          const player = room.players[s];
-          if (!player?.socketId || !room.bombWindow) continue;
-
-          const bombs = room.hands[s]!.length > 0
-            ? getAvailableBombs(room.hands[s]!, room.bombWindow.currentTopPlay)
-            : [];
-
-          io.to(player.socketId).emit('bomb_window_start', {
-            remainingMs: room.bombWindow.duration,
-            canSubmitBomb: bombs.length > 0,
-          });
-        }
-        break;
-
+      // NOTE: 3초 bomb_window 시스템은 제거됨 (bomb-window.ts 상단 주석 참조).
+      // 폭탄은 submit_bomb 즉시 인터럽트로 처리. bomb_window_start / bomb_window_end
+      // 이벤트는 bomb-window.ts 의 deferred 경로에서 생성되지만 해당 경로 자체가
+      // 런타임에 호출되지 않으므로 case 를 두지 않는다 (default 브로드캐스트로도 충분).
       default:
         // 나머지는 방 전체 브로드캐스트
         io.to(room.roomId).emit(event.type, event);

@@ -87,7 +87,6 @@ export function GameScreen({
   const turnStartedAt = useGameStore((s) => s.turnStartedAt);
   const turnDuration = useGameStore((s) => s.turnDuration);
   const canDeclareTichu = useGameStore((s) => s.canDeclareTichu);
-  const bombWindow = useGameStore((s) => s.bombWindow);
   const lastPlayEvent = useGameStore((s) => s.lastPlayEvent);
   const [bombShake, setBombShake] = useState(false);
   // 스몰 티츄 확인 모달 — 실수로 누르면 -100 손해라 중요. RN 0.76 touch-lock
@@ -164,7 +163,6 @@ export function GameScreen({
       setRemainingSec(0);
       return;
     }
-    if (bombWindow) return; // pause timer during bomb window
     const tick = () => {
       const elapsed = Date.now() - turnStartedAt;
       const remaining = Math.max(0, Math.ceil((turnDuration - elapsed) / 1000));
@@ -173,7 +171,7 @@ export function GameScreen({
     tick();
     intervalRef.current = setInterval(tick, 200);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [turnStartedAt, turnDuration, phase, bombWindow]);
+  }, [turnStartedAt, turnDuration, phase]);
   // 턴 글로우 (테이블 영역)
   const turnGlow = useSharedValue(0);
   useEffect(() => {

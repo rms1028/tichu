@@ -93,9 +93,6 @@ export interface GameState {
   canDeclareTichu: boolean;
   players: Record<number, PlayerPublic | null>;
 
-  // 폭탄 윈도우
-  bombWindow: { remainingMs: number; canSubmitBomb: boolean } | null;
-
   // 개 리드 후 화면 표시용 (1.5초간 개 카드 표시)
   dogLeadDisplay: PlayedHand | null;
 
@@ -192,8 +189,6 @@ export interface GameState {
   onExchangeReceived: (data: { fromLeft: Card; fromPartner: Card; fromRight: Card }) => void;
   onTichuDeclared: (seat: number, tichuType: 'large' | 'small') => void;
   onTurnChanged: (seat: number, turnDuration?: number) => void;
-  onBombWindowStart: (remainingMs: number, canSubmitBomb: boolean) => void;
-  onBombWindowEnd: () => void;
   onDragonGiveRequired: (seat: number) => void;
   onDragonGiveCompleted: (fromSeat: number, targetSeat: number) => void;
   onRoundResult: (team1: number, team2: number, scores: { team1: number; team2: number }, details?: { team1CardPoints: number; team2CardPoints: number; tichuBonuses: Record<number, number>; oneTwoFinish: boolean }, finishOrder?: number[], tichuDeclarations?: Record<number, 'large' | 'small' | null>) => void;
@@ -220,7 +215,6 @@ const INITIAL_STATE = {
   wonTrickSummary: {} as Record<number, WonTrickSummary>,
   canDeclareTichu: false,
   players: { 0: null, 1: null, 2: null, 3: null } as Record<number, PlayerPublic | null>,
-  bombWindow: null as { remainingMs: number; canSubmitBomb: boolean } | null,
   dogLeadDisplay: null as PlayedHand | null,
   exchangeReceived: null as { fromLeft: Card; fromPartner: Card; fromRight: Card } | null,
   dragonGiveRequired: false,
@@ -456,12 +450,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     // 0 = 무제한 sentinel. truthy 체크면 0이 무시되어 기본 30000ms 가 남는다.
     ...(turnDuration !== undefined ? { turnDuration } : {}),
   })),
-
-  onBombWindowStart: (remainingMs, canSubmitBomb) => set({
-    bombWindow: { remainingMs, canSubmitBomb },
-  }),
-
-  onBombWindowEnd: () => set({ bombWindow: null }),
 
   onDragonGiveRequired: (seat) => set((state) => ({
     dragonGiveRequired: seat === state.mySeat,

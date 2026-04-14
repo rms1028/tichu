@@ -81,7 +81,6 @@ export function PlayerHand() {
   const selectedCards = useGameStore((s) => s.selectedCards);
   const toggleCard = useGameStore((s) => s.toggleCardSelection);
   const isMyTurn = useGameStore((s) => s.isMyTurn);
-  const bombWindow = useGameStore((s) => s.bombWindow);
   const tableCards = useGameStore((s) => s.tableCards);
   const phase = useGameStore((s) => s.phase);
 
@@ -95,7 +94,7 @@ export function PlayerHand() {
     return keys;
   }, [bombGroups]);
 
-  const canSelectNormal = isMyTurn || (bombWindow !== null && bombWindow.canSubmitBomb);
+  const canSelectNormal = isMyTurn;
   const hasBombs = bombGroups.length > 0;
 
   const normalCards = sorted;
