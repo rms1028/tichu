@@ -106,15 +106,20 @@ beforeAll(async () => {
     });
   });
 
-  // Warmup: Firebase Admin lazily initializes on the first guest_login,
-  // which can push the first test's room_joined latency past 3000ms on a
-  // cold start. Burn that cost here so per-test timeouts stay tight.
+  // Warmup: Firebase Admin + DB layer lazily initializes on the first
+  // guest_login, which can push the first test's room_joined latency past
+  // 3000ms on a cold start. Burn that cost here by actually waiting for
+  // login_success so the DB layer is definitely warm before the first test
+  // runs. Previously used a fixed `delay(500)` which wasn't enough on slow
+  // CI machines — first test then fired at cold DB and tripped the
+  // 5000ms vitest testTimeout.
   const warm = ioClient(SERVER_URL, { transports: ['websocket'], forceNew: true });
   await waitForEvent(warm, 'connect', 3000);
+  const warmLogin = waitForEvent(warm, 'login_success', 10000);
   warm.emit('guest_login', { guestId: 'p_warmup', nickname: 'Warmup' });
-  await delay(500);
+  await warmLogin;
   warm.disconnect();
-}, 20000);
+}, 30000);
 
 afterAll(async () => {
   ioServer?.close();
