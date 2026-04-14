@@ -1326,6 +1326,13 @@ export function registerSocketHandlers(io: Server): void {
         nextSeat = active.find(s => s !== playerSeat) ?? playerSeat;
       }
       room.currentTurn = nextSeat;
+      // ⚠️ 턴 변경 이벤트 emit 필수. 없으면 클라이언트의 currentTurn 이 이전 턴
+      // (인터럽트된 플레이어) 에 멈춰 있어서 실제 다음 턴 플레이어가 자기 차례인 줄
+      // 모르고 hang. 인터럽트 전 턴 주인은 pass 를 눌러도 server 에서 not_your_turn.
+      // (버그 2026-04-14: 상대팀 용 → 내 team 패스/패스 → 파트너 차례에 내가
+      //  인터럽트 폭탄 → 파트너가 pass 못함. broadcastEvents 가 your_turn 을
+      //  해당 player 에 개별, 나머지엔 turn_changed 로 브로드캐스트.)
+      broadcastEvents(io, room, [{ type: 'your_turn', seat: nextSeat }]);
       handlePostPlay(io, room);
     });
 
