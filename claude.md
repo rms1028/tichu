@@ -62,7 +62,7 @@ tichu/
     │   ├── scoring.ts                # 점수 정산
     │   ├── phoenix-utils.ts          # 봉황 대체 로직 공용 헬퍼
     │   ├── index.ts                  # 배럴 export
-    │   └── *.test.ts                 # vitest 단위 테스트 (7 파일)
+    │   └── *.test.ts                 # vitest 단위 테스트 (8 파일)
     │
     ├── server/
     │   ├── prisma/schema.prisma      # User · GameResult · Season · SeasonRanking · FriendRequest · Friendship · Report · Block · PushToken
@@ -187,7 +187,7 @@ sh scripts/install-git-hooks.sh   # core.hooksPath=.githooks 적용
 
 ### 4.3. `npm run android:visual` — 시나리오 기반 visual regression
 
-- **무엇을 하는지:** 설치된 APK 를 launch → 시나리오마다 `tap` / `text` / `keyevent` step 수행 → 스크린샷 캡처 → pixelmatch 로 `visual-tests/baselines/<scenario>.png` 대비 diff 계산 (`includeAA:false`, `threshold:0.1`, 상단 100px 마스킹해서 시계/배터리 변화 무시) → `DIFF_TOLERANCE_PCT=0.1` 이내면 pass. 실행 전후로 `systemui demo` 브로드캐스트로 status bar pin. 현재 시나리오: `01-splash`, `02-login`, `03-lobby`, `04-custom-match`.
+- **무엇을 하는지:** 설치된 APK 를 launch → 시나리오마다 `tap` / `text` / `keyevent` step 수행 → 스크린샷 캡처 → pixelmatch 로 `visual-tests/baselines/<scenario>.png` 대비 diff 계산 (`includeAA:false`, `threshold:0.1`, 상단 100px 마스킹해서 시계/배터리 변화 무시) → `DIFF_TOLERANCE_PCT=0.1` 이내면 pass. 실행 전후로 `systemui demo` 브로드캐스트로 status bar pin. 현재 10 개 시나리오: `01-splash` ~ `04-custom-match`, `05-rules`, `06-ranking`, `07-settings`, `08-shop`, `09-profile`, `10-achievements` (정적 화면만 — §4.4 의 idle state 제약 참조).
 - **어떻게 실행:** `cd packages/app && npm run android:visual`. 옵션: `-- --filter <이름>`, `-- --update-baselines` / `-u`. 종료 코드 = fail 시나리오 개수.
 - **관련 파일:**
   - `packages/app/scripts/visual-test.mjs` (러너 + SCENARIOS 배열, 좌표는 2340×1080 landscape)
@@ -521,33 +521,15 @@ interface RoomSettings {
 
 각 모델의 필드는 스키마 파일이 단일 소스. 운영 기능이 추가되면 스키마와 `db.ts` 를 같이 갱신.
 
-### 7.5. play_cards 처리 파이프라인
+### 7.5. play_cards / submit_bomb 파이프라인
 
-```
-1.  기본 검증: phase=TRICK_PLAY? / bombWindow 없음? / currentTurn 일치? / 카드 보유?
-2.  첫 리드 검증: 없음 (자유 리드 — 참새 포함 의무 없음, 개 허용)
-3.  소원+개 리드 검증: 소원 활성 + 소원 숫자 보유 + 개 → 거부
-4.  족보 검증: validateHand(cards) → null 이면 거부
-5.  바닥 비교: canBeat(tableCards, playedHand) → false 면 거부
-6.  소원 체크: (리드) 소원 숫자 실제 보유 + 미포함 → 거부
-              (팔로우) 소원 숫자 실제 보유 + 미포함 + 포함 가능 합법 조합 존재 → 거부
-7.  상태 업데이트: hands 제거, tableCards 갱신, trick 기록
-8.  소원 해제: 제출 카드에 소원 숫자 포함 시 해제 (폭탄 무관)
-9.  나감 처리: hands 비면 finishOrder 추가, 원투 체크, 3인 나감 체크
-10. 트릭 종료 체크 or 다음 턴 이전 + 타이머 재시작
-11. 브로드캐스트 (폭탄 인터럽트는 별도 `submit_bomb` 경로에서 즉시 처리 — §6.6)
-```
+단일 소스는 `game-engine.ts` 의 `playCards()` 와 `socket-handlers.ts` 의 `submit_bomb` 리스너. 문서에는 **비자명한 검증 순서** 만:
 
-### 7.6. submit_bomb 파이프라인
-
-```
-1. 검증: phase=TRICK_PLAY? / bombWindow 활성? / 카드 보유?
-2. 폭탄 검증: validateHand → 폭탄 타입?
-3. canBeat(bombWindow.currentTopPlay, bomb)?
-4. 핸드 임시 제거 + pendingBombs 추가
-5. 소원 해제 체크
-6. (타임아웃 시 resolveBombWindow 에서 최종 처리)
-```
+- **소원+개 리드 거부:** 소원 활성 + 본인 소원 숫자 실제 보유 + 개 리드 시도 → 거부
+- **팔로우 시 소원 강제:** 소원 숫자 실제 보유 + 바닥 타입 맞는 포함 조합 존재 (봉황 보조 포함) 시 미포함 제출 거부. 폭탄으로만 가능하면 면제
+- **소원 해제 타이밍:** 제출 카드에 소원 숫자 포함 시 즉시 해제 (폭탄 경로 포함)
+- **나감 처리 순서:** hands 비면 finishOrder 추가 → 원투 체크 → 3인 나감 체크 → 트릭 종료 체크
+- **submit_bomb:** §6.6 "즉시 인터럽트" 가 단일 설명. 핸들러는 `canBeat` 검증 후 테이블 갱신 + 다음 활성 플레이어로 `your_turn` emit. `bomb-window.ts` 의 deferred 경로는 미사용
 
 ### 7.7. declare_tichu 처리
 
