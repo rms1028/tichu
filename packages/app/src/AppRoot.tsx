@@ -158,12 +158,18 @@ function AppInner() {
     }
   }, [gameOver]);
 
-  // 결과 화면 — gameOver가 null이면 로비로 복귀
+  // 결과 화면 — gameOver가 null이면 로비 또는 대기실로 복귀
+  // 커스텀 매치는 서버가 10초 후 return_to_waiting 을 보내며 phase 를 WAITING 으로
+  // 리셋한다. 이때는 로비가 아니라 매칭 대기실로 돌아가야 한다.
   useEffect(() => {
     if (screen === 'result' && !gameOver) {
-      setScreen('lobby');
+      if (matchMode === 'custom' && roomId && phase === 'WAITING_FOR_PLAYERS') {
+        setScreen('matchmaking');
+      } else {
+        setScreen('lobby');
+      }
     }
-  }, [screen, gameOver]);
+  }, [screen, gameOver, matchMode, roomId, phase]);
 
   // 첫 방문 튜토리얼 프롬프트
   const handleTutorialPrompt = () => {
@@ -388,6 +394,11 @@ function AppInner() {
         tierUp={tierUp}
         onRematch={() => {
           resultRecorded.current = false;
+          // 커스텀: 같은 방 유지하고 대기실로. 서버의 return_to_waiting 가 상태를 정리.
+          if (matchMode === 'custom') {
+            setScreen('matchmaking');
+            return;
+          }
           leaveRoom();
           setScreen('matchmaking');
           setMatchMode('quick');

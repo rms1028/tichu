@@ -70,7 +70,6 @@ export function CustomMatchScreen({
   const serverRooms = useGameStore((s) => s.customRoomList);
   const savedPlayerId = useUserStore((s) => s.playerId);
   const savedNickname = useUserStore((s) => s.nickname);
-  const userCoins = useUserStore((s) => s.coins);
 
   // ─── 로딩 / 새로고침 상태 ─────────────────────────────
   // 첫 진입 시 skeleton 표시. 서버 응답이 한 번이라도 오면 false.
@@ -273,10 +272,6 @@ export function CustomMatchScreen({
           <Text style={S.backText}>{'← 뒤로'}</Text>
         </TouchableOpacity>
         <View style={S.spacer} />
-        <View style={S.coinsPill}>
-          <View style={S.coinDot} />
-          <Text style={S.coinText}>{userCoins}</Text>
-        </View>
       </View>
     );
     if (Platform.OS === 'ios') {
@@ -983,14 +978,6 @@ const S = StyleSheet.create({
   },
   backText: { color: COLORS.cmInkDim, fontSize: 14, fontWeight: '500' },
   spacer: { flex: 1 },
-  coinsPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
-    borderWidth: 1, borderColor: COLORS.cmLine,
-    backgroundColor: 'rgba(0,0,0,0.3)', minHeight: 32,
-  },
-  coinDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: COLORS.cmGold },
-  coinText: { color: COLORS.cmGold, fontSize: 13, fontWeight: '700' },
 
   // Main
   main: {
