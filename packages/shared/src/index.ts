@@ -17,8 +17,12 @@ export {
   MAHJONG_VALUE, DRAGON_VALUE, PHOENIX_LEAD_VALUE,
   normalCard, specialCard,
   MAHJONG, DOG, PHOENIX, DRAGON,
-  createDeck, shuffleDeck,
+  createDeck, shuffleDeck, __setShuffleRngForTest,
 } from './constants.js';
+
+// RNG (seedable for deterministic tests)
+export { createSeededRng, defaultRng } from './rng.js';
+export type { Rng } from './rng.js';
 
 // Validation
 export { validateHand } from './validate-hand.js';

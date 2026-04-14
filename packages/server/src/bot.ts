@@ -1,4 +1,4 @@
-import type { Card, PlayedHand, Rank } from '@tichu/shared';
+import type { Card, PlayedHand, Rank, Rng } from '@tichu/shared';
 import {
   getValidPlays, getAvailableBombs, mustFulfillWish, sumPoints,
   isNormalCard, isPhoenix, isDog, isDragon, isMahjong, isBomb,
@@ -12,6 +12,17 @@ export interface BotDecision {
   cards?: Card[];
   phoenixAs?: Rank;
   wish?: Rank;
+}
+
+// Module-level RNG so tests can seed bot tie-breaking / probabilistic choices
+// without threading rng through every call site. Production uses Math.random.
+// Pair with `createSeededRng` from `@tichu/shared` to get a reproducible
+// decision stream in self-play tests.
+let botRng: Rng = Math.random;
+
+/** Test-only: inject a seeded RNG for bot decisions. Pass `null` to reset. */
+export function __setBotRngForTest(rng: Rng | null): void {
+  botRng = rng ?? Math.random;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -701,14 +712,14 @@ export function decideBotAction(room: GameRoom, seat: number): BotDecision {
       if (singles.length > 0) {
         // 70% 확률로 가장 높은 싱글 (낭비), 30% 랜덤
         const sorted = singles.sort((a, b) => b.value - a.value);
-        return toDecision(Math.random() < 0.7 ? sorted[0]! : sorted[Math.floor(Math.random() * sorted.length)]!, hand, room, seat);
+        return toDecision(botRng() < 0.7 ? sorted[0]! : sorted[Math.floor(botRng() * sorted.length)]!, hand, room, seat);
       }
-      return toDecision(validPlays[Math.floor(Math.random() * validPlays.length)]!, hand, room, seat);
+      return toDecision(validPlays[Math.floor(botRng() * validPlays.length)]!, hand, room, seat);
     }
     const nonBombs = validPlays.filter(p => !isBomb(p));
     if (nonBombs.length === 0) return { action: 'pass' };
     // 60% 확률로 패스 (소극적)
-    if (Math.random() < 0.6 && hand.length > 2) return { action: 'pass' };
+    if (botRng() < 0.6 && hand.length > 2) return { action: 'pass' };
     // 이길 때는 가장 강한 카드로 (낭비)
     const sorted = nonBombs.sort((a, b) => b.value - a.value);
     return toDecision(sorted[0]!, hand, room, seat);
@@ -766,7 +777,7 @@ export function decideBotBomb(room: GameRoom, seat: number): BotDecision {
   if (lastSeat === partner) return { action: 'pass' };
 
   // 초급: 폭탄 거의 안 씀 (20% 확률)
-  if (diff === 'easy' && Math.random() > 0.2) return { action: 'pass' };
+  if (diff === 'easy' && botRng() > 0.2) return { action: 'pass' };
 
   const shouldBomb = (() => {
     const enemies = [0, 1, 2, 3].filter(s => s !== seat && s !== partner);

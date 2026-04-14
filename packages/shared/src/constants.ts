@@ -64,11 +64,25 @@ export function createDeck(): Card[] {
 }
 
 // ── Shuffle (Fisher-Yates) ───────────────────────────────────
+//
+// Shuffle consults a module-level RNG so tests can seed it for deterministic
+// rounds without threading `rng` through every dealCards call site.
+// Production leaves `shuffleRng = Math.random`. Tests flip it via
+// `__setShuffleRngForTest(createSeededRng(seed))` in a try/finally.
+
+import type { Rng } from './rng.js';
+
+let shuffleRng: Rng = Math.random;
+
+/** Test-only: inject a seeded RNG for shuffling. Pass `null` to reset. */
+export function __setShuffleRngForTest(rng: Rng | null): void {
+  shuffleRng = rng ?? Math.random;
+}
 
 export function shuffleDeck(deck: Card[]): Card[] {
   const arr = [...deck];
   for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(shuffleRng() * (i + 1));
     [arr[i], arr[j]] = [arr[j]!, arr[i]!];
   }
   return arr;
