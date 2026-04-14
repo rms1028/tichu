@@ -1,3 +1,7 @@
 .vercel
 .android-dev/
 visual-tests/current/
+
+# Expo prebuild output (regenerated on every local native build)
+android/
+ios/
