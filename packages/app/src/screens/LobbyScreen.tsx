@@ -734,20 +734,6 @@ const S = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   dNick: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  dIconBtn: {
-    backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 16,
-    width: 40, height: 40,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  dIconText: { fontSize: 18 },
-  dBadge: {
-    position: 'absolute', top: -3, right: -3,
-    backgroundColor: '#ef4444', borderRadius: 9,
-    minWidth: 18, height: 18,
-    alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 3, borderWidth: 1.5, borderColor: COLORS.bg,
-  },
-  dBadgeText: { color: '#fff', fontSize: 9, fontWeight: '900' },
 
   // ─── Desktop 메인 영역 ───
   dMainContent: {

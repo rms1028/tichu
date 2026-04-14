@@ -773,9 +773,10 @@ Railway (서버): https://accomplished-purpose-production-9135.up.railway.app/he
 ### 남은 숙제
 
 - **Portrait base.apk 실물 검증 미완** — `.android-dev/base.apk` 가 debug 변형이라 swap 워크플로우에서 Metro 먼저 찾으려 할 위험. 실제 디바이스에서 portrait 고정 + 게임 흐름이 작동하는지 미검증. EAS preview 빌드 후 swap 필요 (월 quota 소진, 5/1 리셋).
-- **LobbyScreen 죽은 스타일 4개 제거** — `dIconBtn`, `dIconText`, `dBadge`, `dBadgeText`. desktop 상단 우측 아이콘 버튼 제거 후 JSX 참조 없음. 단순 cleanup.
-- **Desktop 친구 알림 배지 복원** — 상단 우측 친구 아이콘 제거하면서 요청 카운트 배지도 사라짐. nav menu "친구" 항목에 `(N)` 형태로 복원 후보. 우선순위 낮음.
+- ~~**LobbyScreen 죽은 스타일 4개 제거**~~ — 완료 (`dIconBtn`, `dIconText`, `dBadge`, `dBadgeText` 제거).
+- ~~**Desktop 친구 알림 배지 복원**~~ — 검토 후 **의도적으로 복원 안 함**. 게임 로비 주 목적은 플레이이고, 친구 요청은 nav menu 경유로 확인 가능. UI 단순화가 더 낫다고 판단.
 - **`custom-match-v3.test.ts` flaky 조사** — "create_custom_room options applies scoreLimit/turnTimer/allowSpectators" 테스트가 5s timeout. 다른 11 tests 는 pass. CI 에서 실패하면 블로커. socket-sim 계열 (`socket-sim.test.ts`, `socket-sim-100.test.ts`) 는 이미 CI 에서 제외됨.
 - **visual-test baseline 전면 재캡처** — 현재 baseline 10개 (`01-splash` ~ `10-achievements`) 는 landscape 2340×1080 기준. portrait 전환 이후 전부 무효. Android 재빌드 이후 portrait 해상도로 재생성 필요.
 - **GameScreen portrait 검증** — 기존 설계가 landscape 기준이었을 가능성. portrait 에서 PlayerHand / OpponentHand / TableArea 레이아웃이 정상 동작하는지 미확인. portrait base.apk 나오면 1순위 검증.
+- **프로덕션 스모크 테스트** — 2026-04-14 Vercel `tichu-app.vercel.app` 에서 로그인 + 로비 확인, 사용자가 "잘 된다" 컨펌. 전체 게임 플로우 (매칭 → 플레이 → 결과) 는 별도 확인 필요.
 
