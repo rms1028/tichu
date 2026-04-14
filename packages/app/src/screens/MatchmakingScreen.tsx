@@ -308,20 +308,29 @@ const S = StyleSheet.create({
   codeCopy: { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
 
   // 슬롯
-  slotsArea: { flex: 1, justifyContent: 'center' },
+  // slotsArea 는 flex:1 + overflow:'hidden' 으로 제한 — 슬롯 콘텐츠가
+  // flex stretch 되면서 아래 hostActions 버튼 row 위에 겹쳐 그려지는
+  // 2026-04-14 landscape 버그 (7차 작업 2단계 실측에서 확인) 방지.
+  slotsArea: { flex: 1, justifyContent: 'center', overflow: 'hidden' },
   teamHeader: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 8 },
   teamLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   teamDot: { width: 8, height: 8, borderRadius: 4 },
   teamLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '700' },
-  slotsGrid: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // alignItems: 'flex-start' 로 고정해서 teamCol 들이 세로로 stretch
+  // 되지 않도록 — 기본 'stretch' 가 parent 높이에 맞춰 늘어나던 원인.
+  slotsGrid: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   teamCol: { flex: 1, gap: 8 },
-  vsCol: { width: 40, alignItems: 'center' },
+  vsCol: { width: 40, alignItems: 'center', alignSelf: 'center' },
   vsText: { color: 'rgba(255,255,255,0.15)', fontSize: 18, fontWeight: '900' },
 
   slot: {
     borderRadius: 16, borderWidth: 2, borderStyle: 'dashed',
     alignItems: 'center', justifyContent: 'center', paddingVertical: 16, paddingHorizontal: 8,
-    minHeight: 120, position: 'relative',
+    // height 를 고정해 slots 가 부모 컨테이너에 따라 stretch 되는 걸 차단.
+    // 이전엔 minHeight 120 만 있어서 column 레이아웃에서 stretch 되며
+    // 651px 까지 커지고 버튼 row 를 덮었음.
+    height: 140,
+    position: 'relative',
   },
   slotAvatar: { fontSize: 34 },
   slotName: { color: '#fff', fontSize: 14, fontWeight: '700', marginTop: 4, maxWidth: 100, textAlign: 'center' },
@@ -342,9 +351,11 @@ const S = StyleSheet.create({
   cdNum: { color: '#FFD700', fontSize: 80, fontWeight: '900', textShadowColor: 'rgba(255,215,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 20 },
   cdGo: { color: '#FFD700', fontSize: 36, fontWeight: '900', textShadowColor: 'rgba(255,215,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 16 },
 
-  // 하단
-  bottom: { alignItems: 'center', gap: 10 },
-  hostActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', alignItems: 'center' },
+  // 하단 — flexShrink:0 으로 slotsArea 가 이 영역을 밀어내지 못하게.
+  bottom: { alignItems: 'center', gap: 10, flexShrink: 0 },
+  // flexWrap 제거 — landscape 에서 한 줄에 다 들어가는데, wrap 허용
+  // 때문에 parent 레이아웃 계산이 비결정적으로 바뀔 수 있음.
+  hostActions: { flexDirection: 'row', gap: 10, justifyContent: 'center', alignItems: 'center' },
   shuffleBtn: { backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)' },
   shuffleBtnText: { color: '#818CF8', fontSize: 14, fontWeight: '800' },
   startGameBtn: { backgroundColor: '#2ecc71', borderRadius: 12, paddingHorizontal: 32, paddingVertical: 12, shadowColor: '#2ecc71', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6 },

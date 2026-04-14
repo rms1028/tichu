@@ -31,7 +31,12 @@ export function useSocket() {
     });
 
     const socket = io(SERVER_URL, {
-      transports: ['websocket', 'polling'],
+      // polling 우선 — adb reverse 터널 / 일부 프록시 환경에서 websocket
+      // upgrade 가 실패하면 client 가 연결을 포기하는 경우가 있음
+      // (2026-04-14 실측: 'websocket error' 무한 retry, fallback 미작동).
+      // polling 으로 먼저 붙고 업그레이드가 가능하면 자동으로 websocket 으로
+      // 올라감. 프로덕션 환경에서도 polling 먼저 붙는 코스트는 미미.
+      transports: ['polling', 'websocket'],
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: Infinity,
