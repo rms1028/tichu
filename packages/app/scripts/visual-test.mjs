@@ -112,6 +112,7 @@ function launchApp({ resetData = false } = {}) {
   // Also force-stop any app that tends to steal foreground on this dev phone —
   // injected taps go to the focused window, so a stray app eats the scenario.
   adb(`shell am force-stop com.openai.chatgpt`, { silent: true, allowFail: true });
+  adb(`shell am force-stop com.samsung.android.app.notes`, { silent: true, allowFail: true });
   adb(`shell am force-stop com.tichu.app`, { silent: true });
   if (resetData) {
     // `pm clear` wipes MMKV + app files so the 03-lobby / 04-custom-match
@@ -151,6 +152,10 @@ function inputText(text) {
 
 function pressKey(keycode) {
   adb(`shell input keyevent ${keycode}`, { silent: true });
+}
+
+function swipe(x1, y1, x2, y2, durationMs = 300) {
+  adb(`shell input swipe ${x1} ${y1} ${x2} ${y2} ${durationMs}`, { silent: true });
 }
 
 function delay(ms) {
@@ -256,6 +261,7 @@ async function runScenario(scenario) {
   for (const step of scenario.steps || []) {
     if (step.wait != null) await delay(step.wait);
     if (step.tap) tap(step.tap[0], step.tap[1]);
+    if (step.swipe) swipe(step.swipe[0], step.swipe[1], step.swipe[2], step.swipe[3], step.swipe[4]);
     if (step.text) inputText(step.text);
     if (step.key) pressKey(step.key);
   }
@@ -384,6 +390,105 @@ const SCENARIOS = [
       // 확실해서 시나리오 안정성을 위해 유지.
       { tap: [1200, 540] },
       { wait: 2500 },               // setPage('customMatch') + 화면 mount
+    ],
+  },
+  // ── 05~10: 로비 하위 화면 landscape 회귀 차단 ───────────────────────────
+  //
+  // 좌표는 03-lobby baseline PNG (2340x1080 landscape) 에서 픽셀 분석으로
+  // 추출한 값. 2026-04-14 에 추가:
+  //   - 게임 규칙 버튼  : (1170, 720)  — rulesBtn 세로 중앙
+  //   - 랭킹 nav (tab 1): (1144, 1020) — nav:space-around 의 2번째 탭 중앙
+  //   - 설정 nav (tab 2): (1845, 1020) — nav:space-around 의 3번째 탭 중앙
+  //   - 🛒 shop 아이콘  : (1911, 100)  — topRight 의 shop 버튼 중앙
+  //   - profile 버튼    : (240, 90)    — topBar 좌측 profileBtn 중앙
+  // 좌표가 미세하게 어긋나면 `--filter <이름>` + baseline 갱신으로 재캡처.
+  {
+    name: '05-rules',
+    resetData: true,
+    settle: 1500,
+    steps: [
+      { wait: 5000 },
+      { tap: [1170, 378] }, { wait: 800 },
+      { text: 'Tester' }, { wait: 300 },
+      { key: 'KEYCODE_BACK' }, { wait: 600 },
+      { tap: [1170, 562] }, { wait: 6000 },
+      { tap: [1170, 788] }, { wait: 1000 },  // attendance dismiss
+      { tap: [1170, 720] }, { wait: 1500 },  // 게임 규칙 button → RulesScreen
+    ],
+  },
+  {
+    name: '06-ranking',
+    resetData: true,
+    settle: 1500,
+    steps: [
+      { wait: 5000 },
+      { tap: [1170, 378] }, { wait: 800 },
+      { text: 'Tester' }, { wait: 300 },
+      { key: 'KEYCODE_BACK' }, { wait: 600 },
+      { tap: [1170, 562] }, { wait: 6000 },
+      { tap: [1170, 788] }, { wait: 1000 },
+      { tap: [1144, 1020] }, { wait: 2000 }, // 랭킹 nav tab → RankingScreen
+    ],
+  },
+  {
+    name: '07-settings',
+    resetData: true,
+    settle: 1500,
+    steps: [
+      { wait: 5000 },
+      { tap: [1170, 378] }, { wait: 800 },
+      { text: 'Tester' }, { wait: 300 },
+      { key: 'KEYCODE_BACK' }, { wait: 600 },
+      { tap: [1170, 562] }, { wait: 6000 },
+      { tap: [1170, 788] }, { wait: 1000 },
+      { tap: [1845, 1020] }, { wait: 1500 }, // 설정 nav tab → settings page
+    ],
+  },
+  {
+    name: '08-shop',
+    resetData: true,
+    settle: 1500,
+    steps: [
+      { wait: 5000 },
+      { tap: [1170, 378] }, { wait: 800 },
+      { text: 'Tester' }, { wait: 300 },
+      { key: 'KEYCODE_BACK' }, { wait: 600 },
+      { tap: [1170, 562] }, { wait: 6000 },
+      { tap: [1170, 788] }, { wait: 1000 },
+      { tap: [1911, 100] }, { wait: 2000 },  // 🛒 top-right → ShopScreen
+    ],
+  },
+  {
+    name: '09-profile',
+    resetData: true,
+    settle: 1500,
+    steps: [
+      { wait: 5000 },
+      { tap: [1170, 378] }, { wait: 800 },
+      { text: 'Tester' }, { wait: 300 },
+      { key: 'KEYCODE_BACK' }, { wait: 600 },
+      { tap: [1170, 562] }, { wait: 6000 },
+      { tap: [1170, 788] }, { wait: 1000 },
+      { tap: [240, 90] }, { wait: 2000 },    // profile button → ProfilePage
+    ],
+  },
+  {
+    // 업적 카드는 ProfilePage 스크롤 하단에 있어서 먼저 위로 스와이프.
+    // "더보기 ›" 텍스트 좌표는 스크롤 후 baseline 에서 amber 픽셀로 확정 (1944, 780).
+    name: '10-achievements',
+    resetData: true,
+    settle: 1500,
+    steps: [
+      { wait: 5000 },
+      { tap: [1170, 378] }, { wait: 800 },
+      { text: 'Tester' }, { wait: 300 },
+      { key: 'KEYCODE_BACK' }, { wait: 600 },
+      { tap: [1170, 562] }, { wait: 6000 },
+      { tap: [1170, 788] }, { wait: 1000 },
+      { tap: [240, 90] }, { wait: 2000 },        // profile button → ProfilePage
+      { swipe: [1170, 900, 1170, 200, 400] }, { wait: 800 },   // first scroll
+      { swipe: [1170, 700, 1170, 500, 300] }, { wait: 1500 },  // second small scroll to fully reveal 업적 card
+      { tap: [1936, 774] }, { wait: 2500 },      // mint "더보기 ›" → AchievementsScreen
     ],
   },
 ];
