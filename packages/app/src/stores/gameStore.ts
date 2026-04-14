@@ -348,8 +348,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     const partner = (state.mySeat + 2) % 4;
     const myDecl = state.tichuDeclarations[state.mySeat];
     const partnerDecl = state.tichuDeclarations[partner];
+    // 1등이 이미 나갔으면 스몰 티츄 불가 — 1등 확정 후 선언은 무조건 -100.
     const canTichu = (phase === 'PASSING' || phase === 'TRICK_PLAY')
-      && myDecl === null && partnerDecl === null;
+      && myDecl === null && partnerDecl === null
+      && state.finishOrder.length === 0;
 
     // New round reset when DEALING_8 (new round starts)
     const roundReset = phase === 'DEALING_8' ? {
@@ -421,6 +423,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   onPlayerFinished: (seat, rank) => set((state) => ({
     finishOrder: [...state.finishOrder, seat],
+    // 1등이 나간 순간부터 스몰 티츄 선언 불가 (선언해봐야 -100 확정).
+    canDeclareTichu: false,
   })),
 
   onWishActive: (wish) => set({ wish }),
@@ -514,6 +518,7 @@ function translateError(error: string): string {
     already_declared: '이미 티츄를 선언했습니다',
     teammate_already_declared: '팀원이 이미 티츄를 선언했습니다',
     already_played_cards: '이미 카드를 냈으므로 스몰 티츄를 선언할 수 없습니다',
+    someone_already_finished: '이미 1등이 나갔으므로 스몰 티츄를 선언할 수 없습니다',
     no_dragon_give_pending: '용 양도 대기 중이 아닙니다',
     must_give_to_opponent: '상대팀에게만 양도할 수 있습니다',
   };

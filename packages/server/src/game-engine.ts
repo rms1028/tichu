@@ -181,6 +181,12 @@ export function declareTichu(
     return { ok: false, error: 'already_played_cards', events: [] };
   }
 
+  // 스몰: 이미 1등이 나간 뒤면 거부 — 1등이 확정된 이후 스몰 선언은
+  // 무조건 -100 실패 (1등을 빼앗을 수 없으므로). 사용자 실수 방지.
+  if (type === 'small' && room.finishOrder.length > 0) {
+    return { ok: false, error: 'someone_already_finished', events: [] };
+  }
+
   // 본인 중복 거부
   if (room.tichuDeclarations[seat] !== null) {
     return { ok: false, error: 'already_declared', events: [] };
