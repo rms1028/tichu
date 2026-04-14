@@ -785,4 +785,5 @@ Railway (서버): https://accomplished-purpose-production-9135.up.railway.app/he
 - `c9a32e4` **fix(server/test): resolve custom-match-v3 flaky first-test timeout** — warmup 을 `login_success` 대기로 변경, `vitest.config.ts testTimeout: 15000`. 12/12 pass, 첫 테스트 1326ms.
 - `3bd90d9` **refactor(lobby/web): remove dead desktop icon button styles** — `dIconBtn`/`dIconText`/`dBadge`/`dBadgeText` 제거 (AppBar 재작업 후 JSX 참조 없음). 친구 알림 배지는 의도적으로 복원 안 함.
 - **스몰 티츄 확인 모달** (GameScreen) — 스몰 티츄 버튼 클릭 시 "정말 선언? (+100/-100)" 확인 오버레이. 실수로 누르는 사고 방지. CLAUDE.md §14.2 준수하여 native Modal 대신 absolute overlay View 사용.
+- **Hard 봇 Phoenix 싱글 낭비 버그 픽스** (`bot.ts pickFollowPlay` + `pickLeadPlay`) — 낮은 싱글 (6-10) 트릭에 봉황을 내버리는 버그 수정. 근본 원인: ① overkill 보상 (margin ≤1 = +20) 이 봉황 싱글 (항상 margin 0.5) 에 자동 적용, ② Phoenix 보존/조합 우선 로직 부재. 수정: ① 봉황 싱글은 overkill 보상 제외, ② 새 `countRemainingByRank()` 헬퍼로 A/K 잔량 카운팅, ③ `[NEW #7]` Phoenix 보존 섹션 — 조합 가능 시 -60, A 남아 있고 바닥 <13 → -70, A 다 나왔고 K 남아 있고 바닥 <12 → -40, 바닥 A → +45, 바닥 K + A 다 나감 → +28, 손 ≤2 → +30, ④ lead 쪽에도 동일한 phoenix-combo 우선 -40 추가. 50-game 자가 플레이 게이트 + 결정성 테스트 통과.
 

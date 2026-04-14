@@ -78,6 +78,17 @@ function getRemainingHighCards(room: GameRoom, hand: Card[]): number {
   return count;
 }
 
+/** 특정 랭크가 아직 게임에 몇 장 남아 있는지 (내 패 + 이미 플레이된 거 제외) */
+function countRemainingByRank(room: GameRoom, hand: Card[], rank: Rank): number {
+  const played = getPlayedCards(room);
+  const myCount = hand.filter(c => isNormalCard(c) && c.rank === rank).length;
+  let playedCount = 0;
+  for (const suit of ['sword', 'star', 'jade', 'pagoda']) {
+    if (played.has(`${suit}-${rank}`)) playedCount++;
+  }
+  return Math.max(0, 4 - myCount - playedCount);
+}
+
 /** 특정 값의 싱글을 내면 먹힐 확률 추정 (0~1) */
 function getSingleBeatProbability(value: number, hand: Card[], room: GameRoom): number {
   if (value >= 999) return 0; // 용
@@ -1196,6 +1207,11 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
           if (p.type === 'straight' && p.length >= 5) score += 10; // 스트레이트에 봉황 = 매우 효율
         } else {
           score -= 20; // 싱글 봉황은 비추 (낭비)
+          // [NEW #7 lead] 봉황을 조합으로 쓸 수 있다면 싱글 리드는 강력 억제
+          const phoenixCombo = plays.some(pp =>
+            pp.cards.some(isPhoenix) && pp.length >= 2 && !isBomb(pp)
+          );
+          if (phoenixCombo) score -= 40;
         }
       }
 
@@ -1379,13 +1395,47 @@ function pickFollowPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat:
       if (planIdx >= 0 && planIdx < 3) score += 8;
 
       // ── [NEW #2] 최소 오버킬 강화 ──
-      if (table) {
+      // 봉황 싱글은 margin 이 항상 0.5 라서 "최소 오버킬" 보상에 자동으로 걸리는데,
+      // 이건 봉황 특성상 의미 없음 (봉황은 어떤 값 위에든 0.5 차이로 올라감).
+      // → 봉황 싱글은 overkill 보상 제외, 대신 아래 [NEW #7] 에서 별도 관리.
+      if (table && !(p.type === 'single' && p.cards.some(isPhoenix))) {
         const margin = p.value - table.value;
         if (margin <= 1) score += 20;      // 최소 차이로 이김 → 최고
         else if (margin <= 2) score += 12;
         else if (margin <= 4) score += 0;  // 적당
         else if (margin <= 6) score -= 10; // 낭비
         else score -= 18;                  // 큰 낭비
+      }
+
+      // ── [NEW #7] Phoenix single 보존 전략 ──
+      // 봉황을 싱글 트릭에 낭비하지 말고 A 위 > K 위 (A 다 나갔을 때) > 조합 우선 순.
+      // 낮은 싱글 (6-10) 위에 봉황 쓰는 건 명백한 자원 낭비.
+      if (table && p.type === 'single' && p.cards.some(isPhoenix)) {
+        const tableVal = table.value;
+        // [a] 현재 valid plays 중 봉황을 조합 (페어/트리플/풀하우스/스트레이트/연속페어) 에
+        //     쓸 수 있으면 그쪽이 훨씬 효율적 → 싱글 사용 강력 억제
+        const phoenixCombo = plays.some(pp =>
+          pp.cards.some(isPhoenix) && pp.length >= 2 && !isBomb(pp)
+        );
+        if (phoenixCombo) score -= 60;
+
+        // [b] A 가 아직 남아 있고 바닥이 A 보다 낮으면 → 봉황 보존 (A 위에 써야)
+        const remAces = countRemainingByRank(room, hand, 'A');
+        const remKings = countRemainingByRank(room, hand, 'K');
+        if (tableVal < 13 && remAces > 0) {
+          score -= 70; // 매우 강한 억제 — A 가 나올 때까지 봉황은 아낌
+        } else if (tableVal < 12 && remAces === 0 && remKings > 0) {
+          // [c] A 는 다 나왔고 K 가 남아 있으면 K 위에 쓰기 위해 보존
+          score -= 40;
+        }
+
+        // [d] 좋은 용도: 바닥 A → 봉황이 유일한 제압 수단 (드래곤 제외)
+        if (tableVal === 14) score += 45;
+        // [e] 바닥 K + A 가 다 나왔음 → 봉황으로 마무리 가능
+        else if (tableVal === 13 && remAces === 0) score += 28;
+
+        // [f] 손 ≤2: 자원 보존 고려 필요 없음 — 빨리 비우기
+        if (hand.length <= 2) score += 30;
       }
 
       // 고립 싱글 우선 소모
