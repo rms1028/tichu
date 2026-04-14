@@ -82,8 +82,13 @@ export default function RootLayout() {
       {/* Dev-only LAYOUT OK banner. The early-error diagnostic infra
        * (this file, app/index.tsx, src/utils/globalErrorCapture.ts) stays
        * in place as a safety net for future white-screen incidents — only
-       * the visible banner is hidden in production. */}
-      {__DEV__ && (
+       * the visible banner is hidden in production.
+       *
+       * Also hidden on web: the banner was introduced to catch native
+       * white-screen crashes on Android Bridgeless. On web we have the
+       * browser DevTools console, so the banner just clutters desktop
+       * layouts with "web undefined" noise. */}
+      {__DEV__ && Platform.OS !== 'web' && (
         <View
           style={{
             position: 'absolute',
