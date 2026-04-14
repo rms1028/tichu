@@ -54,6 +54,24 @@ jobs:
       - run: npm run build -w packages/shared
       - run: cd packages/app && npx tsc --noEmit
 
+  test-app:
+    # Pure-logic unit tests for the mobile app — state reducers, utility
+    # functions, anything Node-runnable without the real RN bundle.
+    # Component rendering tests do not live here. See
+    # packages/app/vitest.config.ts for the react-native shim rationale.
+    name: App - Unit tests
+    runs-on: ubuntu-latest
+    needs: test-shared
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - run: npm test -w packages/app
+
   lint-rn-safety:
     # AST linter that blocks top-level Web API calls (window / document /
     # localStorage / AudioContext / etc). A pre-commit hook also runs this,

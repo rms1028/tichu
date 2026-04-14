@@ -10,7 +10,8 @@
     "android:visual": "node scripts/visual-test.mjs",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
-    "build": "npx expo export --platform web"
+    "build": "npx expo export --platform web",
+    "test": "vitest run"
   },
   "dependencies": {
     "@sentry/react-native": "~6.10.0",
@@ -44,6 +45,7 @@
     "@types/react": "~18.3.0",
     "pixelmatch": "^7.1.0",
     "pngjs": "^7.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
   }
 }

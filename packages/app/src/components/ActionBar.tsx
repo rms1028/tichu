@@ -15,6 +15,7 @@ import { isMahjong, isPhoenix, isNormalCard, mustFulfillWish, validateHand, canB
 import { useGameStore } from '../stores/gameStore';
 import { COLORS, FONT } from '../utils/theme';
 import { mob, isMobile } from '../utils/responsive';
+import { scheduleLockRelease } from '../utils/play-lock';
 
 interface ActionBarProps {
   onPlay: (cards: Card[], phoenixAs?: Rank, wish?: Rank) => void;
@@ -109,10 +110,11 @@ export function ActionBar({ onPlay, onPass, onDeclareTichu, onSubmitBomb }: Acti
 
   // playLock 은 더블탭 방지용. 서버가 invalid_play 로 거부하면 턴이
   // 안 바뀌어서 isMyTurn 기반 해제가 못 풀고 Play 버튼이 영구 잠긴다.
-  // 1초 후 자동 해제로 retry 허용.
+  // scheduleLockRelease 가 타임아웃 후 자동 해제 (§13 #3 회귀 차단용
+  // 유틸 + 단위 테스트 있음).
   const lockBriefly = () => {
     setPlayLock(true);
-    setTimeout(() => setPlayLock(false), 1000);
+    scheduleLockRelease(() => setPlayLock(false));
   };
 
   const handlePlay = () => {
