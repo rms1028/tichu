@@ -152,7 +152,9 @@ export function TableArea() {
             >
               {lastPlay.hand.value === 0 && lastPlay.hand.cards.some((c: any) => c.type === 'special' && c.specialType === 'dog')
                 ? `${players[lastPlay.seat]?.nickname ?? '?'} \u2192 \uD83D\uDC15 \uD30C\uD2B8\uB108\uC5D0\uAC8C \uB9AC\uB4DC \uC774\uC804`
-                : `${players[lastPlay.seat]?.nickname ?? '?'} \u2192 ${valueLabel(lastPlay.hand.value)}${lastPlay.hand.type !== 'single' || (lastPlay.hand.value >= 2 && lastPlay.hand.value <= 14) ? ` ${handTypeLabel(lastPlay.hand.type)}` : ''}`
+                // 봉황 싱글 (value % 1 !== 0) 은 valueLabel 이 이미 "봉황 (11.5)" 같은
+                // 완성된 라벨을 반환하므로 "싱글" 접미사 추가 안 함.
+                : `${players[lastPlay.seat]?.nickname ?? '?'} \u2192 ${valueLabel(lastPlay.hand.value)}${lastPlay.hand.type !== 'single' || (lastPlay.hand.value >= 2 && lastPlay.hand.value <= 14 && lastPlay.hand.value % 1 === 0) ? ` ${handTypeLabel(lastPlay.hand.type)}` : ''}`
               }
             </Animated.Text>
           )}
@@ -176,7 +178,20 @@ function valueLabel(v: number | null | undefined): string {
   if (v === null || v === undefined || v === 999 || v === Infinity || !isFinite(v)) return '용';
   if (v === 0) return '개';
   if (v === 1) return '참새';
-  if (v % 1 !== 0) return '봉황'; // 봉황 싱글 (직전+0.5)
+  // 봉황 싱글: value 는 직전 카드값 + 0.5 (리드 시엔 1.5).
+  // 예: J(11) 위에 봉황 → 11.5, A(14) 위에 봉황 → 14.5, 리드 → 1.5.
+  // 직전 랭크명 + 실제 값 모두 표시 → 사람이 즉시 강도 파악 가능.
+  if (v % 1 !== 0) {
+    if (v === 1.5) return '봉황 (리드 · 1.5)';
+    const prev = Math.floor(v);
+    const prevName =
+      prev === 11 ? 'J' :
+      prev === 12 ? 'Q' :
+      prev === 13 ? 'K' :
+      prev === 14 ? 'A' :
+      String(prev);
+    return `봉황 (${prevName} 위 · ${v})`;
+  }
   if (v === 11) return 'J';
   if (v === 12) return 'Q';
   if (v === 13) return 'K';
