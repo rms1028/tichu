@@ -40,126 +40,39 @@
 
 ---
 
-## 2. 디렉토리 구조 (실제)
+## 2. 디렉토리 구조
 
-```
-tichu/
-├── claude.md                         # 이 문서
-├── claude.md.bak                     # 초기 버전 백업
-├── PROGRESS.md                       # 작업 차수별 체크리스트 (1차 ~ 5차)
-├── package.json                      # 루트 workspaces + postinstall
-├── .github/workflows/ci.yml          # GitHub Actions (test-shared → test-server → typecheck-app → build)
-├── .githooks/pre-commit              # RN 안전성 linter 호출
-├── scripts/install-git-hooks.sh      # 1회성 훅 설치 ( core.hooksPath=.githooks )
-└── packages/
-    ├── shared/src/
-    │   ├── types.ts                  # Card, PlayedHand, GamePhase 등
-    │   ├── constants.ts              # 카드 값 · 점수 매핑
-    │   ├── validate-hand.ts          # validateHand()
-    │   ├── can-beat.ts               # canBeat()
-    │   ├── valid-plays.ts            # getValidPlays(), getAvailableBombs()
-    │   ├── wish.ts                   # mustFulfillWish()
-    │   ├── scoring.ts                # 점수 정산
-    │   ├── phoenix-utils.ts          # 봉황 대체 로직 공용 헬퍼
-    │   ├── index.ts                  # 배럴 export
-    │   └── *.test.ts                 # vitest 단위 테스트 (8 파일)
-    │
-    ├── server/
-    │   ├── prisma/schema.prisma      # User · GameResult · Season · SeasonRanking · FriendRequest · Friendship · Report · Block · PushToken
-    │   └── src/
-    │       ├── index.ts              # 엔트리 (Express + socket.io + CORS + 헬스체크)
-    │       ├── game-room.ts          # GameRoom · BombWindow · RoomSettings 타입 + 룸 생성/관리
-    │       ├── game-engine.ts        # 상태 머신 + playCards/declareTichu/passTurn 파이프라인
-    │       ├── bomb-window.ts        # startBombWindow · submitBomb · resolveBombWindow
-    │       ├── socket-handlers.ts    # 모든 socket.io 이벤트 핸들러
-    │       ├── bot.ts                # AI 봇 (easy / medium / hard)
-    │       ├── db.ts                 # Prisma 접근 레이어 (User/GameResult/친구/신고/푸시토큰)
-    │       ├── firebase-admin.ts     # Firebase Admin SDK 초기화 + ID 토큰 검증
-    │       ├── friends.ts            # 친구 요청 · 수락 · 온라인 상태 · 초대
-    │       ├── matchmaking.ts        # 랭크 매칭 큐 + 파티 구성
-    │       ├── ranking.ts            # XP / 티어 / 시즌 점수 계산
-    │       ├── season.ts             # 시즌 생성 · 리셋 · 랭킹 조회 · 보상 수령
-    │       ├── scheduler.ts          # 백그라운드 잡 (시즌 리셋 등)
-    │       ├── notification.ts       # Expo Server SDK 푸시 발송
-    │       ├── logger.ts             # 로깅 유틸
-    │       └── *.test.ts             # vitest (socket-sim 계열은 CI 에서 제외됨)
-    │
-    └── app/
-        ├── app.json / eas.json       # Expo / EAS 빌드 프로필 (development / preview / production)
-        ├── babel.config.js / metro.config.js
-        ├── index.js                  # 모바일 엔트리 (CommonJS, 조기 에러 핸들러 + gesture-handler 초기화)
-        ├── app/
-        │   ├── _layout.tsx           # Expo Router 루트 레이아웃 (진단 화면)
-        │   └── index.tsx             # Expo Router 홈 → AppRoot 렌더
-        ├── src/
-        │   ├── AppRoot.tsx           # 실제 앱 로직: 화면 전환 상태 머신 + 소켓 이벤트 dispatch
-        │   ├── screens/              # 13 개 스크린 (아래 9장 참조)
-        │   ├── components/           # 19 개 게임 UI + 모달 + 시스템 컴포넌트
-        │   ├── stores/               # Zustand: gameStore · userStore · achievementStore
-        │   ├── hooks/                # useSocket (400+ 줄 이벤트 리스너) · useGame
-        │   └── utils/                # theme · responsive · sound · bgm · haptics · firebase · googleOAuth · notifications · sentry · globalErrorCapture · roomDataAdapter
-        ├── scripts/
-        │   ├── android-dev.mjs       # JS 번들 스왑 기반 Android 개발 사이클
-        │   ├── visual-test.mjs       # pixelmatch 기반 visual regression
-        │   ├── lint-rn-safety.mjs    # AST 기반 RN 크래시 패턴 차단 linter
-        │   └── README.md             # 스크립트 셋업 가이드
-        ├── visual-tests/baselines/   # 커밋된 regression baseline (01-splash / 02-login / 03-lobby)
-        └── .android-dev/              # gitignored: base.apk · screenshots · logs
-```
+`ls` 가 단일 소스. 여기서는 **비자명한 위치와 의도** 만:
 
-실제 파일 목록은 디렉토리 자체가 단일 소스. 이 문서의 구조 개요가 어긋날 경우 **코드가 맞다**.
+- **모노레포 루트:** `packages/{shared,server,app}` (npm workspaces). `postinstall` 이 shared 자동 빌드
+- **`packages/shared/src/`** — 순수 함수 게임 로직. `validate-hand.ts`, `can-beat.ts`, `valid-plays.ts`, `wish.ts`, `scoring.ts`, `phoenix-utils.ts` + 각각 `.test.ts` (8 테스트 파일). RN/Node 양쪽 import
+- **`packages/server/src/`** — `index.ts` (Express+socket.io), `game-room.ts` (타입/룸 관리), `game-engine.ts` (상태 머신), `socket-handlers.ts` (모든 이벤트 라우팅), `bomb-window.ts` (미사용 deferred — §6.6), `bot.ts`, `db.ts`, `firebase-admin.ts`, `friends.ts`, `matchmaking.ts`, `ranking.ts`, `season.ts`, `scheduler.ts`, `notification.ts`, `logger.ts`. `prisma/schema.prisma` 가 DB 단일 소스
+- **`packages/app/`** — 엔트리 순서 주의: `index.js` (CommonJS) → `app/_layout.tsx` → `app/index.tsx` → `src/AppRoot.tsx` (§9.1). Zustand 스토어는 `src/stores/`, 소켓 이벤트 리스너는 `src/hooks/useSocket.ts`
+- **`packages/app/scripts/`** — `android-dev.mjs` (§4.2), `visual-test.mjs` (§4.3), `lint-rn-safety.mjs` (§4.1). `.android-dev/` 는 gitignored
+- **루트 자동화:** `.githooks/pre-commit`, `scripts/install-git-hooks.sh`, `.github/workflows/ci.yml` (§4.5)
+
+구조가 문서와 어긋나면 **코드가 맞다**.
 
 ---
 
 ## 3. 빌드 · 실행 명령어
 
+각 워크스페이스의 `package.json` 이 단일 소스. 자주 쓰는 것만:
+
 ```bash
-# ─── 루트 (모노레포 위임) ───
-npm install                        # 전체 설치 + postinstall 로 shared 자동 빌드
-npm run build:shared               # packages/shared 만 빌드
-npm run test:shared                # shared vitest
-npm run dev:server                 # packages/server 개발 서버 (tsx watch)
-npm run test:server                # server vitest
-npm test                           # 모든 워크스페이스 test --if-present
+npm install                              # postinstall 이 shared 자동 빌드
+npm run dev:server                       # tsx watch
+npm test                                 # 모든 워크스페이스
 
-# ─── packages/shared ───
-cd packages/shared
-npm run build                      # tsc
-npm test                           # vitest run
-npm run test:watch                 # vitest --watch
-
-# ─── packages/server ───
-cd packages/server
-npm run dev                        # tsx watch src/index.ts (← CLAUDE 초기 버전엔 ts-node-dev 로 잘못 적혀 있었음)
-npm run build                      # prisma generate + tsc
-npm start                          # prisma db push + node dist/index.js
-npm test                           # vitest run
-
-# ─── packages/app (클라이언트) ───
 cd packages/app
-npx expo start                     # Metro 서버 (Expo Go 용)
-npm run android                    # expo run:android (로컬 네이티브 빌드, NDK 필요)
-npm run ios                        # expo run:ios
-npm run typecheck                  # tsc --noEmit
-npm run build                      # npx expo export --platform web
-
-# ─── Android 모바일 자동화 (EAS 없이, base APK + JS 스왑) ───
-cd packages/app
-npm run android:dev                # bundle → APK 리패킹 → install → 스크린샷 + logcat 캡처
-npm run android:visual             # 시나리오 기반 visual regression (pixelmatch)
-npm run android:visual -- --update-baselines     # baseline 갱신
-npm run android:visual -- --filter lobby         # 특정 시나리오만 실행
+npm run typecheck                        # tsc --noEmit
+npm run android:dev                      # EAS 없는 Android 사이클 (§4.2)
+npm run android:visual [-- --filter X]   # visual regression (§4.3)
 ```
 
-**환경 변수**
-- `WAIT_MS=12000 npm run android:dev` — 첫 페인트 대기 시간 연장
-- `SKIP_INSTALL=1 npm run android:dev` — APK 만 만들고 설치 생략
+**환경 변수:** `WAIT_MS=12000` (첫 페인트 대기 연장), `SKIP_INSTALL=1` (APK 만 만들고 설치 생략).
 
-**Git 훅 1회성 셋업**
-```bash
-sh scripts/install-git-hooks.sh   # core.hooksPath=.githooks 적용
-```
-이후 `git commit` 시 `.githooks/pre-commit` 이 자동으로 `lint-rn-safety` 를 돌려 `packages/app/` 의 스테이징된 `.ts/.tsx` 파일을 검사.
+**Git 훅 1회성 셋업:** `sh scripts/install-git-hooks.sh` — 이후 `git commit` 시 `.githooks/pre-commit` 이 `lint-rn-safety` 를 자동 실행 (§4.1).
 
 ---
 
@@ -425,95 +338,22 @@ finishOrder 에 2명 이상 && 1등+2등 같은 팀 → 트릭 종료 후 ROUND_
 ### 7.1. 서버 권위 모델
 모든 게임 로직은 서버에서 실행/검증. 클라이언트는 입력+렌더링만 담당.
 
-### 7.2. GameRoom 데이터 모델 (실제 `packages/server/src/game-room.ts` 기준)
+### 7.2. GameRoom 데이터 모델
 
-```typescript
-interface GameRoom {
-  roomId: string;
-  phase: GamePhase;
-  players: Record<number, PlayerInfo | null>;
-  teams: { team1: [0, 2]; team2: [1, 3] };
-  hands: { [seat: number]: Card[] };
-  pendingExchanges: { [seat: number]: {
-    left: Card | null; partner: Card | null; right: Card | null;
-  } | null };
-  currentTrick: {
-    leadSeat: number;
-    leadType: HandType | null;
-    leadLength: number;
-    plays: { seat: number; hand: PlayedHand }[];
-    consecutivePasses: number;
-    lastPlayedSeat: number;
-  };
-  tableCards: PlayedHand | null;
-  wonTricks: { [seat: number]: Card[] };
-  wish: Rank | null;
-  tichuDeclarations: { [seat: number]: 'large' | 'small' | null };
-  largeTichuResponses: { [seat: number]: boolean };
-  finishOrder: number[];
-  currentTurn: number;
-  turnTimer: {
-    startedAt: number; duration: number; turnId: number;
-    timeoutHandle: any; pausedRemainingMs?: number;
-  };
-  scores: { team1: number; team2: number };
-  roundScores: { team1: number; team2: number };
-  roundHistory: TrickRecord[];
-  dragonGivePending: { winningSeat: number; trickCards: Card[] } | null;
-  roundNumber: number;
-  settings: RoomSettings;
-  bombWindow: BombWindow | null;
-  bombWindowIdCounter: number;
+단일 소스는 `packages/server/src/game-room.ts`. 타입 전체를 박제하면 드리프트하므로 **비자명한 필드와 기본값만**:
 
-  // 초기 CLAUDE.md 이후 추가된 필드:
-  isFirstLead: boolean;                    // 라운드 첫 리드 여부
-  hasPlayedCards: Record<number, boolean>; // 스몰 티츄 선언 자격 체크 (본인 플레이 여부)
-  hostPlayerId: string | null;             // 커스텀 방 호스트
-  createdAt: number;                        // 방 생성 시각 (유휴 정리용)
-}
+**GameRoom 의 non-obvious 필드:**
+- `isFirstLead: boolean` — 라운드 첫 리드 여부 (자유 리드 허용 체크)
+- `hasPlayedCards: Record<number, boolean>` — 스몰 티츄 선언 자격 (본인이 카드 낸 적 있는지)
+- `hostPlayerId: string | null` — 커스텀 방 호스트
+- `createdAt: number` — 방 생성 시각 (유휴 정리용)
+- `bombWindow: BombWindow | null` — deferred 시스템 필드, 런타임 미사용 (§6.6)
 
-interface BombWindow {
-  windowId: number;
-  startedAt: number;
-  duration: number;               // 3000ms
-  currentTopPlay: PlayedHand;
-  pendingBombs: { seat: number; bomb: PlayedHand; cards: Card[] }[];
-  excludedSeat: number;           // 방금 카드 낸 플레이어
-  outPlayerSeat?: number;         // 제출 후 나간 플레이어
-}
-
-interface RoomSettings {
-  turnTimeLimit: number;            // 30000ms
-  largeTichuTimeLimit: number;      // 15000ms
-  exchangeTimeLimit: number;        // 30000ms
-  dragonGiveTimeLimit: number;      // 15000ms
-  wishSelectTimeLimit: number;      // 10000ms
-  bombWindowDuration: number;       // 3000ms — deferred 폭탄 윈도우 시스템용 (현재 미사용, §6.6 참조)
-  targetScore: number;              // 1000
-  allowSpectators: boolean;
-  botDifficulty: 'easy' | 'medium' | 'hard';
-}
-```
-
-### 7.3. 서버 모듈 맵
-
-| 파일 | 책임 |
-|------|------|
-| `index.ts` | Express + socket.io 부트스트랩, CORS, 헬스체크, 스케줄러 start |
-| `game-room.ts` | GameRoom · BombWindow · RoomSettings 타입 + 방 생성/관리 |
-| `game-engine.ts` | 상태 머신 + `playCards` / `declareTichu` / `passTurn` / `exchangeCards` / `dragonGive` 파이프라인 |
-| `bomb-window.ts` | `startBombWindow` / `submitBomb` / `resolveBombWindow` / `afterBombWindowResolved` |
-| `socket-handlers.ts` | 모든 socket.io 이벤트 라우팅 (join_room · play_cards · declare_tichu · 친구 · 랭킹 · 커스텀 매치 · 신고 등) |
-| `bot.ts` | AI 봇 의사결정 (easy/medium/hard 난이도) |
-| `db.ts` | Prisma 접근 레이어 |
-| `firebase-admin.ts` | ID 토큰 검증 (Google OAuth) |
-| `friends.ts` | 친구 요청/수락/거절/온라인 상태/초대 |
-| `matchmaking.ts` | 랭크 매칭 큐 |
-| `ranking.ts` | XP / 티어 / 시즌 점수 계산 |
-| `season.ts` | 시즌 생성/리셋/리더보드/보상 수령 |
-| `scheduler.ts` | 백그라운드 잡 (시즌 리셋 등) |
-| `notification.ts` | Expo Server SDK 푸시 발송 |
-| `logger.ts` | 로깅 유틸 |
+**RoomSettings 기본값 (타이머 튜닝 시 참고):**
+- `turnTimeLimit: 30000`, `largeTichuTimeLimit: 15000`, `exchangeTimeLimit: 30000`
+- `dragonGiveTimeLimit: 15000`, `wishSelectTimeLimit: 10000`
+- `bombWindowDuration: 3000` — 미사용 (deferred 시스템용, §6.6)
+- `targetScore: 1000`, `botDifficulty: 'easy' | 'medium' | 'hard'`
 
 ### 7.4. Prisma 모델 (`packages/server/prisma/schema.prisma`)
 
@@ -531,16 +371,11 @@ interface RoomSettings {
 - **나감 처리 순서:** hands 비면 finishOrder 추가 → 원투 체크 → 3인 나감 체크 → 트릭 종료 체크
 - **submit_bomb:** §6.6 "즉시 인터럽트" 가 단일 설명. 핸들러는 `canBeat` 검증 후 테이블 갱신 + 다음 활성 플레이어로 `your_turn` emit. `bomb-window.ts` 의 deferred 경로는 미사용
 
-### 7.7. declare_tichu 처리
+### 7.7. declare_tichu 비자명한 거부 조건
 
-```
-1. 페이즈 검증: large → LARGE_TICHU_WINDOW, small → TRICK_PLAY|PASSING
-2. 스몰: 본인이 카드 낸 적 있으면 거부 (다른 플레이어 무관)
-3. 스몰: `finishOrder.length > 0` 이면 거부 (`someone_already_finished`) — 1등 확정 후 선언은 무조건 -100 이므로 사용자 실수 방지
-4. 본인 중복 거부
-5. [커스텀] 팀원 (seat+2%4) 선언 확인 → 있으면 거부 (`teammate_already_declared`)
-6. 적용 + 브로드캐스트
-```
+- **스몰:** 본인이 이미 카드 낸 적 있음 (다른 플레이어는 무관) → 거부
+- **스몰:** `finishOrder.length > 0` → 거부 (`someone_already_finished`) — 1등 확정 후 선언은 무조건 -100 이라 사용자 실수 방지
+- **[커스텀]** 팀원 (seat+2 %4) 이 이미 선언 → 거부 (`teammate_already_declared`)
 
 ### 7.8. 정보 가시성 필터링
 
@@ -593,30 +428,11 @@ interface RoomSettings {
 
 ### 8.4. 공통 타입
 
-```typescript
-type Suit = 'sword' | 'star' | 'jade' | 'pagoda';
-type SpecialType = 'mahjong' | 'dog' | 'phoenix' | 'dragon';
-type Rank = '2'|'3'|'4'|'5'|'6'|'7'|'8'|'9'|'10'|'J'|'Q'|'K'|'A';
+`packages/shared/src/types.ts` 가 단일 소스 (Card, PlayedHand, HandType, GamePhase 등). 비자명한 포인트:
 
-interface NormalCard { type: 'normal'; suit: Suit; rank: Rank; value: number; }
-interface SpecialCard { type: 'special'; specialType: SpecialType; }
-type Card = NormalCard | SpecialCard;
-
-type HandType = 'single'|'pair'|'steps'|'triple'|'fullhouse'|'straight'|'four_bomb'|'straight_flush_bomb';
-
-interface PlayedHand {
-  type: HandType;
-  cards: Card[];
-  value: number;      // 비교 기준값. 봉황 싱글 시 float (예: 14.5)
-  length: number;     // 카드 장수
-  // 폭탄 비교: type 으로 구분 (SF > 포카드). 같은 타입이면:
-  //   four_bomb: value = rank 값 (2~14). 높은 value 승.
-  //   straight_flush_bomb: length 먼저 비교 (긴 쪽 승), 같으면 value (최고 카드 값) 비교.
-}
-
-type GamePhase = 'WAITING_FOR_PLAYERS'|'DEALING_8'|'LARGE_TICHU_WINDOW'|'DEALING_6'|'PASSING'|'TRICK_PLAY'|'ROUND_END'|'SCORING'|'GAME_OVER';
-type TrickPhase = 'LEAD'|'FOLLOWING'|'TRICK_WON'|'DRAGON_GIVE';
-```
+- **`PlayedHand.value`** 는 float — 봉황 싱글 시 직전값 +0.5 (예: A 위 = 14.5). 폭탄 비교는 `type` 먼저 (SF > 포카드), 같은 타입이면 포카드는 value, SF 는 length→value
+- **`Suit`:** `'sword' | 'star' | 'jade' | 'pagoda'` (검/별/옥/탑)
+- **`SpecialType`:** `'mahjong' | 'dog' | 'phoenix' | 'dragon'` (참새/개/봉황/용)
 
 ---
 
@@ -636,58 +452,26 @@ type TrickPhase = 'LEAD'|'FOLLOWING'|'TRICK_WON'|'DRAGON_GIVE';
 
 Expo Router 와 기존 수동 화면 전환이 병행되는 이유: 파일 라우팅은 진단·배포·딥링크용 shell 만 담당하고, 실제 게임 화면 전환은 `AppRoot` 안의 state 머신이 담당하기 때문 (리패킹 사이클 중에 라우터 재설정 비용을 피하기 위한 의도적 분리).
 
-### 9.2. 화면 (`packages/app/src/screens/`)
+### 9.2. 화면 / 컴포넌트 / Utils
 
-13 개 스크린:
+파일명이 자명한 것들은 `ls packages/app/src/{screens,components,utils}/` 로 확인. 비자명한 것만:
 
-| 스크린 | 역할 |
-|--------|------|
-| `SplashScreen.tsx` | 로딩 / 버전 체크 |
-| `LoginScreen.tsx` | 닉네임 입력 + Google OAuth / 게스트 로그인 |
-| `LobbyScreen.tsx` | 메인 로비 (빠른 매칭 · 커스텀 · 친구 · 출석 · 상점/랭킹/설정 탭) |
-| `MatchmakingScreen.tsx` | 매칭 큐 대기 화면 |
-| `CustomMatchScreen.tsx` | 커스텀 방 목록 + 방 생성 (`feat/custom-match-fullscreen` 의 재설계 대상) |
-| `GameScreen.tsx` | 실제 게임 테이블 |
-| `GameResultScreen.tsx` | 라운드/게임 결과 정산 |
-| `RulesScreen.tsx` | 게임 규칙 / 도움말 |
-| `RankingScreen.tsx` | 시즌 리더보드 |
-| `AchievementsScreen.tsx` | 업적 목록 + 수령 |
-| `ShopScreen.tsx` | 아바타 · 카드백 구매 |
-| `ProfilePage.tsx` | 프로필 · 통계 · 칭호 |
-| `TermsScreen.tsx` | 이용약관 |
+- **`LobbyScreen.tsx`** — 메인 로비 (빠른 매칭 · 커스텀 · 친구 · 출석 · 상점/랭킹/설정 탭 전부)
+- **`AppRoot.tsx` 상태 머신** — `splash → login → lobby → matchmaking → game → result`. Expo Router 는 shell, 실제 전환은 여기서
+- **모달은 전부 absolute overlay View** — `LargeTichuModal` / `DragonGiveModal` / `TutorialModal` / `AchievementPopup`. 네이티브 `<Modal>` 금지 (§14.2)
+- **`sound.ts` / `bgm.ts`** — module-load 시점 Web API 호출 금지 (§13, §14.2 참조)
+- **`globalErrorCapture.ts`** — `index.js` 최상단에서 가장 먼저 호출되어야 함 (§14.3)
+- **`roomDataAdapter.ts`** — 서버 `RoomListEntry` → 클라 `Room` 변환
 
-### 9.3. 컴포넌트 (`packages/app/src/components/`)
+### 9.3. Zustand 스토어 (`packages/app/src/stores/`)
 
-게임 UI, 모달, 시스템 컴포넌트 19 개. 주요 분류:
+- **`gameStore.ts`** — 게임 상태 + 서버 스냅샷/델타 적용
+- **`userStore.ts`** — 유저 프로필, MMKV 영속화
+- **`achievementStore.ts`** — 업적 진행도
 
-- **카드/테이블:** `CardView`, `PlayerHand`, `OpponentHand`, `TableArea`, `ExchangeView`
-- **액션/타이머:** `ActionBar`, `CircleTimer`, `ScoreBoard`
-- **모달 (전부 네이티브 Modal 이 아닌 absolute overlay View — 6.5 의 touch-lock 사고 참조):** `LargeTichuModal`, `DragonGiveModal`, `TutorialModal`, `AchievementPopup`
-- **오버레이/이벤트:** `GameEventOverlay`, `EmotePanel`, `ToastSystem`, `DisconnectOverlay`
-- **시스템:** `ErrorBoundary`, `BackgroundWatermark`, `ParticleEffect`
+### 9.4. `useSocket.ts` (`packages/app/src/hooks/`)
 
-### 9.4. Zustand 스토어 (`packages/app/src/stores/`)
-
-- **`gameStore.ts`** — 현재 게임 상태 (roomId, mySeat, phase, hands, tableCards, wish, tichuDeclarations, scores, bombWindow, 친구 데이터, 랭킹 데이터 등). 서버로부터 오는 스냅샷/델타를 직접 반영.
-- **`userStore.ts`** — 유저 프로필 (playerId, nickname, coins, xp, 티어, 출석, 상점 인벤토리, 설정, 아바타/카드백). MMKV 로 영속화.
-- **`achievementStore.ts`** — 업적 진행도와 최근 해금 이력.
-
-### 9.5. Hooks (`packages/app/src/hooks/`)
-
-- **`useSocket.ts`** — 소켓 연결 라이프사이클 + 모든 서버 이벤트 리스너 (400+ 줄). 연결 재시도, `rejoin_room` 자동, 버전 체크, `guest_login` 포함. 재접속 시 서버가 재시작됐으면 전체 상태 snapshot 으로 복구.
-- **`useGame.ts`** — 게임 상태 파생 헬퍼 (유효 플레이, 내 차례 여부 등).
-
-### 9.6. Utils (`packages/app/src/utils/`)
-
-- **`theme.ts`** — 색상 · 타이포 상수
-- **`responsive.ts`** — `useResponsive()` (window dimensions 기반 `isLandscape` / `isShort` / `isNarrow`)
-- **`sound.ts`** · **`bgm.ts`** — 효과음 / 배경음 (둘 다 **module-load 시점에 Web API 호출 금지** — 아래 13장 참조)
-- **`haptics.ts`** — expo-haptics 래퍼
-- **`firebase.ts`** · **`googleOAuth.ts`** — Firebase 클라이언트 초기화 / Google 로그인 flow
-- **`notifications.ts`** — expo-notifications 권한 + 토큰 획득
-- **`sentry.ts`** — Sentry 초기화 (`initSentry`) + 브레드크럼 + 유저 식별
-- **`globalErrorCapture.ts`** — 조기 에러 핸들러 (`installGlobalErrorHandler`) — index.js 에서 제일 먼저 호출됨
-- **`roomDataAdapter.ts`** — 서버 `RoomListEntry` → 클라이언트 `Room` 변환 (커스텀 매치 목록용)
+모든 서버 이벤트 리스너 + 연결 재시도 + `rejoin_room` 자동 + 버전 체크 + 재접속 시 snapshot 복구. 400+ 줄. 신규 이벤트 추가 시 이 파일과 `socket-handlers.ts` 양쪽 수정.
 
 ---
 
