@@ -353,9 +353,9 @@ const S = StyleSheet.create({
 
   // 하단 — flexShrink:0 으로 slotsArea 가 이 영역을 밀어내지 못하게.
   bottom: { alignItems: 'center', gap: 10, flexShrink: 0 },
-  // flexWrap 제거 — landscape 에서 한 줄에 다 들어가는데, wrap 허용
-  // 때문에 parent 레이아웃 계산이 비결정적으로 바뀔 수 있음.
-  hostActions: { flexDirection: 'row', gap: 10, justifyContent: 'center', alignItems: 'center' },
+  // portrait 고정 이후: 가로 한 줄에 셔플/봇/시작 3개를 담기엔 모바일 폭이 부족.
+  // column 으로 세로 stack — 3개 버튼이 각자 한 줄 씩 차지해서 잘림 없음.
+  hostActions: { flexDirection: 'column', gap: 10, alignItems: 'center' },
   shuffleBtn: { backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)' },
   shuffleBtnText: { color: '#818CF8', fontSize: 14, fontWeight: '800' },
   startGameBtn: { backgroundColor: '#2ecc71', borderRadius: 12, paddingHorizontal: 32, paddingVertical: 12, shadowColor: '#2ecc71', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6 },
