@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Pressable } from 'react-native';
-import { isMobile, useResponsive } from '../utils/responsive';
+import { useResponsive } from '../utils/responsive';
 import Animated, {
   FadeIn, ZoomIn, SlideInRight, SlideOutRight,
   useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing,
@@ -75,10 +75,10 @@ function FloatingSymbol({ symbol, x, delay }: { symbol: string; x: number; delay
 }
 
 export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRooms, onGetLeaderboard, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite, onBuyShopItem, onEquipShopItem, onChangeNickname, onGetGameHistory, onClaimAttendance, onDeleteAccount }: LobbyScreenProps) {
-  const { isLandscape, isShort, height: winHeight } = useResponsive();
-  // landscape phone 처럼 세로 공간이 부족할 때 로고/카드 축소.
-  // winHeight < 600 = landscape phone or very small screen.
-  const compact = isLandscape || isShort || winHeight < 600;
+  const { isDesktop } = useResponsive();
+  // 18차: desktop 은 완전히 다른 구조 (AppBar + Hero + Cards + Footer). 1-17차의
+  // 모든 desktop 실험 (contentWidth 계산, outerWrapper, cardDesktop 고정 width,
+  // chrome/main 이원화, 사이드바 등) 전면 폐기. isDesktop 일 때 별도 return.
   const savedNickname = useUserStore((s) => s.nickname);
   const savedPlayerId = useUserStore((s) => s.playerId);
   const userSetNickname = useUserStore((s) => s.setNickname);
@@ -243,105 +243,21 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
     );
   }
   // ═══════════ 메인 화면 ═══════════
-  return (
-    <SafeAreaView style={S.root}>
-      <BackgroundWatermark />
-      {/* 파티클 */}
-      <View style={S.particleLayer} pointerEvents="none">
-        {particles.map((p, i) => <FloatingSymbol key={i} symbol={p.s} x={p.x} delay={p.d} />)}
-      </View>
-      {/* 상단 바 */}
-      <Animated.View entering={FadeIn.delay(0).duration(500)} style={S.topBar}>
-        <TouchableOpacity style={S.profileBtn} activeOpacity={0.8} onPress={() => { setPage('profile'); onGetLeaderboard?.(); onGetGameHistory?.(); }}>
-          <View style={[S.av, { borderColor: tier.color }]}><Text style={{ fontSize: 18 }}>{avatarEmoji}</Text></View>
-          <Text style={S.nick}>{name}</Text>
-          <Text style={S.tierIcon}>{tier.icon}</Text>
-        </TouchableOpacity>
-        <View style={S.topRight}>
-          <View style={S.coinBadge}><Text style={{ fontSize: 16 }}>{'🪙'}</Text><Text style={S.coinText}>{userCoins}</Text></View>
-          <TouchableOpacity style={S.topIconBtn} onPress={() => setPage('shop')}><Text style={S.topIconText}>{'🛒'}</Text></TouchableOpacity>
-          <TouchableOpacity style={S.topIconBtn} onPress={() => setShowFriends(true)}>
-            <Text style={S.topIconText}>{'\uD83D\uDC65'}</Text>
-            {(onlineFriends.length > 0 || friendRequests.length > 0) && <View style={S.badge}><Text style={S.badgeText}>{onlineFriends.length + friendRequests.length}</Text></View>}
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-      {/* 중앙 — ScrollView 로 감싸서 landscape / small screen 잘림 방지 */}
-      <ScrollView
-        style={{ flex: 1, zIndex: 5 }}
-        contentContainerStyle={[S.center, compact && S.centerCompact]}
-        showsVerticalScrollIndicator={false}
-      >
-        {!compact && (
-          <Animated.View entering={FadeIn.delay(200).duration(500)} style={S.logoArea}>
-            <Animated.Text style={[S.title, logoGlowStyle]}>TICHU</Animated.Text>
-            <Text style={S.subtitle}>Ultimate Card Battle</Text>
-            <View style={S.divider} />
-          </Animated.View>
-        )}
-        {!matching ? (
-          <Animated.View entering={FadeIn.delay(400).duration(500)} style={S.cardsWrap}>
-            <View style={S.cards}>
-              <TouchableOpacity style={[S.card, compact && S.cardCompact, S.cardG]} activeOpacity={0.85} onPress={() => setMatching(true)}>
-                <View style={S.cardGlow} pointerEvents="none" />
-                <Text style={[S.cIcon, compact && S.cIconCompact]}>{'\u26A1'}</Text>
-                <Text style={S.cTitle}>{'\uBE60\uB978 \uB9E4\uCE6D'}</Text>
-                <Text style={S.cSub}>{'\uBE44\uC2B7\uD55C \uC2E4\uB825\uC758 \uC720\uC800\uC640'}{'\n'}{'\uC989\uC2DC \uD50C\uB808\uC774'}</Text>
-                <View style={S.playBtn}><Text style={S.playBtnText}>{'\u25B6  \uD50C\uB808\uC774'}</Text></View>
-              </TouchableOpacity>
-              <TouchableOpacity style={[S.card, compact && S.cardCompact, S.cardD]} activeOpacity={0.85} onPress={() => { setPage('customMatch'); }}>
-                <Text style={[S.cIcon, compact && S.cIconCompact]}>{'\uD83D\uDD12'}</Text>
-                <Text style={S.cTitle}>{'\uCEE4\uC2A4\uD140 \uBAA8\uB4DC'}</Text>
-                <Text style={S.cSub}>{'\uBC29 \uB9CC\uB4E4\uAE30 \uBC0F'}{'\n'}{'\uCF54\uB4DC\uB85C \uC785\uC7A5'}</Text>
-                <View style={S.playBtnOutline}><Text style={S.playBtnOutlineText}>{'\u25B6  \uD50C\uB808\uC774'}</Text></View>
-              </TouchableOpacity>
-            </View>
-            <Animated.View entering={FadeIn.delay(600).duration(500)}>
-              <TouchableOpacity style={[S.rulesBtn, compact && S.rulesBtnCompact]} activeOpacity={0.8} onPress={() => setPage('rules')}>
-                <View style={S.rulesBtnInner}>
-                  <Text style={S.rulesBtnIcon}>{'\uD83D\uDCD6'}</Text>
-                  <View style={S.rulesBtnTextWrap}>
-                    <Text style={S.rulesBtnTitle}>{'\uAC8C\uC784 \uADDC\uCE59'}</Text>
-                    <Text style={S.rulesBtnDesc}>{'\uD2F0\uCE04\uAC00 \uCC98\uC74C\uC774\uB77C\uBA74 \uC5EC\uAE30\uC11C \uBC30\uC6CC\uBCF4\uC138\uC694!'}</Text>
-                  </View>
-                  <Text style={S.rulesBtnArrow}>{'>'}</Text>
-                </View>
-              </TouchableOpacity>
-            </Animated.View>
-          </Animated.View>
-        ) : (
-          <Animated.View entering={ZoomIn.duration(300).springify()} style={S.matchBox}>
-            <Text style={{ fontSize: 36 }}>{'\uD83D\uDD0D'}</Text>
-            <Text style={S.matchTitle}>{'\uB9E4\uCE6D \uC911...'}</Text>
-            <Text style={S.matchTimer}>{matchSec}{'\uCD08'}</Text>
-            <TouchableOpacity style={S.matchCancel} onPress={() => setMatching(false)}><Text style={S.matchCancelT}>{'\uB9E4\uCE6D \uCDE8\uC18C'}</Text></TouchableOpacity>
-          </Animated.View>
-        )}
-      </ScrollView>
-      {/* 하단 탭 */}
-      <Animated.View entering={FadeIn.delay(800).duration(500)} style={S.nav}>
-        {[{ i: '\uD83C\uDFE0', l: '\uD648', idx: 0 }, { i: '\uD83C\uDFC6', l: '\uB7AD\uD0B9', idx: 1 }, { i: '\u2699\uFE0F', l: '\uC124\uC815', idx: 2 }].map(t => (
-          <TouchableOpacity key={t.idx} style={S.navTab} onPress={() => { setActiveTab(t.idx); if (t.idx === 1) setPage('ranking'); else if (t.idx === 2) setPage('settings'); }}>
-            {activeTab === t.idx && <View style={S.navDot} />}
-            <Text style={[S.navI, activeTab === t.idx ? S.navOn : S.navOff]}>{t.i}</Text>
-            <Text style={[S.navL, activeTab === t.idx && S.navLOn]}>{t.l}</Text>
-          </TouchableOpacity>
-        ))}
-      </Animated.View>
+  // 공통 overlay/modal — desktop/mobile 양쪽에서 동일 JSX 재사용.
+  const overlays = (
+    <>
       {/* ═══ 친구 사이드 패널 ═══ */}
       {showFriends && (
         <Pressable style={S.overlay} onPress={() => setShowFriends(false)}>
           <Animated.View entering={SlideInRight.duration(300)} style={S.fp}>
             <Pressable style={{ flex: 1 }} onPress={e => e.stopPropagation()}>
               <View style={S.fpHead}><Text style={S.fpTitle}>{'친구 목록'}</Text><TouchableOpacity onPress={() => setShowFriends(false)}><Text style={S.fpX}>{'\u2715'}</Text></TouchableOpacity></View>
-              {/* 내 친구 코드 */}
               {friendCode ? (
                 <View style={{ alignItems: 'center', marginBottom: 10 }}>
                   <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>내 친구 코드</Text>
                   <Text style={{ color: '#F59E0B', fontSize: 18, fontWeight: '900', letterSpacing: 3 }}>{friendCode}</Text>
                 </View>
               ) : null}
-              {/* 친구 코드로 검색 */}
               <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8, paddingHorizontal: 4 }}>
                 <TextInput
                   style={[S.mInput, { flex: 1, paddingVertical: 6, fontSize: 13 }]}
@@ -359,7 +275,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                   <Text style={S.fpAddText}>{'검색'}</Text>
                 </TouchableOpacity>
               </View>
-              {/* 검색 결과 */}
               {friendSearchResult && friendSearchResult.found && (
                 <View style={[S.fpRow, { backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 8, marginBottom: 6 }]}>
                   <View style={{ flex: 1 }}><Text style={S.fpN}>{friendSearchResult.nickname}</Text></View>
@@ -376,7 +291,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                 <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, textAlign: 'center', marginBottom: 6 }}>{'플레이어를 찾을 수 없습니다'}</Text>
               )}
               {friendMsg ? <Text style={{ color: '#F59E0B', fontSize: 11, textAlign: 'center', marginBottom: 6 }}>{friendMsg}</Text> : null}
-              {/* 친구 요청 */}
               {friendRequests.length > 0 && (
                 <>
                   <Text style={S.fpSec}>{'📩 친구 요청 (' + friendRequests.length + ')'}</Text>
@@ -394,7 +308,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                 </>
               )}
               <ScrollView showsVerticalScrollIndicator={false}>
-                {/* 온라인 친구 */}
                 <Text style={S.fpSec}>{'온라인 (' + onlineFriends.length + ')'}</Text>
                 {onlineFriends.length === 0 && <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, textAlign: 'center', paddingVertical: 8 }}>{'온라인 친구가 없습니다'}</Text>}
                 {onlineFriends.map((f, i) => (
@@ -417,7 +330,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                     )}
                   </View>
                 ))}
-                {/* 오프라인 친구 */}
                 <Text style={[S.fpSec, { marginTop: 10 }]}>{'오프라인 (' + offlineFriends.length + ')'}</Text>
                 {offlineFriends.map((f, i) => (
                   <View key={i} style={[S.fpRow, { opacity: 0.5 }]}>
@@ -430,12 +342,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           </Animated.View>
         </Pressable>
       )}
-      {/* ═══ 출석 체크 팝업 ═══
-        * RN 0.76 + New Arch + Bridgeless 에서 네이티브 `<Modal>` 는
-        * Android Dialog 를 띄우면서 부모 window focus 를 가로채
-        * gesture state 가 "DOWN" 으로 stuck 되는 버그가 있다. 그래서
-        * 이 팝업은 Modal 대신 absolute overlay View 로 렌더한다 —
-        * BACK 키/시스템 Dialog 시맨틱은 불필요. */}
+      {/* 출석/닉네임 편집 — RN 0.76 Modal 금지 (14.2 참조), overlay View 사용. */}
       {showAttendance && (
         <View style={[S.attOverlay, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }]}>
           <Animated.View entering={ZoomIn.duration(350).springify()} style={S.attModal}>
@@ -455,7 +362,6 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           </Animated.View>
         </View>
       )}
-      {/* 닉네임 편집 팝업 — Modal 대신 overlay View (위 주석 참조) */}
       {showNickEdit && (
         <View style={[S.mOvl, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }]}>
           <View style={S.mBox}>
@@ -465,7 +371,186 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           </View>
         </View>
       )}
-      {/* 커스텀 매치는 CustomMatchScreen 풀스크린 페이지로 이전됨 (page === 'customMatch') */}
+    </>
+  );
+
+  // ═══ Desktop (PC 웹) — 완전히 다른 AppBar + Hero + Cards + Footer 구조 ═══
+  if (isDesktop) {
+    return (
+      <SafeAreaView style={S.root}>
+        <BackgroundWatermark />
+        <View style={S.particleLayer} pointerEvents="none">
+          {particles.map((p, i) => <FloatingSymbol key={i} symbol={p.s} x={p.x} delay={p.d} />)}
+        </View>
+        {/* Desktop 상단 AppBar — 로고 좌, nav 중앙, tools 우 */}
+        <Animated.View entering={FadeIn.delay(0).duration(500)} style={S.dHeader}>
+          <View style={S.dHeaderLeft}>
+            <Text style={S.dHeaderLogo}>{'TICHU'}</Text>
+          </View>
+          <View style={S.dHeaderNav}>
+            <TouchableOpacity style={S.dHeaderNavItem} onPress={() => setActiveTab(0)}>
+              <Text style={[S.dHeaderNavText, activeTab === 0 && S.dHeaderNavActive]}>{'홈'}</Text>
+              {activeTab === 0 && <View style={S.dHeaderNavUnderline} />}
+            </TouchableOpacity>
+            <TouchableOpacity style={S.dHeaderNavItem} onPress={() => { setPage('ranking'); onGetLeaderboard?.(); }}>
+              <Text style={S.dHeaderNavText}>{'랭킹'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={S.dHeaderNavItem} onPress={() => setPage('shop')}>
+              <Text style={S.dHeaderNavText}>{'상점'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={S.dHeaderNavItem} onPress={() => setShowFriends(true)}>
+              <Text style={S.dHeaderNavText}>{'친구'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={S.dHeaderNavItem} onPress={() => setPage('settings')}>
+              <Text style={S.dHeaderNavText}>{'설정'}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={S.dHeaderRight}>
+            <TouchableOpacity style={S.dProfileBtn} activeOpacity={0.8} onPress={() => { setPage('profile'); onGetLeaderboard?.(); onGetGameHistory?.(); }}>
+              <View style={[S.dAv, { borderColor: tier.color }]}><Text style={{ fontSize: 18 }}>{avatarEmoji}</Text></View>
+              <Text style={S.dNick}>{name}</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+        {/* Desktop 메인 — hero + cards + rules link */}
+        <ScrollView style={{ flex: 1, zIndex: 5 }} contentContainerStyle={S.dMainContent} showsVerticalScrollIndicator={false}>
+          <Animated.View entering={FadeIn.delay(200).duration(500)} style={S.dHero}>
+            <Text style={S.dHeroTagline}>{'ULTIMATE CARD BATTLE'}</Text>
+            <Animated.Text style={[S.dHeroLogo, logoGlowStyle]}>{'TICHU'}</Animated.Text>
+            <View style={S.dHeroDivider} />
+          </Animated.View>
+          {!matching ? (
+            <>
+              <Animated.View entering={FadeIn.delay(400).duration(500)} style={S.dCards}>
+                <TouchableOpacity style={[S.dCard, S.dCardG]} activeOpacity={0.85} onPress={() => setMatching(true)}>
+                  <View style={S.cardGlow} pointerEvents="none" />
+                  <Text style={S.dCardIcon}>{'\u26A1'}</Text>
+                  <Text style={S.dCardTitle}>{'\uBE60\uB978 \uB9E4\uCE6D'}</Text>
+                  <Text style={S.dCardSub}>{'\uBE44\uC2B7\uD55C \uC2E4\uB825\uC758 \uC720\uC800\uC640'}{'\n'}{'\uC989\uC2DC \uD50C\uB808\uC774'}</Text>
+                  <View style={S.dPlayBtn}><Text style={S.dPlayBtnText}>{'\u25B6  \uD50C\uB808\uC774'}</Text></View>
+                </TouchableOpacity>
+                <TouchableOpacity style={[S.dCard, S.dCardD]} activeOpacity={0.85} onPress={() => setPage('customMatch')}>
+                  <Text style={S.dCardIcon}>{'\uD83D\uDD12'}</Text>
+                  <Text style={S.dCardTitle}>{'\uCEE4\uC2A4\uD140 \uBAA8\uB4DC'}</Text>
+                  <Text style={S.dCardSub}>{'\uBC29 \uB9CC\uB4E4\uAE30 \uBC0F'}{'\n'}{'\uCF54\uB4DC\uB85C \uC785\uC7A5'}</Text>
+                  <View style={S.dPlayBtnOutline}><Text style={S.dPlayBtnOutlineText}>{'\u25B6  \uD50C\uB808\uC774'}</Text></View>
+                </TouchableOpacity>
+              </Animated.View>
+              <Animated.View entering={FadeIn.delay(600).duration(500)}>
+                <TouchableOpacity style={S.dRulesBtn} activeOpacity={0.8} onPress={() => setPage('rules')}>
+                  <Text style={S.dRulesBtnIcon}>{'\uD83D\uDCD6'}</Text>
+                  <View style={S.dRulesBtnTextWrap}>
+                    <Text style={S.dRulesBtnTitle}>{'게임 규칙'}</Text>
+                    <Text style={S.dRulesBtnDesc}>{'티츄가 처음이라면 여기서 배워보세요!'}</Text>
+                  </View>
+                  <Text style={S.dRulesBtnArrow}>{'›'}</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            </>
+          ) : (
+            <Animated.View entering={ZoomIn.duration(300).springify()} style={S.matchBox}>
+              <Text style={{ fontSize: 36 }}>{'\uD83D\uDD0D'}</Text>
+              <Text style={S.matchTitle}>{'\uB9E4\uCE6D \uC911...'}</Text>
+              <Text style={S.matchTimer}>{matchSec}{'\uCD08'}</Text>
+              <TouchableOpacity style={S.matchCancel} onPress={() => setMatching(false)}><Text style={S.matchCancelT}>{'\uB9E4\uCE6D \uCDE8\uC18C'}</Text></TouchableOpacity>
+            </Animated.View>
+          )}
+        </ScrollView>
+        {/* Desktop 하단 푸터 */}
+        <View style={S.dFooter}>
+          <Text style={S.dFooterText}>{'© 2026 Tichu'}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+            <Text style={S.dFooterText}>{'v1.0.0'}</Text>
+            <TouchableOpacity onPress={() => setPage('terms')}><Text style={S.dFooterLink}>{'이용약관'}</Text></TouchableOpacity>
+          </View>
+        </View>
+        {overlays}
+      </SafeAreaView>
+    );
+  }
+
+  // ═══ Mobile (세로) — 기존 구조 유지 ═══
+  return (
+    <SafeAreaView style={S.root}>
+      <BackgroundWatermark />
+      <View style={S.particleLayer} pointerEvents="none">
+        {particles.map((p, i) => <FloatingSymbol key={i} symbol={p.s} x={p.x} delay={p.d} />)}
+      </View>
+      <Animated.View entering={FadeIn.delay(0).duration(500)} style={S.topBar}>
+        <TouchableOpacity style={S.profileBtn} activeOpacity={0.8} onPress={() => { setPage('profile'); onGetLeaderboard?.(); onGetGameHistory?.(); }}>
+          <View style={[S.av, { borderColor: tier.color }]}><Text style={{ fontSize: 18 }}>{avatarEmoji}</Text></View>
+          <Text style={S.nick}>{name}</Text>
+          <Text style={S.tierIcon}>{tier.icon}</Text>
+        </TouchableOpacity>
+        <View style={S.topRight}>
+          <TouchableOpacity style={S.topIconBtn} onPress={() => setPage('shop')}><Text style={S.topIconText}>{'🛒'}</Text></TouchableOpacity>
+          <TouchableOpacity style={S.topIconBtn} onPress={() => setShowFriends(true)}>
+            <Text style={S.topIconText}>{'\uD83D\uDC65'}</Text>
+            {(onlineFriends.length > 0 || friendRequests.length > 0) && <View style={S.badge}><Text style={S.badgeText}>{onlineFriends.length + friendRequests.length}</Text></View>}
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+      <ScrollView
+        style={{ flex: 1, zIndex: 5 }}
+        contentContainerStyle={S.center}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View entering={FadeIn.delay(200).duration(500)} style={S.logoArea}>
+          <Animated.Text style={[S.title, logoGlowStyle]}>TICHU</Animated.Text>
+          <Text style={S.subtitle}>Ultimate Card Battle</Text>
+          <View style={S.divider} />
+        </Animated.View>
+        {!matching ? (
+          <Animated.View entering={FadeIn.delay(400).duration(500)} style={S.cardsWrap}>
+            <View style={S.cards}>
+              <TouchableOpacity style={[S.card, S.cardG]} activeOpacity={0.85} onPress={() => setMatching(true)}>
+                <View style={S.cardGlow} pointerEvents="none" />
+                <Text style={S.cIcon}>{'\u26A1'}</Text>
+                <Text style={S.cTitle}>{'\uBE60\uB978 \uB9E4\uCE6D'}</Text>
+                <Text style={S.cSub}>{'\uBE44\uC2B7\uD55C \uC2E4\uB825\uC758 \uC720\uC800\uC640'}{'\n'}{'\uC989\uC2DC \uD50C\uB808\uC774'}</Text>
+                <View style={S.playBtn}><Text style={S.playBtnText}>{'\u25B6  \uD50C\uB808\uC774'}</Text></View>
+              </TouchableOpacity>
+              <TouchableOpacity style={[S.card, S.cardD]} activeOpacity={0.85} onPress={() => { setPage('customMatch'); }}>
+                <Text style={S.cIcon}>{'\uD83D\uDD12'}</Text>
+                <Text style={S.cTitle}>{'\uCEE4\uC2A4\uD140 \uBAA8\uB4DC'}</Text>
+                <Text style={S.cSub}>{'\uBC29 \uB9CC\uB4E4\uAE30 \uBC0F'}{'\n'}{'\uCF54\uB4DC\uB85C \uC785\uC7A5'}</Text>
+                <View style={S.playBtnOutline}><Text style={S.playBtnOutlineText}>{'\u25B6  \uD50C\uB808\uC774'}</Text></View>
+              </TouchableOpacity>
+            </View>
+            <Animated.View entering={FadeIn.delay(600).duration(500)}>
+              <TouchableOpacity style={S.rulesBtn} activeOpacity={0.8} onPress={() => setPage('rules')}>
+                <View style={S.rulesBtnInner}>
+                  <Text style={S.rulesBtnIcon}>{'\uD83D\uDCD6'}</Text>
+                  <View style={S.rulesBtnTextWrap}>
+                    <Text style={S.rulesBtnTitle}>{'\uAC8C\uC784 \uADDC\uCE59'}</Text>
+                    <Text style={S.rulesBtnDesc}>{'\uD2F0\uCE04\uAC00 \uCC98\uC74C\uC774\uB77C\uBA74 \uC5EC\uAE30\uC11C \uBC30\uC6CC\uBCF4\uC138\uC694!'}</Text>
+                  </View>
+                  <Text style={S.rulesBtnArrow}>{'>'}</Text>
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
+          </Animated.View>
+        ) : (
+          <Animated.View entering={ZoomIn.duration(300).springify()} style={S.matchBox}>
+            <Text style={{ fontSize: 36 }}>{'\uD83D\uDD0D'}</Text>
+            <Text style={S.matchTitle}>{'\uB9E4\uCE6D \uC911...'}</Text>
+            <Text style={S.matchTimer}>{matchSec}{'\uCD08'}</Text>
+            <TouchableOpacity style={S.matchCancel} onPress={() => setMatching(false)}><Text style={S.matchCancelT}>{'\uB9E4\uCE6D \uCDE8\uC18C'}</Text></TouchableOpacity>
+          </Animated.View>
+        )}
+      </ScrollView>
+      <Animated.View entering={FadeIn.delay(800).duration(500)} style={S.nav}>
+        <View style={S.navInner}>
+          {[{ i: '\uD83C\uDFE0', l: '\uD648', idx: 0 }, { i: '\uD83C\uDFC6', l: '\uB7AD\uD0B9', idx: 1 }, { i: '\u2699\uFE0F', l: '\uC124\uC815', idx: 2 }].map(t => (
+            <TouchableOpacity key={t.idx} style={S.navTab} onPress={() => { setActiveTab(t.idx); if (t.idx === 1) setPage('ranking'); else if (t.idx === 2) setPage('settings'); }}>
+              {activeTab === t.idx && <View style={S.navDot} />}
+              <Text style={[S.navI, activeTab === t.idx ? S.navOn : S.navOff]}>{t.i}</Text>
+              <Text style={[S.navL, activeTab === t.idx && S.navLOn]}>{t.l}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Animated.View>
+      {overlays}
     </SafeAreaView>
   );
 }
@@ -474,7 +559,8 @@ const S = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg, overflow: 'hidden' },
   particleLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 },
 
-  // 상단 바
+  // 상단 바 — 모바일 풀폭. desktop 은 desktopContent (inline) 이 contentWidth
+  // maxWidth + alignSelf center 주입.
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 10, zIndex: 10 },
   profileBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
   av: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
@@ -488,24 +574,17 @@ const S = StyleSheet.create({
   badge: { position: 'absolute', top: -3, right: -3, backgroundColor: '#ef4444', borderRadius: 9, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: COLORS.bg },
   badgeText: { color: '#fff', fontSize: 9, fontWeight: '900' },
 
-  // 중앙 — ScrollView contentContainerStyle
+  // 중앙 — ScrollView contentContainerStyle. 모바일/desktop 공통: 세로 중앙 정렬.
   center: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16 },
-  // compact (landscape phone / short screen): 위 정렬 + 여백 축소.
-  // flex-start 로 둬야 content 가 nav 아래로 밀려서 게임 규칙 버튼이 가려지는 일이 없다.
-  centerCompact: { justifyContent: 'flex-start', paddingTop: 6, paddingBottom: 12, paddingHorizontal: 24 },
   logoArea: { alignItems: 'center', marginBottom: 16 },
   title: { color: '#FFD700', fontSize: 48, fontWeight: '900', letterSpacing: 10, textShadowColor: 'rgba(255,215,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 12, marginBottom: 2 },
   subtitle: { color: 'rgba(255,255,255,0.3)', fontSize: 12, fontWeight: '600', letterSpacing: 4, marginBottom: 8 },
   divider: { width: 50, height: 2, backgroundColor: 'rgba(255,215,0,0.3)', borderRadius: 1 },
 
-  // 카드
+  // 카드 (모바일만 사용)
   cardsWrap: { alignItems: 'stretch' },
   cards: { flexDirection: 'row', gap: 20, justifyContent: 'center' },
   card: { width: 160, height: 240, borderRadius: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.6, shadowRadius: 28, elevation: 16, overflow: 'hidden' },
-  // compact = landscape phone. 내용은 유지하되 nav 와 겹치지 않도록 충분히 작게.
-  cardCompact: { width: 190, height: 140, paddingHorizontal: 12, paddingVertical: 8 },
-  cIconCompact: { fontSize: 24, marginBottom: 0 },
-  rulesBtnCompact: { marginTop: 6, paddingVertical: 6, paddingHorizontal: 14 },
   cardG: { backgroundColor: '#0d6b3f' },
   cardD: { backgroundColor: '#14332a' },
   cardGlow: { position: 'absolute', top: -20, left: -20, right: -20, bottom: -20, borderRadius: 30, backgroundColor: 'rgba(245,158,11,0.04)', shadowColor: '#F59E0B', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 30, elevation: 2 },
@@ -537,8 +616,9 @@ const S = StyleSheet.create({
   matchCancel: { borderRadius: 10, paddingHorizontal: 18, paddingVertical: 7, marginTop: 4, backgroundColor: 'rgba(239,68,68,0.1)' },
   matchCancelT: { color: '#f87171', fontSize: 13, fontWeight: '700' },
 
-  // 하단 탭
-  nav: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: 'rgba(0,0,0,0.5)', paddingVertical: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', zIndex: 10 },
+  // 하단 탭 (모바일만 사용. desktop 은 상단 AppBar 의 nav 메뉴 사용).
+  nav: { backgroundColor: 'rgba(0,0,0,0.5)', paddingVertical: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', zIndex: 10 },
+  navInner: { flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
   navTab: { alignItems: 'center', paddingHorizontal: 16 },
   navDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#F59E0B', marginBottom: 2 },
   navI: { fontSize: 26 },
@@ -617,4 +697,146 @@ const S = StyleSheet.create({
   mBtns: { flexDirection: 'row', gap: 10 },
   mOk: { flex: 1, backgroundColor: '#D97706', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   mOkT: { color: '#fff', fontWeight: '800', fontSize: 15 },
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 18차 Desktop (PC 웹) — AppBar + Hero + Cards + Footer 스탠다드 레이아웃.
+  // 모바일 스타일 (topBar, center, cards, nav) 와 완전 독립. 혼용 금지.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // ─── Desktop 상단 AppBar ───
+  dHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    height: 72, paddingHorizontal: 48,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)',
+    zIndex: 10,
+  },
+  dHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
+  dHeaderLogo: {
+    color: '#FFD700', fontSize: 32, fontWeight: '900', letterSpacing: 3,
+    textShadowColor: 'rgba(255,215,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8,
+  },
+  dHeaderNav: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  dHeaderNavItem: { paddingHorizontal: 18, paddingVertical: 10, alignItems: 'center' },
+  dHeaderNavText: { color: 'rgba(255,255,255,0.7)', fontSize: 15, fontWeight: '700', letterSpacing: 0.5 },
+  dHeaderNavActive: { color: '#F59E0B' },
+  dHeaderNavUnderline: { marginTop: 6, height: 2, width: 24, backgroundColor: '#F59E0B', borderRadius: 1 },
+  dHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dProfileBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 20,
+    paddingHorizontal: 10, paddingVertical: 5,
+  },
+  dAv: {
+    width: 32, height: 32, borderRadius: 16, borderWidth: 2,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  dNick: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  dIconBtn: {
+    backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 16,
+    width: 40, height: 40,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  dIconText: { fontSize: 18 },
+  dBadge: {
+    position: 'absolute', top: -3, right: -3,
+    backgroundColor: '#ef4444', borderRadius: 9,
+    minWidth: 18, height: 18,
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 3, borderWidth: 1.5, borderColor: COLORS.bg,
+  },
+  dBadgeText: { color: '#fff', fontSize: 9, fontWeight: '900' },
+
+  // ─── Desktop 메인 영역 ───
+  dMainContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 48,
+    zIndex: 5,
+  },
+  // Hero (큰 로고 + 태그라인)
+  dHero: { alignItems: 'center', marginBottom: 40 },
+  dHeroTagline: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 14, fontWeight: '600',
+    letterSpacing: 8,
+    marginBottom: 12,
+  },
+  dHeroLogo: {
+    color: '#FFD700', fontSize: 84, fontWeight: '900', letterSpacing: 16,
+    textShadowColor: 'rgba(255,215,0,0.5)',
+    textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 20,
+  },
+  dHeroDivider: { width: 80, height: 2, backgroundColor: 'rgba(255,215,0,0.3)', borderRadius: 1, marginTop: 16 },
+
+  // 메인 카드 2개 (크게, PC 가독성)
+  dCards: {
+    flexDirection: 'row',
+    gap: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  dCard: {
+    width: 400, height: 380, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 26, paddingVertical: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.55, shadowRadius: 28, elevation: 18,
+    overflow: 'hidden',
+  },
+  dCardG: { backgroundColor: '#0d6b3f' },
+  dCardD: { backgroundColor: '#14332a' },
+  dCardIcon: { fontSize: 64, marginBottom: 18 },
+  dCardTitle: { color: '#fff', fontSize: 30, fontWeight: '900', marginBottom: 10 },
+  dCardSub: { color: 'rgba(255,255,255,0.5)', fontSize: 16, lineHeight: 23, textAlign: 'center', marginBottom: 22 },
+  dPlayBtn: {
+    backgroundColor: '#D97706', borderRadius: 12,
+    paddingHorizontal: 46, paddingVertical: 14,
+    shadowColor: '#F59E0B', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5, shadowRadius: 10, elevation: 6,
+  },
+  dPlayBtnText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  dPlayBtnOutline: {
+    borderWidth: 1.5, borderColor: 'rgba(16,185,129,0.6)',
+    borderRadius: 12,
+    paddingHorizontal: 46, paddingVertical: 13,
+  },
+  dPlayBtnOutlineText: { color: '#10b981', fontSize: 17, fontWeight: '700' },
+
+  // 게임 규칙 배너 — 카드 2개 합친 폭 (400×2 + gap 48 = 848) 에 맞춰 stretch.
+  // marginTop 으로 카드 아래에 살짝 간격.
+  dRulesBtn: {
+    width: 848,
+    marginTop: 4,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 28, paddingVertical: 20,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.25)',
+  },
+  dRulesBtnIcon: { fontSize: 32, marginRight: 18 },
+  dRulesBtnTextWrap: { flex: 1 },
+  dRulesBtnTitle: { color: '#F59E0B', fontSize: 18, fontWeight: '800', marginBottom: 3 },
+  dRulesBtnDesc: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '500' },
+  dRulesBtnArrow: { color: 'rgba(255,255,255,0.4)', fontSize: 28, fontWeight: '300' },
+
+  // ─── Desktop 하단 푸터 ───
+  // 배경/보더 없음 — splash 배경 위에 텍스트만 올림. 상단 AppBar 와 시각적으로
+  // 구분되어 "대칭 프레임" 느낌이 사라져 더 자연스러움.
+  dFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 52, paddingHorizontal: 48,
+    zIndex: 10,
+  },
+  dFooterText: { color: 'rgba(255,255,255,0.35)', fontSize: 12 },
+  dFooterLink: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '600' },
 });
