@@ -780,3 +780,9 @@ Railway (서버): https://accomplished-purpose-production-9135.up.railway.app/he
 - **GameScreen portrait 검증** — 기존 설계가 landscape 기준이었을 가능성. portrait 에서 PlayerHand / OpponentHand / TableArea 레이아웃이 정상 동작하는지 미확인. portrait base.apk 나오면 1순위 검증.
 - **프로덕션 스모크 테스트** — 2026-04-14 Vercel `tichu-app.vercel.app` 에서 로그인 + 로비 확인, 사용자가 "잘 된다" 컨펌. 전체 게임 플로우 (매칭 → 플레이 → 결과) 는 별도 확인 필요.
 
+### 8차-b (2026-04-14 추가 작업)
+
+- `c9a32e4` **fix(server/test): resolve custom-match-v3 flaky first-test timeout** — warmup 을 `login_success` 대기로 변경, `vitest.config.ts testTimeout: 15000`. 12/12 pass, 첫 테스트 1326ms.
+- `3bd90d9` **refactor(lobby/web): remove dead desktop icon button styles** — `dIconBtn`/`dIconText`/`dBadge`/`dBadgeText` 제거 (AppBar 재작업 후 JSX 참조 없음). 친구 알림 배지는 의도적으로 복원 안 함.
+- **스몰 티츄 확인 모달** (GameScreen) — 스몰 티츄 버튼 클릭 시 "정말 선언? (+100/-100)" 확인 오버레이. 실수로 누르는 사고 방지. CLAUDE.md §14.2 준수하여 native Modal 대신 absolute overlay View 사용.
+

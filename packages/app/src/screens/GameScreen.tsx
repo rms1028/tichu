@@ -90,6 +90,9 @@ export function GameScreen({
   const bombWindow = useGameStore((s) => s.bombWindow);
   const lastPlayEvent = useGameStore((s) => s.lastPlayEvent);
   const [bombShake, setBombShake] = useState(false);
+  // 스몰 티츄 확인 모달 — 실수로 누르면 -100 손해라 중요. RN 0.76 touch-lock
+  // 버그 회피 위해 native Modal 금지, absolute overlay View 사용 (CLAUDE.md §14.2).
+  const [showTichuConfirm, setShowTichuConfirm] = useState(false);
   // 폭탄이 실제로 플레이됐을 때만 화면 흔들림
   useEffect(() => {
     if (lastPlayEvent?.hand?.type === 'four_bomb' || lastPlayEvent?.hand?.type === 'straight_flush_bomb') {
@@ -510,7 +513,7 @@ export function GameScreen({
             </View>
           ) : (
             <View>
-              <TichuPulseButton onPress={() => onDeclareTichu('small')} />
+              <TichuPulseButton onPress={() => setShowTichuConfirm(true)} />
             </View>
           )}
           <EmoteButton onSend={(emoji, label) => onSendEmote?.(emoji, label)} />
@@ -574,6 +577,48 @@ export function GameScreen({
                 <Text style={styles.exchangeLabel}>{'\u2192'} 오른쪽에서</Text>
                 <CardView card={exchangeReceived.fromRight} size="normal" />
               </View>
+            </View>
+          </View>
+        </View>
+      )}
+      {/* 스몰 티츄 선언 확인 모달 — 실수 방지. 이기면 +100, 실패 시 -100.
+          RN 0.76 Bridgeless 에서 native Modal 은 focus-steal 버그 있어 금지 (CLAUDE.md §14.2). */}
+      {showTichuConfirm && (
+        <View style={styles.tichuConfirmOverlay}>
+          <View style={styles.tichuConfirmBox}>
+            <Text style={styles.tichuConfirmIcon}>{'⭐'}</Text>
+            <Text style={styles.tichuConfirmTitle}>{'스몰 티츄 선언'}</Text>
+            <Text style={styles.tichuConfirmDesc}>
+              {'정말 스몰 티츄를 선언하시겠습니까?'}
+            </Text>
+            <View style={styles.tichuConfirmRewardRow}>
+              <View style={styles.tichuConfirmRewardCol}>
+                <Text style={styles.tichuConfirmRewardLabelOk}>{'성공'}</Text>
+                <Text style={styles.tichuConfirmRewardValOk}>{'+100'}</Text>
+              </View>
+              <View style={styles.tichuConfirmRewardCol}>
+                <Text style={styles.tichuConfirmRewardLabelFail}>{'실패'}</Text>
+                <Text style={styles.tichuConfirmRewardValFail}>{'−100'}</Text>
+              </View>
+            </View>
+            <View style={styles.tichuConfirmBtns}>
+              <TouchableOpacity
+                style={[styles.tichuConfirmBtn, styles.tichuConfirmBtnCancel]}
+                onPress={() => setShowTichuConfirm(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.tichuConfirmBtnCancelText}>{'취소'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tichuConfirmBtn, styles.tichuConfirmBtnOk]}
+                onPress={() => {
+                  setShowTichuConfirm(false);
+                  onDeclareTichu('small');
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.tichuConfirmBtnOkText}>{'선언'}</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -1093,4 +1138,75 @@ const styles = StyleSheet.create({
     color: COLORS.textDim,
     fontSize: FONT.sm,
   },
+
+  // ─── 스몰 티츄 확인 모달 ───
+  tichuConfirmOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 200,
+    paddingHorizontal: 24,
+  },
+  tichuConfirmBox: {
+    backgroundColor: COLORS.bgDark,
+    borderRadius: 20,
+    padding: 28,
+    width: '100%',
+    maxWidth: 340,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(245,158,11,0.5)',
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 24,
+    elevation: 20,
+  },
+  tichuConfirmIcon: { fontSize: 44, marginBottom: 6 },
+  tichuConfirmTitle: { color: '#F59E0B', fontSize: 20, fontWeight: '900', marginBottom: 10 },
+  tichuConfirmDesc: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 14, lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+  tichuConfirmRewardRow: {
+    flexDirection: 'row', gap: 20,
+    marginBottom: 22,
+  },
+  tichuConfirmRewardCol: {
+    alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 8,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 10,
+    minWidth: 80,
+  },
+  tichuConfirmRewardLabelOk: { color: '#10b981', fontSize: 11, fontWeight: '700', marginBottom: 4 },
+  tichuConfirmRewardValOk: { color: '#10b981', fontSize: 20, fontWeight: '900' },
+  tichuConfirmRewardLabelFail: { color: '#ef4444', fontSize: 11, fontWeight: '700', marginBottom: 4 },
+  tichuConfirmRewardValFail: { color: '#ef4444', fontSize: 20, fontWeight: '900' },
+  tichuConfirmBtns: { flexDirection: 'row', gap: 12, width: '100%' },
+  tichuConfirmBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  tichuConfirmBtnCancel: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  tichuConfirmBtnCancelText: { color: 'rgba(255,255,255,0.7)', fontSize: 15, fontWeight: '700' },
+  tichuConfirmBtnOk: {
+    backgroundColor: '#D97706',
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  tichuConfirmBtnOkText: { color: '#fff', fontSize: 15, fontWeight: '900' },
 });
