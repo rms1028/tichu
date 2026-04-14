@@ -54,6 +54,24 @@ jobs:
       - run: npm run build -w packages/shared
       - run: cd packages/app && npx tsc --noEmit
 
+  lint-rn-safety:
+    # AST linter that blocks top-level Web API calls (window / document /
+    # localStorage / AudioContext / etc). A pre-commit hook also runs this,
+    # but hooks can be bypassed with --no-verify — this job is the hard
+    # gate. Regression test for the 2026-04-13 sound.ts white-screen bug
+    # (CLAUDE.md §13 #1).
+    name: App - RN safety lint
+    runs-on: ubuntu-latest
+    needs: test-shared
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: node packages/app/scripts/lint-rn-safety.mjs
+
   build:
     name: Server - Build
     runs-on: ubuntu-latest
