@@ -945,50 +945,62 @@ export function decideBotExchange(room: GameRoom, seat: number): { left: Card; p
     return { left: sorted[0]!, partner: sorted[1]!, right: sorted[2]! };
   }
 
-  // [D] 고급 교환: 핸드 분해 후 조합을 깨지 않는 카드 선택
+  // [D] 고급 교환 v2 — 2026-04-14
+  //   ① 내가 티츄할 가능성 예측 (손패 강도 기반). true 면 팀원에게 약카드.
+  //   ② 상대팀 선물은 "낮은 페어 찢기" 우선 — 2,2 같은 낮은 페어가 있으면
+  //      양쪽 적에게 한 장씩 분배 → 폭탄 리스크 0 + 저평가 카드 처분.
+  //   ③ 큰 조합 (triple/fullhouse/straight/steps/bomb) 보호 — 이 조합에
+  //      들어간 카드는 누구에게도 주지 않음. 단, 페어만 있는 조합은 찢기 가능.
+  //   ④ 적에게 A/K 절대 금지 (기존 A만 → A+K 로 강화).
   if (diff === 'hard') {
     const decomp = decomposeHand(hand);
+    // 큰 조합 (length ≥3, 또는 triple/bomb) 에 들어간 카드 집합 — 절대 보호.
+    const usedInLargeCombo = new Set<string>();
+    for (const g of decomp.groups) {
+      if (
+        g.type === 'triple' || g.type === 'fullhouse' ||
+        g.type === 'straight' || g.type === 'steps' || isBomb(g)
+      ) {
+        g.cards.forEach(c => usedInLargeCombo.add(cardId(c)));
+      }
+    }
+    // 페어에 들어간 카드는 "splittable" — 찢을 수 있음.
     const usedInCombo = new Set<string>();
     for (const g of decomp.groups) {
       if (g.length >= 2) g.cards.forEach(c => usedInCombo.add(cardId(c)));
     }
 
-    // 내 티츄면 파트너에게 약한 카드 (내가 1등 나가야 하므로 강카드 보존)
-    const myTichu = room.tichuDeclarations[seat] !== null;
+    const myTichuDeclared = room.tichuDeclarations[seat] !== null;
+    const likelyMyTichu = myTichuDeclared || isStrongTichuHand(hand, room);
 
-    // 파트너에게: 파트너 티츄→최강, 내 티츄→약한 카드, 그 외→좋은 프리 카드
+    // ── 파트너 선물 ──
     const forPartner = partnerTichu
       ? pickBestForPartner(hand)
-      : myTichu
-        ? pickWorstForEnemy(hand) // 내 티츄면 파트너에게도 약한 카드 (내 핸드 보존)
+      : likelyMyTichu
+        ? pickWeakFreeCard(hand, usedInLargeCombo) // 내 티츄 → 약카드, 단 큰 조합은 보호
         : (() => {
-            // 조합에 안 쓰이는 카드 중 높은 것 → 좋은 카드 주기
-            const free = hand.filter(c => !usedInCombo.has(cardId(c)));
-            // 프리 카드 중 A/봉황/K 순, 없으면 높은 카드 (단, 용은 내가 보존)
+            // 일반: 큰 조합 안 쓰이는 카드 중 A/봉황/K/Q/J 순, 없으면 최고 free
+            const free = hand.filter(c => !usedInLargeCombo.has(cardId(c)));
             const freeAce = free.find(c => isNormalCard(c) && c.rank === 'A');
             if (freeAce) return freeAce;
             const freePhoenix = free.find(isPhoenix);
             if (freePhoenix) return freePhoenix;
             const freeKing = free.find(c => isNormalCard(c) && c.rank === 'K');
             if (freeKing) return freeKing;
-            // 프리 카드 중 가장 높은 일반 카드
-            const good = free.filter(c => isNormalCard(c) && !isDragon(c)).sort((a, b) => cardSortValue(b) - cardSortValue(a));
+            const freeQueen = free.find(c => isNormalCard(c) && c.rank === 'Q');
+            if (freeQueen) return freeQueen;
+            const freeJack = free.find(c => isNormalCard(c) && c.rank === 'J');
+            if (freeJack) return freeJack;
+            const good = free
+              .filter(c => isNormalCard(c) && !isDragon(c))
+              .sort((a, b) => cardSortValue(b) - cardSortValue(a));
             return good[0] ?? pickGoodForPartner(hand);
           })();
 
-    const remaining1 = hand.filter(c => !cardEquals(c, forPartner));
+    const remaining = hand.filter(c => !cardEquals(c, forPartner));
 
-    // 상대에게: 프리 카드 중 가장 약한 것 (용/봉황/A 절대 불가)
-    const pickSafeWorst = (cards: Card[]): Card => {
-      // 콤보에 안 쓰이는 카드 우선, 없으면 전체에서 선택
-      const free = cards.filter(c => !usedInCombo.has(cardId(c)));
-      const pool = free.length > 0 ? free : cards;
-      return pickWorstForEnemy(pool);
-    };
-
-    const forLeft = pickSafeWorst(remaining1);
-    const remaining2 = remaining1.filter(c => !cardEquals(c, forLeft));
-    const forRight = pickSafeWorst(remaining2);
+    // ── 상대팀 선물 (양쪽 한꺼번에, 페어 찢기 우선) ──
+    const [forLeft, forRight] = pickEnemyGiftsHard(remaining, usedInLargeCombo);
 
     return { left: forLeft, partner: forPartner, right: forRight };
   }
@@ -1769,6 +1781,113 @@ function pickGoodForPartner(hand: Card[]): Card {
   const queen = hand.filter(c => isNormalCard(c) && c.rank === 'Q')[0];
   if (queen) return queen;
   return hand.filter(c => isNormalCard(c)).sort((a, b) => cardSortValue(b) - cardSortValue(a))[0] ?? hand[0]!;
+}
+
+/**
+ * Hard 교환 예측: 내 핸드가 스몰 티츄 선언할 만큼 강한가?
+ * decideBotTichu('small') 의 Hard 스코어링을 간소화한 버전. 실제 선언이 아닌
+ * 예측 용도이므로 임계값은 실제 선언 임계값 (6.0) 보다 낮게 (4.5) 잡음.
+ */
+function isStrongTichuHand(hand: Card[], room: GameRoom): boolean {
+  const hasDragon = hand.some(isDragon);
+  const hasPhoenix = hand.some(isPhoenix);
+  const aces = hand.filter(c => isNormalCard(c) && c.rank === 'A').length;
+  const analysis = analyzeHand(hand, room);
+  let score = 0;
+  if (hasDragon) score += 3;
+  if (hasPhoenix) score += 1.5;
+  score += aces * 1.5;
+  score += analysis.topSingles;
+  score -= analysis.minTricks * 0.5;
+  return score >= 4.5;
+}
+
+/**
+ * 큰 조합에 안 쓰이는 카드 중 가장 약한 것 선택.
+ * 내가 티츄하려고 할 때 팀원에게 줄 카드 용도 — 내 핸드 강도 보존하면서 약카드 양도.
+ */
+function pickWeakFreeCard(hand: Card[], usedInLargeCombo: Set<string>): Card {
+  const free = hand.filter(c => !usedInLargeCombo.has(cardId(c)));
+  const pool = free.length > 0 ? free : hand;
+  // 용/봉황/참새 아닌 가장 낮은 카드
+  const candidates = pool.filter(c => !isDragon(c) && !isPhoenix(c) && !isMahjong(c));
+  const workingPool = candidates.length > 0 ? candidates : pool;
+  return workingPool.sort((a, b) => cardSortValue(a) - cardSortValue(b))[0] ?? hand[0]!;
+}
+
+/**
+ * 상대팀 2명에게 줄 카드 선택 (Hard 전용).
+ *
+ * 전략:
+ * 1. 낮은 페어 (value ≤10, 둘 다 큰 조합에 미사용) → 찢어서 양쪽에 한 장씩.
+ *    폭탄 리스크 0 + 저평가 카드 처분.
+ * 2. 페어 없으면: 개 + 낮은 싱글 (개는 적에게 무용지물, 이상적인 선물).
+ * 3. 둘 다 없으면: 낮은 싱글 2장, 단 A/K 절대 제외, Q/J 는 최후 수단.
+ *
+ * 용/봉황/참새/A 는 절대 금지. K/Q 는 다른 옵션 있으면 회피.
+ */
+function pickEnemyGiftsHard(pool: Card[], usedInLargeCombo: Set<string>): [Card, Card] {
+  const absForbidden = (c: Card) =>
+    isDragon(c) || isPhoenix(c) || isMahjong(c) ||
+    (isNormalCard(c) && c.rank === 'A');
+  const strongCard = (c: Card) =>
+    isNormalCard(c) && (c.rank === 'K' || c.rank === 'Q');
+
+  const safe = pool.filter(c => !absForbidden(c));
+  const preferred = safe.filter(c => !strongCard(c));
+  // 최종 후보 풀: 가능한 약/중 카드만, 없으면 강카드 포함, 최후엔 전체
+  const workingPool: Card[] =
+    preferred.length >= 2 ? preferred : (safe.length >= 2 ? safe : pool);
+
+  // Rank 별 그룹핑 (페어 탐색)
+  const byRank = new Map<string, Card[]>();
+  for (const c of workingPool) {
+    if (!isNormalCard(c)) continue;
+    const list = byRank.get(c.rank) ?? [];
+    list.push(c);
+    byRank.set(c.rank, list);
+  }
+
+  // 낮은 페어 후보: value ≤10, 둘 다 큰 조합에 미사용
+  const splittablePairs: { cards: [Card, Card]; value: number }[] = [];
+  for (const [, cards] of byRank) {
+    if (cards.length < 2 || !isNormalCard(cards[0]!)) continue;
+    const value = cards[0]!.value;
+    if (value > 10) continue;
+    const first = cards[0]!;
+    const second = cards[1]!;
+    if (usedInLargeCombo.has(cardId(first)) || usedInLargeCombo.has(cardId(second))) continue;
+    splittablePairs.push({ cards: [first, second], value });
+  }
+  splittablePairs.sort((a, b) => a.value - b.value);
+
+  // 🥇 최선: 낮은 페어 찢기
+  if (splittablePairs.length > 0) return splittablePairs[0]!.cards;
+
+  // 🥈 차선: 개 + 낮은 싱글
+  const dog = workingPool.find(isDog);
+  if (dog) {
+    const others = workingPool
+      .filter(c => !cardEquals(c, dog) && isNormalCard(c))
+      .sort((a, b) => cardSortValue(a) - cardSortValue(b));
+    if (others.length > 0) return [dog, others[0]!];
+  }
+
+  // 🥉 평범: 낮은 싱글 2장 (큰 조합 미사용 우선)
+  const freeNormals = workingPool
+    .filter(c => isNormalCard(c) && !usedInLargeCombo.has(cardId(c)))
+    .sort((a, b) => cardSortValue(a) - cardSortValue(b));
+  if (freeNormals.length >= 2) return [freeNormals[0]!, freeNormals[1]!];
+
+  // 최후: 큰 조합 무시하고 낮은 2장
+  const sorted = workingPool
+    .filter(isNormalCard)
+    .sort((a, b) => cardSortValue(a) - cardSortValue(b));
+  if (sorted.length >= 2) return [sorted[0]!, sorted[1]!];
+
+  // 극단: pool 에서 아무거나 2개
+  const fallback = [...pool].sort((a, b) => cardSortValue(a) - cardSortValue(b));
+  return [fallback[0] ?? pool[0]!, fallback[1] ?? fallback[0] ?? pool[0]!];
 }
 
 function pickWorstForEnemy(hand: Card[]): Card {
