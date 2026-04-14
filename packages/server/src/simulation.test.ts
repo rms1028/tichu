@@ -1,10 +1,19 @@
 /**
  * 100판 풀 게임 시뮬레이션 — 봇 4명이 1000점까지 완주.
  * Socket.io 없이 순수 game-engine + bot 로직만 사용.
+ *
+ * As of 0단계 (seedable RNG), each game runs under a fresh seeded RNG
+ * so results are deterministic. Same seed → same game. This lets the
+ * test act as a regression gate (section 3/4 of the test-automation
+ * plan): if bot code changes alter a known seed's outcome, we catch
+ * it immediately. Random AI benchmarking lives in
+ * `scripts/bot-benchmark.mjs` and is out of CI scope.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import type { Card } from '@tichu/shared';
-import { isDog } from '@tichu/shared';
+import {
+  isDog, createSeededRng, __setShuffleRngForTest,
+} from '@tichu/shared';
 import type { GameRoom } from './game-room.js';
 import {
   createGameRoom, getActivePlayers, cardEquals,
@@ -16,7 +25,14 @@ import {
   playCards, passTurn, dragonGive, handleTurnTimeout,
   resolveTrickWon, checkOneTwoFinish,
 } from './game-engine.js';
-import { decideBotAction, decideBotTichu, decideBotExchange } from './bot.js';
+import {
+  decideBotAction, decideBotTichu, decideBotExchange, __setBotRngForTest,
+} from './bot.js';
+
+afterEach(() => {
+  __setShuffleRngForTest(null);
+  __setBotRngForTest(null);
+});
 
 // ── 헬퍼 ──────────────────────────────────────────────────────
 
@@ -31,6 +47,7 @@ function setupBots(room: GameRoom) {
 
 interface GameResult {
   gameIndex: number;
+  seed: number;
   winner: 'team1' | 'team2';
   scores: { team1: number; team2: number };
   rounds: number;
@@ -40,16 +57,26 @@ interface GameResult {
   tichuSuccess: number;
   bombsPlayed: number;
   dragonGives: number;
+  /** Per-round score deltas — used to assert sum = 100 per round. */
+  roundScoreSums: number[];
   errors: string[];
 }
 
-function simulateOneGame(gameIndex: number): GameResult {
+function simulateOneGame(gameIndex: number, seed: number = gameIndex + 1): GameResult {
+  // Inject seeded RNGs — shuffle (deck dealing) and bot tie-breaking.
+  // Both persist across the whole game so the RNG stream is consumed
+  // in the same order every time for a given seed. The afterEach hook
+  // resets to null so no test leak outside this suite.
+  __setShuffleRngForTest(createSeededRng(seed));
+  __setBotRngForTest(createSeededRng(seed ^ 0x9e3779b9)); // golden-ratio-like offset
+
   const room = createGameRoom(`sim-${gameIndex}`);
   room.settings.botDifficulty = 'hard';
   setupBots(room);
 
   const result: GameResult = {
     gameIndex,
+    seed,
     winner: 'team1',
     scores: { team1: 0, team2: 0 },
     rounds: 0,
@@ -59,6 +86,7 @@ function simulateOneGame(gameIndex: number): GameResult {
     tichuSuccess: 0,
     bombsPlayed: 0,
     dragonGives: 0,
+    roundScoreSums: [],
     errors: [],
   };
 
@@ -66,6 +94,10 @@ function simulateOneGame(gameIndex: number): GameResult {
   const MAX_TURNS_PER_ROUND = 200;
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
+    // Capture pre-round scores to compute per-round delta for score-sum
+    // integrity assertion (total delta must equal 100 or 200 on 1-2 finish).
+    const preRoundScores = { team1: room.scores.team1, team2: room.scores.team2 };
+
     // ── 라운드 시작 ─────────────────────────────
     const startEvents = startRound(room);
     if (room.phase !== 'LARGE_TICHU_WINDOW') {
@@ -219,6 +251,15 @@ function simulateOneGame(gameIndex: number): GameResult {
     result.totalTurns += turnCount;
     result.rounds++;
 
+    // Record per-round score delta for the round-score integrity gate.
+    // Normal end: delta sums to 100. One-two finish: sums to 200.
+    // Tichu bonuses stack on top (±100/±200). We track the raw sum so
+    // the assertion can subtract known tichu deltas from it.
+    const deltaSum =
+      (room.scores.team1 - preRoundScores.team1) +
+      (room.scores.team2 - preRoundScores.team2);
+    result.roundScoreSums.push(deltaSum);
+
     // 원투 체크
     if (room.finishOrder.length >= 2) {
       const f1 = room.finishOrder[0]!;
@@ -252,15 +293,32 @@ function simulateOneGame(gameIndex: number): GameResult {
   return result;
 }
 
-// ── 100판 시뮬레이션 ──────────────────────────────────────────
+// ── 50판 시뮬레이션 ───────────────────────────────────────────
+//
+// 이 describe 는 3단계/4단계 의 regression gate 다. 시드 고정 후 아래
+// 네 개 불변식을 모든 게임에 대해 검증한다:
+//
+//   1. errors.length === 0         — 엔진이 거부 없이 끝까지 돌아간 것
+//   2. rounds 내 finishOrder 4명   — 4명 다 패 털었고 스킵 없음
+//   3. roundScoreSum % 100 === 0   — 정산 합계 100 단위 (tichu bonus 고려)
+//   4. winner.score >= targetScore — 누적 1000 이상으로 게임 종료
+//
+// 게임 수는 50으로 줄임 (100 게임 ≈ 95s → CI 60s 예산 초과). 시드 1..50
+// 으로 각 게임이 결정적이라 50판이어도 "회귀 시 감지" 는 100판과 동등.
+// bot 성능 벤치는 여기서 안 잰다. AI 성능 측정은
+// `packages/server/scripts/bot-benchmark.mjs` 로 분리.
 
-describe('100-game simulation', () => {
-  it('runs 100 full games without crashes', () => {
+const GAME_COUNT = 50;
+
+describe('50-game self-play regression gate', () => {
+  it('runs 50 deterministic seeded games with full integrity checks', () => {
     const results: GameResult[] = [];
     const startTime = Date.now();
 
-    for (let i = 0; i < 100; i++) {
-      const r = simulateOneGame(i);
+    for (let i = 0; i < GAME_COUNT; i++) {
+      // Seed derived from index so re-runs are reproducible but each
+      // game has a distinct RNG stream.
+      const r = simulateOneGame(i, i + 1);
       results.push(r);
     }
 
@@ -284,7 +342,7 @@ describe('100-game simulation', () => {
     const avgScore2 = results.reduce((s, r) => s + r.scores.team2, 0) / results.length;
 
     console.log('\n══════════════════════════════════════════');
-    console.log('  100-GAME SIMULATION REPORT');
+    console.log(`  ${GAME_COUNT}-GAME SIMULATION REPORT`);
     console.log('══════════════════════════════════════════');
     console.log(`  소요 시간:        ${(elapsed / 1000).toFixed(1)}s`);
     console.log(`  성공/실패:        ${completed.length} / ${failed.length}`);
@@ -312,7 +370,58 @@ describe('100-game simulation', () => {
       if (failed.length > 10) console.log(`  ... and ${failed.length - 10} more`);
     }
 
-    // 90% 이상 성공해야 함
-    expect(completed.length).toBeGreaterThanOrEqual(90);
+    // ── Regression gate assertions ─────────────────────────
+    // Under seeded RNG every game must complete cleanly. Zero tolerance
+    // because flakiness was removed — a single failure means a bot or
+    // engine regression.
+    expect(failed.length, `${failed.length} games had errors`).toBe(0);
+
+    // Round-score integrity: every round's score delta must be 100
+    // (normal end) or 200 (one-two finish), ignoring tichu bonuses.
+    // Tichu bonuses are ±100/±200 per declaration, and up to 4 players
+    // can declare per round, so the sum can drift well above or below
+    // the base. What must hold is: (a) delta is always a multiple of
+    // 100 (normalized to avoid JS -0 ≠ 0 quirk), and (b) the absolute
+    // magnitude is bounded by base(200 max) + 4 tichus × 200 max = 1000.
+    for (const r of results) {
+      for (let ri = 0; ri < r.roundScoreSums.length; ri++) {
+        const delta = r.roundScoreSums[ri]!;
+        const mod = ((delta % 100) + 100) % 100; // normalize -0 → 0
+        expect(mod, `game#${r.gameIndex} round ${ri} delta=${delta} not multiple of 100`).toBe(0);
+        expect(Math.abs(delta), `game#${r.gameIndex} round ${ri} delta=${delta} out of range`).toBeLessThanOrEqual(1000);
+      }
+    }
+
+    // Winner must actually reach target score (1000 by default).
+    for (const r of results) {
+      const winScore = r.winner === 'team1' ? r.scores.team1 : r.scores.team2;
+      expect(winScore, `game#${r.gameIndex} winner=${r.winner} score=${winScore} < 1000`).toBeGreaterThanOrEqual(1000);
+    }
   }, 120_000); // 2분 타임아웃
+});
+
+describe('self-play determinism', () => {
+  // Proves 0단계 + 3단계 wiring: the same seed applied twice produces
+  // byte-identical game results. If this ever flakes, a non-deterministic
+  // code path has crept back in (hidden Math.random, time-based branch,
+  // iterator order, etc) and we must hunt it down before shipping.
+
+  it('two runs of the same seed produce identical game outcomes', () => {
+    const SEEDS = [1, 7, 42, 999, 31337];
+    for (const seed of SEEDS) {
+      const a = simulateOneGame(0, seed);
+      const b = simulateOneGame(0, seed);
+      expect(a.scores).toEqual(b.scores);
+      expect(a.winner).toBe(b.winner);
+      expect(a.rounds).toBe(b.rounds);
+      expect(a.totalTurns).toBe(b.totalTurns);
+      expect(a.roundScoreSums).toEqual(b.roundScoreSums);
+      expect(a.oneTwoFinishes).toBe(b.oneTwoFinishes);
+      expect(a.tichuDeclared).toBe(b.tichuDeclared);
+      expect(a.tichuSuccess).toBe(b.tichuSuccess);
+      expect(a.bombsPlayed).toBe(b.bombsPlayed);
+      expect(a.dragonGives).toBe(b.dragonGives);
+      expect(a.errors).toEqual(b.errors);
+    }
+  }, 60_000);
 });

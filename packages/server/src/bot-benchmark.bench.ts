@@ -1,7 +1,17 @@
 /**
- * 봇 난이도별 벤치마크 — 각 난이도 조합 10판 시뮬레이션
+ * 봇 난이도별 벤치마크 — 각 난이도 조합 100판 시뮬레이션
+ *
+ * CI 에서 돌지 않는다. 파일명이 `.bench.ts` 라 vitest 기본 test glob
+ * (`**\/*.test.{ts,tsx,js,...}`) 에 안 걸린다. 수동 실행은:
+ *   npm run benchmark -w packages/server
+ *   node packages/server/scripts/bot-benchmark.mjs
+ *
+ * 3/4단계 이후로 각 게임이 결정적 시드로 돌아간다. 시드 1..N 결과가
+ * 재현 가능해서 봇 코드 변경 시 회귀 감지에 쓰인다. 평균 승률 등은
+ * print 로 확인 — 수치 변화를 기록해두고 다음 벤치와 비교하면 된다.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
+import { createSeededRng, __setShuffleRngForTest } from '@tichu/shared';
 import { createGameRoom, getActivePlayers, getPartnerSeat } from './game-room.js';
 import {
   startRound, playCards, passTurn, declareTichu, passLargeTichu,
@@ -9,9 +19,16 @@ import {
   allLargeTichuResponded, finishLargeTichuWindow,
   handleTurnTimeout, dragonGive,
 } from './game-engine.js';
-import { decideBotAction, decideBotExchange, decideBotTichu } from './bot.js';
+import {
+  decideBotAction, decideBotExchange, decideBotTichu, __setBotRngForTest,
+} from './bot.js';
 import type { GameRoom } from './game-room.js';
 import type { GameEvent } from './game-engine.js';
+
+afterEach(() => {
+  __setShuffleRngForTest(null);
+  __setBotRngForTest(null);
+});
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 
@@ -34,7 +51,12 @@ function hasEvent(events: GameEvent[], type: string): boolean {
   return events.some(e => e.type === type);
 }
 
-function simulateGame(t1: Difficulty, t2: Difficulty): GameStats {
+function simulateGame(t1: Difficulty, t2: Difficulty, seed: number): GameStats {
+  // Seed both RNGs so the same (t1, t2, seed) triple always produces the
+  // same game. Reset happens in afterEach.
+  __setShuffleRngForTest(createSeededRng(seed));
+  __setBotRngForTest(createSeededRng(seed ^ 0x9e3779b9));
+
   const room = createGameRoom('bench');
   for (let s = 0; s < 4; s++) {
     const d = getDiff(s, t1, t2);
@@ -163,7 +185,11 @@ function benchmark(label: string, t1: Difficulty, t2: Difficulty, n: number) {
   const scores: string[] = [];
 
   for (let i = 0; i < n; i++) {
-    const s = simulateGame(t1, t2);
+    // Distinct seed per (matchup, game) so results are reproducible but
+    // each game has its own RNG stream. Multiply label into seed so
+    // different matchups don't share game 1's deck.
+    const seed = ((t1.charCodeAt(0) * 31 + t2.charCodeAt(0)) * 1000) + (i + 1);
+    const s = simulateGame(t1, t2, seed);
     if (s.winner === 'team1') w1++; else w2++;
     rounds += s.rounds;
     errors += s.errors.length;

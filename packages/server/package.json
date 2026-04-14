@@ -7,7 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "prisma generate && tsc",
     "start": "prisma db push --skip-generate && node dist/index.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "benchmark": "node scripts/bot-benchmark.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.9.0",
