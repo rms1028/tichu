@@ -64,6 +64,8 @@ export interface PlayerPublic {
   nickname: string;
   connected: boolean;
   isBot: boolean;
+  /** DB User.id (cuid) — 신고/차단/친구요청 등 DB target 식별용. 봇은 null. */
+  dbUserId?: string | null;
 }
 
 export interface WonTrickSummary {

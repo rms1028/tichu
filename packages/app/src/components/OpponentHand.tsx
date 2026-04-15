@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
 import { isMobile, mob } from '../utils/responsive';
 import Animated, {
   useSharedValue,
@@ -26,6 +26,8 @@ interface OpponentHandProps {
   isPartner?: boolean;
   nickColor?: string;
   trickWon?: { points: number } | null;
+  /** 길게 눌렀을 때 — 신고 모달 오픈용 */
+  onLongPress?: () => void;
 }
 
 // 동물 아바타 매핑 (이름 해시 기반)
@@ -49,7 +51,7 @@ function getAvatar(name: string) {
 }
 
 export function OpponentHand({
-  cardCount, nickname, tichu, isCurrentTurn, finished, passed, position, connected = true, isPartner = false, nickColor, trickWon = null,
+  cardCount, nickname, tichu, isCurrentTurn, finished, passed, position, connected = true, isPartner = false, nickColor, trickWon = null, onLongPress,
 }: OpponentHandProps) {
   const [emote, setEmote] = useState<string | null>(null);
   const [passBubble, setPassBubble] = useState(false);
@@ -118,7 +120,7 @@ export function OpponentHand({
   // 파트너: 아바타를 카드 왼쪽에 가로 배치
   if (isPartner) {
     return (
-      <View style={[styles.partnerRow, finished && styles.finishedContainer]}>
+      <Pressable onLongPress={onLongPress} delayLongPress={500} style={[styles.partnerRow, finished && styles.finishedContainer]}>
         {/* 좌: 아바타 + 이름 */}
         <View style={styles.partnerLeft}>
           {passBubble && (
@@ -165,12 +167,12 @@ export function OpponentHand({
             <Text style={styles.passText}>패스!</Text>
           </View>
         )}
-      </View>
+      </Pressable>
     );
   }
 
   return (
-    <View style={[styles.container, finished && styles.finishedContainer]}>
+    <Pressable onLongPress={onLongPress} delayLongPress={500} style={[styles.container, finished && styles.finishedContainer]}>
       {/* 패스 말풍선 — flow 배치, 아바타 위에 자연스럽게 */}
       {passBubble && (
         <View style={styles.passBubble}>
@@ -246,7 +248,7 @@ export function OpponentHand({
           ))}
         </View>
       )}
-    </View>
+    </Pressable>
   );
 }
 

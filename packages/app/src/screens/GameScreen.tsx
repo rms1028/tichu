@@ -23,6 +23,8 @@ import { ActionBar } from '../components/ActionBar';
 import { CardView } from '../components/CardView';
 import { ScoreBoard } from '../components/ScoreBoard';
 import { DragonGiveModal } from '../components/DragonGiveModal';
+import { ReportModal } from '../components/ReportModal';
+import { useToast } from './../components/ToastSystem';
 import { LargeTichuModal } from '../components/LargeTichuModal';
 import { ExchangeView } from '../components/ExchangeView';
 
@@ -45,6 +47,7 @@ interface GameScreenProps {
   onAddBots: () => void;
   onBackToLobby?: () => void;
   onSendEmote?: (emoji: string, label: string) => void;
+  onReportUser?: (targetId: string, reason: string, description?: string) => void;
 }
 
 function TichuPulseButton({ onPress }: { onPress: () => void }) {
@@ -73,7 +76,7 @@ const tichuPulseS = StyleSheet.create({
 
 export function GameScreen({
   onPlay, onPass, onDeclareTichu, onPassTichu,
-  onExchange, onDragonGive, onSubmitBomb, onSubmitBombCards, onAddBots, onBackToLobby, onSendEmote,
+  onExchange, onDragonGive, onSubmitBomb, onSubmitBombCards, onAddBots, onBackToLobby, onSendEmote, onReportUser,
 }: GameScreenProps) {
   const phase = useGameStore((s) => s.phase);
   const players = useGameStore((s) => s.players);
@@ -99,6 +102,9 @@ export function GameScreen({
   const [showTichuConfirm, setShowTichuConfirm] = useState(false);
   // 파트너 위에 카드 낼 때 경고 모달 (팀원 트릭 막기 방지)
   const [pendingPartnerBlock, setPendingPartnerBlock] = useState<{ cards: Card[]; phoenixAs?: Rank; wish?: Rank } | null>(null);
+  // 신고 모달 — 게임 중 opponent 신고
+  const [reportTarget, setReportTarget] = useState<{ seat: number; nickname: string; dbUserId: string } | null>(null);
+  const { showToast } = useToast();
   // "다시 표시하지 않기" 체크박스 로컬 상태 — 모달이 열릴 때마다 초기화
   const [tichuDontShowAgain, setTichuDontShowAgain] = useState(false);
   const [partnerDontShowAgain, setPartnerDontShowAgain] = useState(false);
@@ -490,6 +496,10 @@ export function GameScreen({
               connected={players[partnerSeat]?.connected ?? true}
               isPartner={true}
               trickWon={trickWonEvent?.winningSeat === partnerSeat ? { points: trickWonEvent.points } : null}
+              onLongPress={() => {
+                const p = players[partnerSeat];
+                if (p && !p.isBot && p.dbUserId) setReportTarget({ seat: partnerSeat, nickname: p.nickname, dbUserId: p.dbUserId });
+              }}
             />
           </View>
         </View>
@@ -513,6 +523,10 @@ export function GameScreen({
               isPartner={false}
               nickColor="#A3E635"
               trickWon={trickWonEvent?.winningSeat === leftOpponent ? { points: trickWonEvent.points } : null}
+              onLongPress={() => {
+                const p = players[leftOpponent];
+                if (p && !p.isBot && p.dbUserId) setReportTarget({ seat: leftOpponent, nickname: p.nickname, dbUserId: p.dbUserId });
+              }}
             />
           </View>
         </View>
@@ -536,6 +550,10 @@ export function GameScreen({
               isPartner={false}
               nickColor="#C084FC"
               trickWon={trickWonEvent?.winningSeat === rightOpponent ? { points: trickWonEvent.points } : null}
+              onLongPress={() => {
+                const p = players[rightOpponent];
+                if (p && !p.isBot && p.dbUserId) setReportTarget({ seat: rightOpponent, nickname: p.nickname, dbUserId: p.dbUserId });
+              }}
             />
           </View>
         </View>
@@ -597,6 +615,18 @@ export function GameScreen({
         onPass={onPassTichu}
       />
       <DragonGiveModal onGive={onDragonGive} />
+      <ReportModal
+        visible={reportTarget !== null}
+        targetNickname={reportTarget?.nickname ?? ''}
+        onClose={() => setReportTarget(null)}
+        onSubmit={(reason, description) => {
+          if (reportTarget && onReportUser) {
+            onReportUser(reportTarget.dbUserId, reason, description);
+            showToast('신고가 접수되었습니다.');
+          }
+          setReportTarget(null);
+        }}
+      />
       {/* 교환 결과 오버레이 (3초간 표시) */}
       {exchangeReceived && (
         <View style={styles.exchangeOverlay}>

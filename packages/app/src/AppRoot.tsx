@@ -90,7 +90,7 @@ function AppInner() {
     createCustomRoom, listRooms, startGame, addBotToSeat, removeBot,
     friendInit, friendSearch, friendRequest, friendAccept, friendReject, friendRemove, friendInvite,
     guestLogin, firebaseLogin, getLeaderboard, getGameHistory, sendEmote, buyShopItem, equipShopItem, changeNickname,
-    leaveRoom, moveSeat, shuffleTeams, claimAttendance, deleteAccount,
+    leaveRoom, moveSeat, shuffleTeams, claimAttendance, deleteAccount, reportUser,
   } = useSocket();
 
   const connected = useGameStore((s) => s.connected);
@@ -452,6 +452,7 @@ function AppInner() {
         submitBomb(cards);
       }}
       onSendEmote={sendEmote}
+      onReportUser={reportUser}
       onBackToLobby={() => {
         leaveRoom();
         setScreen('lobby');

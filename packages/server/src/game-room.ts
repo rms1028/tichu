@@ -7,6 +7,9 @@ import { createDeck, shuffleDeck } from '@tichu/shared';
 
 export interface PlayerInfo {
   playerId: string;
+  /** DB User.id (cuid) — 인간 플레이어 only. 친구/신고/차단 등 DB 작업 target 식별용.
+   *  봇 은 null. join / create 시점의 closure dbUserId 를 스냅샷. */
+  dbUserId?: string | null;
   nickname: string;
   socketId: string;
   connected: boolean;
@@ -15,6 +18,7 @@ export interface PlayerInfo {
   /** 봇 대체 전 원래 플레이어 정보 (재접속 시 복원용) */
   originalPlayer?: {
     playerId: string;
+    dbUserId?: string | null;
     nickname: string;
   };
   /** 봇 대체 예약 타이머 */

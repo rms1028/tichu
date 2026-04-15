@@ -177,7 +177,7 @@ interface ClientGameState {
   scores: { team1: number; team2: number };
   wonTrickSummary: Record<number, { count: number; points: number }>;
   canDeclareTichu: boolean;
-  players: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null>;
+  players: Record<number, { nickname: string; connected: boolean; isBot: boolean; dbUserId: string | null } | null>;
   mySeat: number;
 }
 
@@ -213,10 +213,10 @@ function buildClientState(room: GameRoom, seat: number): ClientGameState {
     !room.hasPlayedCards[seat] &&
     (room.phase === 'PASSING' || room.phase === 'TRICK_PLAY');
 
-  const players: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
+  const players: Record<number, { nickname: string; connected: boolean; isBot: boolean; dbUserId: string | null } | null> = {};
   for (let s = 0; s < 4; s++) {
     const p = room.players[s];
-    players[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
+    players[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot, dbUserId: p.dbUserId ?? null } : null;
   }
 
   return {
@@ -593,6 +593,7 @@ export function registerSocketHandlers(io: Server): void {
       // 방장 seat 0으로 입장
       room.players[0] = {
         playerId: data.playerId,
+        dbUserId,
         nickname: sanitize(data.nickname),
         socketId: socket.id,
         connected: true,
@@ -604,10 +605,10 @@ export function registerSocketHandlers(io: Server): void {
       playerSeat = 0;
       socket.join(roomId);
 
-      const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
+      const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean; dbUserId: string | null } | null> = {};
       for (let s = 0; s < 4; s++) {
         const p = room.players[s];
-        playersInfo[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
+        playersInfo[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot, dbUserId: p.dbUserId ?? null } : null;
       }
 
       socket.emit('room_joined', { seat: 0, roomId, players: playersInfo, hostPlayerId: room.hostPlayerId });
@@ -661,6 +662,7 @@ export function registerSocketHandlers(io: Server): void {
 
       room.players[seat] = {
         playerId: data.playerId,
+        dbUserId,
         nickname: sanitize(data.nickname),
         socketId: socket.id,
         connected: true,
@@ -675,10 +677,10 @@ export function registerSocketHandlers(io: Server): void {
       socket.leave(ROOM_LIST_SOCKET_ROOM);
 
       // 현재 플레이어 목록 구성
-      const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
+      const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean; dbUserId: string | null } | null> = {};
       for (let s = 0; s < 4; s++) {
         const p = room.players[s];
-        playersInfo[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
+        playersInfo[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot, dbUserId: p.dbUserId ?? null } : null;
       }
 
       socket.emit('room_joined', { seat, roomId: data.roomId, players: playersInfo, hostPlayerId: room.hostPlayerId });
@@ -815,10 +817,10 @@ export function registerSocketHandlers(io: Server): void {
         isBot: true,
       };
       // seats_updated로 전체 상태 브로드캐스트 (player_joined보다 확실)
-      const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
+      const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean; dbUserId: string | null } | null> = {};
       for (let i = 0; i < 4; i++) {
         const p = room.players[i];
-        playersInfo[i] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
+        playersInfo[i] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot, dbUserId: p.dbUserId ?? null } : null;
       }
       io.to(room.roomId).emit('seats_updated', { players: playersInfo, swapped: [] });
     });
@@ -834,10 +836,10 @@ export function registerSocketHandlers(io: Server): void {
       if (!room.players[s]?.isBot) return;
 
       room.players[s] = null;
-      const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
+      const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean; dbUserId: string | null } | null> = {};
       for (let i = 0; i < 4; i++) {
         const p = room.players[i];
-        playersInfo[i] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
+        playersInfo[i] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot, dbUserId: p.dbUserId ?? null } : null;
       }
       io.to(room.roomId).emit('seats_updated', { players: playersInfo, swapped: [] });
     });
@@ -2007,10 +2009,10 @@ function formAndStartMatch(io: Server): void {
     }
 
     // 플레이어 목록 구성
-    const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
+    const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean; dbUserId: string | null } | null> = {};
     for (let i = 0; i < 4; i++) {
       const p = room.players[i];
-      playersInfo[i] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
+      playersInfo[i] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot, dbUserId: p.dbUserId ?? null } : null;
     }
 
     io.to(entry.socketId).emit('matchmaking_status', { status: 'matched', roomId, seat });
@@ -2269,10 +2271,10 @@ function cleanupRoom(room: GameRoom): void {
 }
 
 function broadcastSeats(io: Server, room: GameRoom): void {
-  const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean } | null> = {};
+  const playersInfo: Record<number, { nickname: string; connected: boolean; isBot: boolean; dbUserId: string | null } | null> = {};
   for (let s = 0; s < 4; s++) {
     const p = room.players[s];
-    playersInfo[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot } : null;
+    playersInfo[s] = p ? { nickname: p.nickname, connected: p.connected, isBot: p.isBot, dbUserId: p.dbUserId ?? null } : null;
   }
   io.to(room.roomId).emit('seats_updated', { players: playersInfo, hostPlayerId: room.hostPlayerId });
 }
