@@ -54,6 +54,10 @@ export function TableArea() {
 
   // 폭탄/SF 이펙트
   const isBomb = tableCards?.type === 'four_bomb' || tableCards?.type === 'straight_flush_bomb';
+
+  // 표시용 정렬: 서버가 보낸 원본 순서는 플레이어 선택 순서라 스트레이트가 뒤죽박죽.
+  // 값 기준 오름차순으로 재배열 (봉황은 straight 에서 빈 슬롯, 그 외는 끝).
+  const displayCards = React.useMemo(() => sortTableCards(tableCards), [tableCards]);
   const bombGlow = useSharedValue(0);
 
   useEffect(() => {
@@ -130,7 +134,7 @@ export function TableArea() {
             bombGlowStyle,
           ]} />
           <View style={styles.cardsRow}>
-            {tableCards.cards.map((card, i) => (
+            {displayCards.map((card, i) => (
               <Animated.View
                 key={i}
                 entering={ZoomIn.delay(i * 40).duration(200).springify()}
@@ -172,6 +176,87 @@ export function TableArea() {
       </View>
     </View>
   );
+}
+
+function sortTableCards(hand: { type: string; cards: any[]; value: number; length: number } | null): any[] {
+  if (!hand) return [];
+  const cards = hand.cards;
+  if (cards.length <= 1) return cards;
+
+  const suitOrder: Record<string, number> = { sword: 0, star: 1, jade: 2, pagoda: 3 };
+  const cardVal = (c: any): number => {
+    if (c.type === 'special') {
+      if (c.specialType === 'dog') return 0;
+      if (c.specialType === 'mahjong') return 1;
+      if (c.specialType === 'dragon') return 16;
+      return 15; // phoenix placeholder
+    }
+    return c.value;
+  };
+
+  const phoenixIdx = cards.findIndex((c) => c.type === 'special' && c.specialType === 'phoenix');
+  const phoenix = phoenixIdx >= 0 ? cards[phoenixIdx] : null;
+  const rest = phoenix ? cards.filter((_, i) => i !== phoenixIdx) : [...cards];
+
+  rest.sort((a, b) => {
+    const va = cardVal(a);
+    const vb = cardVal(b);
+    if (va !== vb) return va - vb;
+    if (a.type === 'normal' && b.type === 'normal') return suitOrder[a.suit] - suitOrder[b.suit];
+    return 0;
+  });
+
+  if (!phoenix) return rest;
+
+  // 스트레이트: [max-length+1 ... max] 중 빠진 값 자리에 봉황 삽입.
+  if (hand.type === 'straight') {
+    const maxVal = Math.floor(hand.value);
+    const minVal = maxVal - hand.length + 1;
+    const present = new Set<number>();
+    for (const c of rest) present.add(cardVal(c));
+    let missing = -1;
+    for (let v = minVal; v <= maxVal; v++) {
+      if (!present.has(v)) { missing = v; break; }
+    }
+    const insertAt = missing >= 0 ? missing - minVal : rest.length;
+    const result = [...rest];
+    result.splice(insertAt, 0, phoenix);
+    return result;
+  }
+
+  // 연속페어: rest 에서 빠진 페어의 한 짝 옆에 삽입.
+  if (hand.type === 'steps') {
+    const maxVal = Math.floor(hand.value);
+    const pairCount = hand.length / 2;
+    const minVal = maxVal - pairCount + 1;
+    const counts: Record<number, number> = {};
+    for (const c of rest) counts[cardVal(c)] = (counts[cardVal(c)] ?? 0) + 1;
+    let missingVal = -1;
+    for (let v = minVal; v <= maxVal; v++) {
+      if ((counts[v] ?? 0) < 2) { missingVal = v; break; }
+    }
+    const result = [...rest];
+    if (missingVal >= 0) {
+      // 해당 값이 있으면 바로 뒤, 없으면 그 자리에.
+      const idx = result.findIndex((c) => cardVal(c) === missingVal);
+      result.splice(idx >= 0 ? idx + 1 : (missingVal - minVal) * 2, 0, phoenix);
+    } else {
+      result.push(phoenix);
+    }
+    return result;
+  }
+
+  // 페어/트리플/풀하우스: 같은 값 그룹 옆에 삽입.
+  if (hand.type === 'pair' || hand.type === 'triple' || hand.type === 'full_house') {
+    const target = Math.floor(hand.value);
+    const idx = rest.findIndex((c) => cardVal(c) === target);
+    const result = [...rest];
+    result.splice(idx >= 0 ? idx + 1 : result.length, 0, phoenix);
+    return result;
+  }
+
+  // 싱글/기타: 끝에 추가.
+  return [...rest, phoenix];
 }
 
 function valueLabel(v: number | null | undefined): string {
