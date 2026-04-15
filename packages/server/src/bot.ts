@@ -533,7 +533,7 @@ function endgameMinimaxOpp(myHand: Card[], oppHand: Card[], lastPlay: PlayedHand
   bestForOpp = Math.min(bestForOpp, passScore);
 
   for (const play of oppPlays) {
-    if (isBomb(play)) continue; // 간소화: 폭탄 제외
+    // 폭탄 포함 (2인 엔드게임에선 폭탄 역전이 실제로 중요). 기존엔 간소화로 제외.
     const oppRemaining = oppHand.filter(c => !play.cards.some(pc => cardId(pc) === cardId(c)));
     if (oppRemaining.length === 0) return -10; // 상대가 나감
     // 내 차례
@@ -560,7 +560,7 @@ function endgameMinimaxMe(myHand: Card[], oppHand: Card[], lastPlay: PlayedHand 
   }
 
   for (const play of myPlays) {
-    if (isBomb(play)) continue;
+    // 폭탄 포함 (2인 엔드게임 역전 고려)
     const myRemaining = myHand.filter(c => !play.cards.some(pc => cardId(pc) === cardId(c)));
     if (myRemaining.length === 0) return 10; // 내가 나감
     const score = endgameMinimaxOpp(myRemaining, oppHand, play, room, depth - 1);
@@ -821,8 +821,9 @@ export function decideBotBomb(room: GameRoom, seat: number): BotDecision {
     // [NEW #5] 폭탄 보존: 위 조건에 해당 안 하면 → 상대에 남은 폭탄 추정
     if (diff === 'hard') {
       const remainingBombs = estimateRemainingBombs(hand, room);
-      // 상대에게 폭탄이 있을 수 있고 트릭 포인트가 낮으면 → 보존
-      if (remainingBombs >= 1 && trickPoints < 10) return false;
+      // 상대에게 2개+ 폭탄이 있을 가능성이 있고 트릭 포인트가 낮으면 → 보존.
+      // 1개 threshold 는 너무 보수적 (과도하게 폭탄 아껴서 실전 활용 부족).
+      if (remainingBombs >= 2 && trickPoints < 10) return false;
     }
 
     return false;
@@ -1088,9 +1089,10 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
 
   // Hard: 중반 싱글 계단 오르기 (climb) — 인간 상급자 행동 모사.
   // 사용자 피드백 2026-04-15: "A를 내고 9를 낸 뒤 싱글 패스" 비일관성 해결.
-  // 핸드 5장 이상 + 낮은 non-top 싱글이 ≥2개 + 큰 조합 (≥4장) 리드 가능 수단 없음
-  // → 가장 낮은 non-top 싱글로 리드. A/K 는 엔드게임 대비 보존.
-  if (diff === 'hard' && hand.length >= 5) {
+  // 핸드 7장 이상 (isOnlySingles 엔드게임 경로 ≤6 과 안 겹치게) + 낮은 non-top
+  // 싱글이 ≥2개 + 큰 조합 (≥4장) 리드 가능 수단 없음 → 가장 낮은 non-top 싱글로
+  // 리드. A/K 는 엔드게임 대비 보존.
+  if (diff === 'hard' && hand.length >= 7) {
     const singles = plays.filter(p => p.type === 'single' && isNormalCard(p.cards[0]!));
     const nonTopSingles = singles
       .filter(p => !isTopSingle(p.cards[0]!, hand, room))
@@ -1142,12 +1144,15 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
     if (p.type === 'single' && isTopSingle(p.cards[0]!, hand, room)) {
       // 핸드 여유 있으면 탑 싱글 보존 — 엔드게임 대비. 이전엔 +50 무조건 줘서
       // 초반부터 A 를 리드하는 비일관성이 있었음.
-      if (hand.length <= 5) {
-        score += 50;  // 엔드게임 근처 — 탑 싱글로 컨트롤 확보
-      } else if (hand.length <= 7) {
-        score += 10;  // 중반 — 약한 선호
+      // 2026-04-15 재조정: 보존 윈도우 확대 (≤4 → ≤5 → >5 대신 ≤4/≤6/>6).
+      if (hand.length <= 4) {
+        score += 50;  // 엔드게임 — 탑 싱글로 컨트롤 확보
+      } else if (hand.length <= 6) {
+        score += 10;  // 후반 — 약한 선호
+      } else if (hand.length <= 8) {
+        score -= 25;  // 중반 — 탑 싱글 리드 억제
       } else {
-        score -= 35;  // 초반 — 탑 싱글 리드는 낭비
+        score -= 45;  // 초반 — 탑 싱글 리드는 낭비
       }
       score -= Math.floor(p.value * 0.5);
     }
@@ -1466,15 +1471,16 @@ function pickFollowPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat:
         const remKings = countRemainingByRank(room, hand, 'K');
         if (tableVal < 13 && remAces > 0) {
           score -= 70; // 매우 강한 억제 — A 가 나올 때까지 봉황은 아낌
-        } else if (tableVal < 12 && remAces === 0 && remKings > 0) {
-          // [c] A 는 다 나왔고 K 가 남아 있으면 K 위에 쓰기 위해 보존
+        } else if (tableVal < 13 && remAces === 0 && remKings > 0) {
+          // [c] A 는 다 나왔고 K 가 남아 있으면 K 위에 쓰기 위해 보존.
+          // 이전엔 tableVal < 12 라 Q 바닥에서 누락됐음 — 13 으로 확장.
           score -= 40;
         }
 
         // [d] 좋은 용도: 바닥 A → 봉황이 유일한 제압 수단 (드래곤 제외)
         if (tableVal === 14) score += 45;
-        // [e] 바닥 K + A 가 다 나왔음 → 봉황으로 마무리 가능
-        else if (tableVal === 13 && remAces === 0) score += 28;
+        // [e] 바닥 K + A 가 다 나왔음 → 봉황으로 마무리 가능 — 강한 가점
+        else if (tableVal === 13 && remAces === 0) score += 40;
 
         // [f] 손 ≤2: 자원 보존 고려 필요 없음 — 빨리 비우기
         if (hand.length <= 2) score += 30;
@@ -1603,6 +1609,11 @@ function shouldPass(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: num
   // 파트너가 이기고 있을 때
   if (room.currentTrick.lastPlayedSeat === partner) {
     if (partnerTichu) return true;
+    // 파트너가 이기는 상황에서 트릭에 이미 고점수 (용/K/10/5 등) 가 쌓였으면
+    // 파트너가 가져가는 게 팀 이익 → 패스. (적이 뺏어가지 않도록 약한 카드로
+    // 강화할 생각은 버리고, 강한 카드는 보존.)
+    const trickPtsPartner = room.currentTrick.plays.reduce((sum, pp) => sum + sumPoints(pp.hand.cards), 0);
+    if (trickPtsPartner >= 15) return true;
     // 약한~중간 카드로 이길 수 있으면 내기 (카드 빨리 소모)
     if (weakest.value <= 10) return false;
     // 남은 카드 적으면 적극적으로 내기
@@ -1707,10 +1718,10 @@ function shouldUseBombOnFollow(room: GameRoom, seat: number, bombPlays: PlayedHa
   const trickPoints = room.currentTrick.plays.reduce((sum, p) => sum + sumPoints(p.hand.cards), 0);
   if (trickPoints >= 15) return true;
 
-  // [NEW #5] 폭탄 보존: 트릭 포인트 낮고 상대에게도 폭탄 있을 수 있으면 보존
+  // [NEW #5] 폭탄 보존: 트릭 포인트 낮고 상대에게도 폭탄이 2개+ 있을 가능성이면 보존
   if (diff === 'hard' && trickPoints < 10) {
     const remainingBombs = estimateRemainingBombs(hand, room);
-    if (remainingBombs >= 1) return false; // 상대 폭탄 가능 → 내 폭탄 아끼기
+    if (remainingBombs >= 2) return false; // 상대 폭탄 다수 가능 → 내 폭탄 아끼기
   }
 
   return false;
