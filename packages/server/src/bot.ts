@@ -5,7 +5,7 @@ import {
   RANK_VALUES,
 } from '@tichu/shared';
 import type { GameRoom } from './game-room.js';
-import { getActivePlayers, getPartnerSeat, getTeamForSeat } from './game-room.js';
+import { getActivePlayers, getPartnerSeat, getTeamForSeat, getNextSeat } from './game-room.js';
 
 export interface BotDecision {
   action: 'play' | 'pass' | 'bomb';
@@ -463,14 +463,14 @@ function getPositionInfo(room: GameRoom, seat: number): PositionInfo {
 
   let activeAfter = 0;
   let partnerIsNext = false;
-  let nextSeat = (seat + 1) % 4;
+  let nextSeat = getNextSeat(room, seat);
   let foundNext = false;
   for (let i = 0; i < 3; i++) {
     if (active.includes(nextSeat) && nextSeat !== lastPlayed) {
       activeAfter++;
       if (!foundNext) { partnerIsNext = nextSeat === partner; foundNext = true; }
     }
-    nextSeat = (nextSeat + 1) % 4;
+    nextSeat = getNextSeat(room, nextSeat);
   }
 
   return {

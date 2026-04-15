@@ -5,7 +5,7 @@ import {
 } from '@tichu/shared';
 import type { GameRoom, BombWindow } from './game-room.js';
 import {
-  getActivePlayers, removeCardsFromHand, handContainsCards,
+  getActivePlayers, removeCardsFromHand, handContainsCards, getNextSeat,
 } from './game-room.js';
 import type { GameEvent } from './game-engine.js';
 
@@ -178,10 +178,10 @@ export function afterBombWindowResolved(room: GameRoom): GameEvent[] {
 
   // 폭탄 후: 폭탄 낸 사람 다음 활성 플레이어에게 턴
   {
-    let next = (lastSeat + 1) % 4;
+    let next = getNextSeat(room, lastSeat);
     let loopCount = 0;
     while (!active.includes(next) && loopCount < 4) {
-      next = (next + 1) % 4;
+      next = getNextSeat(room, next);
       loopCount++;
     }
     if (!active.includes(next)) return events; // 활성 플레이어 없으면 트릭 종료

@@ -7,7 +7,7 @@ import {
 import { logger } from './logger.js';
 import type { GameRoom, PlayerInfo } from './game-room.js';
 import {
-  createGameRoom, emptyTrick, getActivePlayers, getTeamForSeat, getPartnerSeat, clearTimers,
+  createGameRoom, emptyTrick, getActivePlayers, getTeamForSeat, getPartnerSeat, clearTimers, getNextSeat,
 } from './game-room.js';
 import {
   startRound, finishLargeTichuWindow, finishExchange,
@@ -566,6 +566,7 @@ export function registerSocketHandlers(io: Server): void {
 
       const roomId = generateRoomId();
       const room = createGameRoom(roomId);
+      room.turnStep = 3;  // 시계반대 방향 (기존 티츄 관례) — prod 기본
       rooms.set(roomId, room);
       room.settings.isCustom = true;
       room.settings.roomName = sanitize(data.roomName || '티츄 방');
@@ -1300,10 +1301,10 @@ export function registerSocketHandlers(io: Server): void {
 
       // 폭탄 낸 다음 사람에게 턴 이전 (M3: 2인 시나리오 안전 처리)
       const active = getActivePlayers(room);
-      let nextSeat = (playerSeat + 1) % 4;
+      let nextSeat = getNextSeat(room, playerSeat);
       let loopCount = 0;
       while (!active.includes(nextSeat) && loopCount < 4) {
-        nextSeat = (nextSeat + 1) % 4;
+        nextSeat = getNextSeat(room, nextSeat);
         loopCount++;
       }
       // 2인만 남은 경우 자기 자신으로 돌아오면 상대방에게 턴
@@ -1993,6 +1994,7 @@ function formAndStartMatch(io: Server): void {
 
   const roomId = `match_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const room = createGameRoom(roomId);
+  room.turnStep = 3;  // 시계반대 방향 (기존 티츄 관례)
   rooms.set(roomId, room);
 
   // 실제 플레이어 배치

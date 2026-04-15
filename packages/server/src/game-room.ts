@@ -145,6 +145,8 @@ export interface GameRoom {
   // 방장 playerId (좌석 이동해도 유지)
   hostPlayerId: string | null;
   createdAt: number;
+  /** 턴 진행 스텝. 3 = 시계반대 (기본, 기존 티츄 관례), 1 = 시계방향 (legacy 테스트용) */
+  turnStep: 1 | 3;
 }
 
 // ── 생성 / 초기화 ───────────────────────────────────────────
@@ -178,6 +180,9 @@ export function createGameRoom(roomId: string, settings?: Partial<RoomSettings>)
     hasPlayedCards: { 0: false, 1: false, 2: false, 3: false },
     hostPlayerId: null,
     createdAt: Date.now(),
+    // 기본값 1 (시계방향) — 기존 테스트 호환. 프로덕션 소켓 핸들러는
+    // createGameRoom 직후 room.turnStep = 3 (시계반대) 로 명시 설정.
+    turnStep: 1,
   };
 }
 
@@ -250,12 +255,17 @@ export function getActivePlayers(room: GameRoom): number[] {
   return [0, 1, 2, 3].filter(s => !room.finishOrder.includes(s));
 }
 
+/** 다음 좌석 — room.turnStep 기반 (3=시계반대, 1=시계방향) */
+export function getNextSeat(room: GameRoom, fromSeat: number): number {
+  return (fromSeat + room.turnStep) % 4;
+}
+
 export function getNextActiveSeat(room: GameRoom, fromSeat: number): number {
   const active = getActivePlayers(room);
   if (active.length === 0) return -1;
-  let seat = (fromSeat + 1) % 4;
+  let seat = getNextSeat(room, fromSeat);
   while (!active.includes(seat)) {
-    seat = (seat + 1) % 4;
+    seat = getNextSeat(room, seat);
   }
   return seat;
 }
