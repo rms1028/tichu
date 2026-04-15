@@ -277,8 +277,8 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={S.hand}
-        style={{ flexGrow: 0, height: cardHeight + 8 }}
+        contentContainerStyle={[S.hand, { overflow: 'visible' }]}
+        style={{ flexGrow: 0, height: cardHeight + 8, overflow: 'visible' }}
         scrollEnabled={draggingKey === null}
       >
         {cards.map((card, i) => {
@@ -319,8 +319,8 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
 
   return (
     <ScrollView
-      style={S.scrollRoot}
-      contentContainerStyle={S.root}
+      style={[S.scrollRoot, { overflow: 'visible' }]}
+      contentContainerStyle={[S.root, { overflow: 'visible' }]}
       showsVerticalScrollIndicator={false}
       bounces={false}
       scrollEnabled={draggingKey === null}
@@ -548,7 +548,7 @@ const S = StyleSheet.create({
   tichuBadgeText: { color: '#fff', fontSize: mob(12, 15), fontWeight: '800' },
 
   // 손패
-  twoRowWrap: { gap: mob(2, 4) },
+  twoRowWrap: { gap: mob(2, 4), overflow: 'visible' },
   hand: {
     flexDirection: 'row',
     alignItems: 'flex-end',
