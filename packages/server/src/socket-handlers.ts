@@ -1372,15 +1372,19 @@ export function registerSocketHandlers(io: Server): void {
     }
 
     // 로비 진입 시 온라인 등록 + 친구 목록/요청 전송
+    // 친구 시스템은 전부 DB cuid (dbUserId) 기준으로 통일. onlinePlayers 맵, friend
+    // 테이블 FK, friend 코드 모두 dbUserId 로 키잉. 클라이언트가 보내는 data.playerId
+    // (guestId) 는 requireAuth 검증용으로만 사용.
     socket.on('friend_init', async (data: { playerId: string; nickname: string }) => {
       if (!authenticatedPlayerId) await waitForLogin();
       if (!requireAuth(data.playerId)) return;
-      playerOnline({ playerId: data.playerId, nickname: data.nickname, socketId: socket.id, status: 'lobby' });
-      const code = getPlayerFriendCode(data.playerId);
+      if (!dbUserId) return;
+      playerOnline({ playerId: dbUserId, nickname: data.nickname, socketId: socket.id, status: 'lobby' });
+      const code = getPlayerFriendCode(dbUserId);
       socket.emit('friend_code', { code });
       try {
-        await emitFriendList(socket, data.playerId);
-        await emitPendingRequests(socket, data.playerId);
+        await emitFriendList(socket, dbUserId);
+        await emitPendingRequests(socket, dbUserId);
       } catch (err) { console.error('[friend_init] DB error:', err); }
     });
 
@@ -1399,16 +1403,18 @@ export function registerSocketHandlers(io: Server): void {
       }
     });
 
-    // 친구 요청 보내기
+    // 친구 요청 보내기 — fromId 는 서버 dbUserId (cuid), toId 는 클라가 보낸 cuid
+    // (friend_search_result 에서 받음). 클라 data.fromId(guestId) 는 auth 용으로만.
     socket.on('friend_request', async (data: { fromId: string; fromNickname: string; toId: string }) => {
       if (!authenticatedPlayerId) await waitForLogin();
       if (!requireAuth(data.fromId)) return;
+      if (!dbUserId) { socket.emit('friend_error', { error: 'not_logged_in' }); return; }
       if (!rateLimitCheck(socket.id, 10)) { socket.emit('friend_error', { error: 'rate_limited' }); return; }
-      if (!isValidPlayerId(data.fromId) || !isValidNickname(data.fromNickname) || !isValidPlayerId(data.toId)) {
+      if (!isValidNickname(data.fromNickname) || !isValidPlayerId(data.toId)) {
         socket.emit('friend_error', { error: 'invalid_input' }); return;
       }
       try {
-        const result = await dbSendFriendRequest(data.fromId, data.toId);
+        const result = await dbSendFriendRequest(dbUserId, data.toId);
         if (!result.ok) {
           socket.emit('friend_error', { error: result.error });
           return;
@@ -1416,7 +1422,7 @@ export function registerSocketHandlers(io: Server): void {
         // 상대에게 실시간 알림
         const target = getOnlinePlayer(data.toId);
         if (target) {
-          io.to(target.socketId).emit('friend_request_received', { fromId: data.fromId, fromNickname: data.fromNickname });
+          io.to(target.socketId).emit('friend_request_received', { fromId: dbUserId, fromNickname: data.fromNickname });
         }
         // 오프라인이면 푸시 알림
         if (!target) {
@@ -1424,7 +1430,7 @@ export function registerSocketHandlers(io: Server): void {
         }
         // 자동 수락된 경우 양쪽에 친구 목록 갱신
         if (result.autoAccepted) {
-          await emitFriendList(socket, data.fromId);
+          await emitFriendList(socket, dbUserId);
           if (target) {
             const targetSock = io.sockets.sockets.get(target.socketId);
             if (targetSock) await emitFriendList(targetSock, data.toId);
@@ -1437,16 +1443,17 @@ export function registerSocketHandlers(io: Server): void {
       }
     });
 
-    // 친구 요청 수락
+    // 친구 요청 수락 — myId 는 서버 dbUserId 사용
     socket.on('friend_accept', async (data: { fromId: string; myId: string }) => {
+      if (!dbUserId) { socket.emit('friend_error', { error: 'not_logged_in' }); return; }
       if (!rateLimitCheck(socket.id, 10)) { socket.emit('friend_error', { error: 'rate_limited' }); return; }
-      if (!isValidPlayerId(data.fromId) || !isValidPlayerId(data.myId)) {
+      if (!isValidPlayerId(data.fromId)) {
         socket.emit('friend_error', { error: 'invalid_input' }); return;
       }
       try {
-        if (await dbAcceptFriendRequest(data.fromId, data.myId)) {
-          await emitFriendList(socket, data.myId);
-          await emitPendingRequests(socket, data.myId);
+        if (await dbAcceptFriendRequest(data.fromId, dbUserId)) {
+          await emitFriendList(socket, dbUserId);
+          await emitPendingRequests(socket, dbUserId);
           // 상대에게도 친구 목록 갱신
           const from = getOnlinePlayer(data.fromId);
           if (from) {
@@ -1459,25 +1466,27 @@ export function registerSocketHandlers(io: Server): void {
 
     // 친구 요청 거절
     socket.on('friend_reject', async (data: { fromId: string; myId: string }) => {
+      if (!dbUserId) { socket.emit('friend_error', { error: 'not_logged_in' }); return; }
       if (!rateLimitCheck(socket.id, 10)) { socket.emit('friend_error', { error: 'rate_limited' }); return; }
-      if (!isValidPlayerId(data.fromId) || !isValidPlayerId(data.myId)) {
+      if (!isValidPlayerId(data.fromId)) {
         socket.emit('friend_error', { error: 'invalid_input' }); return;
       }
       try {
-        await dbRejectFriendRequest(data.fromId, data.myId);
-        await emitPendingRequests(socket, data.myId);
+        await dbRejectFriendRequest(data.fromId, dbUserId);
+        await emitPendingRequests(socket, dbUserId);
       } catch (err) { console.error('[friend_reject] DB error:', err); }
     });
 
     // 친구 삭제
     socket.on('friend_remove', async (data: { myId: string; friendId: string }) => {
+      if (!dbUserId) { socket.emit('friend_error', { error: 'not_logged_in' }); return; }
       if (!rateLimitCheck(socket.id, 10)) { socket.emit('friend_error', { error: 'rate_limited' }); return; }
-      if (!isValidPlayerId(data.myId) || !isValidPlayerId(data.friendId)) {
+      if (!isValidPlayerId(data.friendId)) {
         socket.emit('friend_error', { error: 'invalid_input' }); return;
       }
       try {
-        await dbRemoveFriend(data.myId, data.friendId);
-        await emitFriendList(socket, data.myId);
+        await dbRemoveFriend(dbUserId, data.friendId);
+        await emitFriendList(socket, dbUserId);
         const friend = getOnlinePlayer(data.friendId);
         if (friend) {
           const friendSock = io.sockets.sockets.get(friend.socketId);
@@ -1726,10 +1735,11 @@ export function registerSocketHandlers(io: Server): void {
         playerSeat = (socket as any)._playerSeat;
       }
 
-      // playerId 찾아서 offline 처리
+      // playerId 찾아서 offline 처리 (guestId 기준 + 친구 시스템용 dbUserId 기준 둘 다)
       const room2 = playerRoomId ? rooms.get(playerRoomId) : null;
       const pid = room2?.players[playerSeat]?.playerId;
       if (pid) playerOffline(pid);
+      if (dbUserId) playerOffline(dbUserId);
 
       if (!playerRoomId) return;
       const room = rooms.get(playerRoomId);

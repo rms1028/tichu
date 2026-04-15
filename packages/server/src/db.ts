@@ -167,11 +167,18 @@ export async function dbGetPendingRequests(userId: string) {
   });
 }
 
-/** 친구 코드(ID 뒷 6자리)로 유저 검색 */
+/** 친구 코드(식별자 뒷 6자리)로 유저 검색 — guestId / firebaseUid / id 어느 쪽이든
+ *  매칭. 클라이언트 `getPlayerFriendCode` 가 guestId 기반인데 DB `User.id` 는 Prisma cuid
+ *  라 값이 달라 기존 `id endsWith` 단일 검색으로는 영원히 못 찾는 버그 있었음. */
 export async function dbFindUserByCode(code: string): Promise<{ id: string; nickname: string } | null> {
-  // Prisma는 endsWith 지원
   const user = await prisma.user.findFirst({
-    where: { id: { endsWith: code } },
+    where: {
+      OR: [
+        { guestId: { endsWith: code } },
+        { firebaseUid: { endsWith: code } },
+        { id: { endsWith: code } },
+      ],
+    },
     select: { id: true, nickname: true },
   });
   return user;

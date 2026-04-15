@@ -54,6 +54,7 @@ import { GOOGLE_OAUTH, isGoogleOAuthConfigured } from './utils/googleOAuth';
 // import * as Google from 'expo-auth-session/providers/google';
 // import * as WebBrowser from 'expo-web-browser';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { FriendInviteBanner } from './components/FriendInviteBanner';
 
 // WebBrowser.maybeCompleteAuthSession() 도 일시 비활성 (위 import 제거의 일부)
 import { playBgm, setBgmEnabled, stopAll as stopBgm } from './utils/bgm';
@@ -304,6 +305,17 @@ function AppInner() {
         onDeleteAccount={() => { deleteAccount(); clearSentryUser(); addBreadcrumb('account deleted', 'auth'); setScreen('login'); }}
       />
       <TutorialModal visible={showTutorial} onClose={() => setShowTutorial(false)} />
+      <FriendInviteBanner
+        onAccept={(roomId) => {
+          const us = useUserStore.getState();
+          setNickname(us.nickname);
+          setMatchMode('custom');
+          setMatchRoomCode(roomId);
+          setScreen('matchmaking');
+          addBreadcrumb('friend invite accept', 'friend', { roomId });
+          joinRoom(roomId, us.playerId, us.nickname, undefined);
+        }}
+      />
       </>
     );
   }

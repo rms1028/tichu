@@ -262,9 +262,9 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                   <Text style={{ color: '#F59E0B', fontSize: 18, fontWeight: '900', letterSpacing: 3 }}>{friendCode}</Text>
                 </View>
               ) : null}
-              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8, paddingHorizontal: 4 }}>
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8, paddingHorizontal: 4, alignItems: 'stretch' }}>
                 <TextInput
-                  style={[S.mInput, { flex: 1, paddingVertical: 6, fontSize: 13 }]}
+                  style={[S.mInput, { flex: 1, paddingVertical: 8, fontSize: 13, marginBottom: 0, borderRadius: 8 }]}
                   value={searchCode}
                   onChangeText={setSearchCode}
                   placeholder={'친구 코드 입력'}
@@ -273,10 +273,18 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
                   disableFullscreenUI
                 />
                 <TouchableOpacity
-                  style={[S.fpAddBtn, { marginBottom: 0, paddingHorizontal: 12, paddingVertical: 6 }]}
+                  style={{
+                    backgroundColor: 'rgba(245,158,11,0.18)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(245,158,11,0.5)',
+                    borderRadius: 8,
+                    paddingHorizontal: 14,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
                   onPress={() => { if (searchCode.trim() && onFriendSearch) onFriendSearch(searchCode.trim(), savedPlayerId); }}
                 >
-                  <Text style={S.fpAddText}>{'검색'}</Text>
+                  <Text style={{ color: '#F59E0B', fontSize: 12, fontWeight: '800' }}>{'검색'}</Text>
                 </TouchableOpacity>
               </View>
               {friendSearchResult && friendSearchResult.found && (

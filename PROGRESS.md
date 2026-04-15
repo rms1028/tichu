@@ -851,3 +851,49 @@ Railway (서버): https://accomplished-purpose-production-9135.up.railway.app/he
 - `.env` 는 gitignored 라 Railway URL 복원은 커밋 안 됨 — 로컬 dev 환경만 영향
 - Vercel 웹은 이번 수정과 무관 (웹은 정상 작동 중, 모바일 RN quirk 만 수정)
 
+### 11차 작업 (2026-04-15) — 친구 시스템 정합성 + 편의 기능
+
+사용자 요청으로 웹+앱 공통 코드에 대한 게임 편의 기능 / 간단 수정. 이번부터 서버/shared 변경은 Railway 자동 배포를 통해 웹·앱 양쪽에 동시 적용.
+
+**1. 프로필 페이지 리더보드 제거 (`ProfilePage.tsx`)** — 사용자 요청: "메인 로비에 이미 리더보드가 있으니 프로필 페이지에서는 중복". Desktop 레이아웃의 `Sidebar` 컴포넌트 렌더만 제거 (unused 상태로 남음), mainCol 풀 폭 사용. Sidebar 함수/스타일 정의는 일단 유지 (향후 복원 여지).
+
+**2. 친구 초대 배너 UI (`FriendInviteBanner.tsx` 신규)** — 서버/클라 파이프라인 (`friend_invite` → `friend_invite_received` → gameStore.friendInvite)은 이미 있었지만 **수신 측 UI가 전혀 없어 실제로는 초대를 볼 수 없었음**. 로비 상단에 absolute overlay 배너 추가:
+- gameStore.friendInvite 상태 구독
+- 15초 자동 dismiss 타이머
+- 거절 / 참가 버튼 (참가는 joinRoom(roomId) 호출 후 matchmaking 화면 전환)
+- Android 카메라홀 회피 top inset 자체 적용
+- CLAUDE.md §14.2 준수 — native Modal 대신 absolute View
+
+로비 분기 (AppRoot.tsx) 에 `<FriendInviteBanner onAccept={(roomId) => { joinRoom + setScreen('matchmaking') }} />` 추가.
+
+**3. 푸시 토큰 projectId 자동 감지 (`notifications.ts`)** — 기존엔 `process.env.EXPO_PUBLIC_PROJECT_ID` 만 읽어서 env var 없으면 undefined 로 전달. 대체: env → `Constants.expoConfig.extra.eas.projectId` (app.json 에 이미 세팅됨) → `undefined` 순으로 fallback. env 설정 없이도 Expo push token 획득 가능.
+
+**4. 친구 시스템 ID 정합성 버그 (`db.ts` + `socket-handlers.ts`)** — 사용자 리포트: "친구 코드 입력하고 검색 눌러도 찾을 수 없음". 근본 원인은 id 체계 mismatch:
+- **친구 코드 생성**: `getPlayerFriendCode(data.playerId)` → 클라이언트 guestId (crypto.randomUUID) 의 뒷 6자리
+- **DB 검색**: `dbFindUserByCode(code)` → `prisma.user.findFirst({ where: { id: { endsWith: code } } })` — 그러나 `User.id` 는 Prisma `cuid()` (자동 생성) 이고, `guestId` 는 **별도 컬럼**. guestId 의 뒷 6자리로 `id` 컬럼을 endsWith 검색하면 절대 매칭 안 됨.
+- **추가 버그**: `onlinePlayers` 맵이 guestId 로 키잉되는데 `friend_search_result.playerId` 는 `found.id` (DB cuid) 를 반환 → 이후 `friend_invite.toId = cuid` 로 `getOnlinePlayer(cuid)` 호출 시 miss.
+- **DB FK 위반 위험**: `FriendRequest.fromId/toId`, `Friendship.userAId/userBId` 전부 `User.id` FK 인데 클라 `data.fromId` (guestId) 를 그대로 전달 → FK 제약 위반.
+
+**수정**: 친구 시스템을 **DB cuid 단일 authority** 로 통일.
+- `db.ts:dbFindUserByCode` → `guestId / firebaseUid / id` endsWith OR 검색 (보수적 호환).
+- `socket-handlers.ts`:
+  - `friend_init`: `playerOnline({ playerId: dbUserId, ... })` + `getPlayerFriendCode(dbUserId)` — 친구 코드를 cuid 뒷 6자리로 생성해 DB 검색과 일치.
+  - `friend_request`: 서버 측 `dbUserId` 를 fromId 로 사용 (클라 data.fromId 는 auth 검증용으로만, DB ops 에는 쓰지 않음).
+  - `friend_accept / reject / remove`: 동일하게 `dbUserId` 를 self-id 로 사용. 클라 data.myId 무시.
+  - `disconnect`: guestId + dbUserId 둘 다 `playerOffline` 호출해 온라인 맵 정리.
+
+이로써 친구 검색/요청/수락/삭제/초대 전 경로가 cuid 기준으로 일관. 기존에 guestId 로 저장된 Friendship 레코드는 없으므로 (FK 위반으로 애초에 생성 불가능했음) 마이그레이션 불필요.
+
+**5. 친구 코드 검색 버튼 UI (`LobbyScreen.tsx`)** — 사용자 요청: "검색 버튼이 좀 커 옆 input 이랑 알맞게". 기존은 `fpAddBtn` 공용 스타일을 파생 사용해 height/borderRadius 불일치. 수정: input 과 동일 height (stretch 정렬), borderRadius 8, 주황 테마 반투명 배경 + 테두리로 버튼 형태 부여.
+
+**변경 파일**:
+- `packages/server/src/db.ts` — dbFindUserByCode 확장 검색
+- `packages/server/src/socket-handlers.ts` — friend_* 핸들러 전면 dbUserId 기반 재작성 + disconnect 정리
+- `packages/app/src/screens/ProfilePage.tsx` — 리더보드 Sidebar 렌더 제거
+- `packages/app/src/screens/LobbyScreen.tsx` — 친구 초대 버튼 호출 + 검색 버튼 스타일
+- `packages/app/src/AppRoot.tsx` — FriendInviteBanner 렌더
+- `packages/app/src/components/FriendInviteBanner.tsx` (신규)
+- `packages/app/src/utils/notifications.ts` — projectId auto-detect
+
+**주의**: 이번 차수부터 서버 코드 변경은 Railway 자동 배포 필수. 커밋 후 push → Railway webhook → ~1분 deploy → 웹 + 앱 양쪽 live.
+

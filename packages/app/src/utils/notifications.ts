@@ -54,9 +54,18 @@ export async function registerForPushNotifications(): Promise<{ token: string; p
       return null;
     }
 
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: process.env.EXPO_PUBLIC_PROJECT_ID,
-    });
+    // projectId 우선순위: env → Constants.expoConfig.extra.eas.projectId → app.json 자동 감지
+    let projectId: string | undefined = process.env.EXPO_PUBLIC_PROJECT_ID;
+    if (!projectId) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const Constants = require('expo-constants').default;
+        projectId = Constants?.expoConfig?.extra?.eas?.projectId;
+      } catch { /* noop */ }
+    }
+    const tokenData = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined,
+    );
     const platform = Platform.OS === 'ios' ? 'ios' : 'android';
     return { token: tokenData.data, platform };
   } catch (err) {

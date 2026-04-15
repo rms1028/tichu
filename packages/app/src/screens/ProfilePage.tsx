@@ -338,17 +338,13 @@ export function ProfilePage({ onBack, onEdit, onStartGame, onAchievements, showN
           )}
         </Animated.View>
 
-        {/* 2~8. 반응형 */}
+        {/* 2~8. 반응형 — 리더보드(Sidebar)는 메인 로비에 이미 있으므로 프로필에서 제거 */}
         {IS_DESKTOP ? (
           <View style={$.desktopLayout}>
             <View style={$.mainCol}><MainContent /></View>
-            <View style={$.sideCol}><Sidebar /></View>
           </View>
         ) : (
-          <>
-            <MainContent />
-            <Sidebar />
-          </>
+          <MainContent />
         )}
         <View style={{ height: 24 }} />
       </ScrollView>
