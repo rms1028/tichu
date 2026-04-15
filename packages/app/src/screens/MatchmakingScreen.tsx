@@ -329,7 +329,7 @@ const S = StyleSheet.create({
   // slotsArea 는 flex:1 + overflow:'hidden' 으로 제한 — 슬롯 콘텐츠가
   // flex stretch 되면서 아래 hostActions 버튼 row 위에 겹쳐 그려지는
   // 2026-04-14 landscape 버그 (7차 작업 2단계 실측에서 확인) 방지.
-  slotsArea: { flex: 1, justifyContent: 'center', overflow: 'hidden' },
+  slotsArea: { flex: 1, justifyContent: 'center', overflow: 'hidden', marginBottom: 12 },
   teamHeader: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 8 },
   teamLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   teamDot: { width: 8, height: 8, borderRadius: 4 },
@@ -343,16 +343,18 @@ const S = StyleSheet.create({
 
   slot: {
     borderRadius: 16, borderWidth: 2, borderStyle: 'dashed',
-    alignItems: 'center', justifyContent: 'center', paddingVertical: 16, paddingHorizontal: 8,
+    alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 8,
     // height 를 고정해 slots 가 부모 컨테이너에 따라 stretch 되는 걸 차단.
     // 이전엔 minHeight 120 만 있어서 column 레이아웃에서 stretch 되며
     // 651px 까지 커지고 버튼 row 를 덮었음.
-    height: 140,
+    // 2026-04-15: 140 → 110 으로 축소해 하단 호스트 액션 3단 레이아웃에
+    // 충분한 수직 여유 확보 (모바일 웹 주소창 고려).
+    height: 110,
     position: 'relative',
   },
-  slotAvatar: { fontSize: 34 },
-  slotName: { color: '#fff', fontSize: 14, fontWeight: '700', marginTop: 4, maxWidth: 100, textAlign: 'center' },
-  slotTier: { fontSize: 14, marginTop: 2 },
+  slotAvatar: { fontSize: 28 },
+  slotName: { color: '#fff', fontSize: 13, fontWeight: '700', marginTop: 2, maxWidth: 100, textAlign: 'center' },
+  slotTier: { fontSize: 12, marginTop: 1 },
   readyMark: { position: 'absolute', top: 6, right: 6, backgroundColor: '#10b981', borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
   readyMarkText: { color: '#fff', fontSize: 12, fontWeight: '900' },
   botBadge: { position: 'absolute', top: 6, left: 6, backgroundColor: 'rgba(99,102,241,0.3)', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
