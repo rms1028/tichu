@@ -2605,6 +2605,24 @@ async function recordGameResults(io: Server, room: GameRoom): Promise<void> {
 }
 
 function broadcastEvents(io: Server, room: GameRoom, events: GameEvent[]): void {
+  // 라운드 종료가 이 배치에 포함돼 있으면 (ROUND_END phase 전환 + round_result),
+  // 마지막 카드/트릭이 시각적으로 보이도록 3초 지연 후 뒤 절반만 별도 배치로 전송.
+  // 앞 절반 = card_played / trick_won / player_finished 등 플레이 직후 이펙트,
+  // 뒤 절반 = phase_changed → ROUND_END + round_result (점수 정산).
+  const roundEndIdx = events.findIndex(e =>
+    e.type === 'phase_changed' && (e as { type: 'phase_changed'; phase: string }).phase === 'ROUND_END',
+  );
+  if (roundEndIdx > 0 && roundEndIdx < events.length) {
+    const pre = events.slice(0, roundEndIdx);
+    const post = events.slice(roundEndIdx);
+    broadcastEventsImmediate(io, room, pre);
+    setTimeout(() => broadcastEventsImmediate(io, room, post), 3000);
+    return;
+  }
+  broadcastEventsImmediate(io, room, events);
+}
+
+function broadcastEventsImmediate(io: Server, room: GameRoom, events: GameEvent[]): void {
   let hasCardsDealt = false;
 
   for (const event of events) {
