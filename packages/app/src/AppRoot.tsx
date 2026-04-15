@@ -366,6 +366,11 @@ function AppInner() {
       achStore.checkProgress('wins', us.wins);
       achStore.checkProgress('winStreak', us.winStreak);
       if (tichuDeclared && isWin) achStore.checkProgress('tichuSuccess', us.tichuSuccess);
+      // 누락됐던 4가지 업적 진행도 업데이트 — dead achievements 복구
+      achStore.checkProgress('bombUsed', us.bombUsed);
+      achStore.checkProgress('bombSF', us.bombSFUsed);
+      achStore.checkProgress('oneTwoFinish', us.oneTwoFinish);
+      achStore.checkProgress('dragonSteal', us.dragonSteals);
     }
     const xpAfterVal = useUserStore.getState().xp;
     const curTier = getTier(xpBefore);

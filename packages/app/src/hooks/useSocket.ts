@@ -288,7 +288,7 @@ export function useSocket() {
         lastPlayEvent: { seat: data.seat, hand: data.bomb },
         passedSeats: [],
       };
-      // 내가 폭탄을 냈으면 패에서 카드 제거
+      // 내가 폭탄을 냈으면 패에서 카드 제거 + 업적 카운터 증가
       if (data.seat === state.mySeat) {
         const bombCards = data.bomb.cards;
         updates.myHand = state.myHand.filter(handCard => {
@@ -299,6 +299,17 @@ export function useSocket() {
           });
         });
         updates.selectedCards = [];
+        // 업적 추적: 일반 폭탄 + SF 폭탄 별도 카운트.
+        // 용 가로채기: 폭탄 직전 테이블 카드가 용이면 dragonSteal 인정.
+        try {
+          const us = require('../stores/userStore').useUserStore.getState();
+          us.incrementBomb(data.bomb.type === 'straight_flush_bomb');
+          const prevTable = state.tableCards;
+          const prevWasDragon = prevTable?.cards.some(
+            (c: { type: string; specialType?: string }) => c.type === 'special' && c.specialType === 'dragon',
+          );
+          if (prevWasDragon) us.incrementDragonSteal();
+        } catch { /* noop */ }
       }
       useGameStore.setState(updates as any);
       if (!isInGame()) return;

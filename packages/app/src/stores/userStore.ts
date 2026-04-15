@@ -106,6 +106,11 @@ interface UserState {
   oneTwoFinish: number;
   winStreak: number;
 
+  // 업적 카운터 — 클라이언트 로컬 추적 (서버 DB 미저장)
+  bombUsed: number;        // 일반 폭탄 + SF 폭탄 합산
+  bombSFUsed: number;      // SF 폭탄만
+  dragonSteals: number;    // 내가 폭탄으로 용 트릭 가로챈 횟수
+
   // 출석
   attendanceStreak: number;
   lastAttendanceDate: string;
@@ -157,6 +162,8 @@ interface UserState {
   syncRecentGames: (games: { won: boolean; myScore: number; opScore: number; date: string; rp: number }[]) => void;
   setNickname: (name: string) => void;
   setSetting: (key: 'soundOn' | 'musicOn' | 'ttsOn' | 'notifyOn' | 'friendNotify' | 'gameNotify' | 'smallTichuHintOn' | 'partnerBlockHintOn', value: boolean) => void;
+  incrementBomb: (isStraightFlush: boolean) => void;
+  incrementDragonSteal: () => void;
   setPlayerId: (id: string) => void;
   isGuest: () => boolean;
   applyServerRewards: (xp: number, coins: number, won: boolean, tichuSuccess: boolean) => void;
@@ -232,6 +239,9 @@ export const useUserStore = create<UserState>((set, get) => ({
   largeTichuSuccess: saved.largeTichuSuccess ?? 0,
   largeTichuFail: saved.largeTichuFail ?? 0,
   oneTwoFinish: saved.oneTwoFinish ?? 0,
+  bombUsed: saved.bombUsed ?? 0,
+  bombSFUsed: saved.bombSFUsed ?? 0,
+  dragonSteals: saved.dragonSteals ?? 0,
   winStreak: saved.winStreak ?? 0,
   attendanceStreak: saved.attendanceStreak ?? 0,
   lastAttendanceDate: saved.lastAttendanceDate ?? '',
@@ -385,6 +395,20 @@ export const useUserStore = create<UserState>((set, get) => ({
   },
   setPlayerId: (id) => set(s => { const ns = { ...s, playerId: id }; saveState(ns); return ns; }),
   isGuest: () => get().playerId.startsWith('guest_'),
+  incrementBomb: (isStraightFlush) => set(s => {
+    const ns = {
+      ...s,
+      bombUsed: s.bombUsed + 1,
+      bombSFUsed: s.bombSFUsed + (isStraightFlush ? 1 : 0),
+    };
+    saveState(ns);
+    return ns;
+  }),
+  incrementDragonSteal: () => set(s => {
+    const ns = { ...s, dragonSteals: s.dragonSteals + 1 };
+    saveState(ns);
+    return ns;
+  }),
 
   // 서버에서 보상 수신 시 로컬 스토어 업데이트
   applyServerRewards: (xp, coins, won, tichuSuccess) => set(s => {
