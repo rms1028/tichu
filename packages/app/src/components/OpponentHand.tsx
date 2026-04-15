@@ -133,6 +133,8 @@ export function OpponentHand({
             isCurrentTurn && { shadowColor: teamBorderColor, shadowOpacity: 0.6 },
             isCurrentTurn && pulseStyle,
             isCurrentTurn && glowStyle,
+            tichu && styles.avatarTichuGlow,
+            tichu === 'large' && styles.avatarTichuGlowLarge,
           ]}>
             <View style={[styles.avatarInner, { backgroundColor: avatar.bg }]}>
               <Text style={styles.avatarEmoji}>{avatar.emoji}</Text>
@@ -141,7 +143,7 @@ export function OpponentHand({
           <Text style={[styles.nickname, !connected && styles.nicknameDimmed, nickColor ? { color: nickColor } : undefined]} numberOfLines={1} ellipsizeMode="tail">{nickname}</Text>
           {tichu && (
             <View style={[styles.tichuBadge, tichu === 'large' && styles.tichuLarge]}>
-              <Text style={styles.tichuText}>{tichu === 'large' ? '🔥' : '⭐'}</Text>
+              <Text style={styles.tichuText}>{tichu === 'large' ? '🔥 라지' : '⭐ 스몰'}</Text>
             </View>
           )}
         </View>
@@ -194,6 +196,8 @@ export function OpponentHand({
           isCurrentTurn && styles.avatarOuterActive,
           isCurrentTurn && pulseStyle,
           isCurrentTurn && glowStyle,
+          tichu && styles.avatarTichuGlow,
+          tichu === 'large' && styles.avatarTichuGlowLarge,
         ]}>
           <View style={[styles.avatarInner, { backgroundColor: avatar.bg }]}>
             <Text style={styles.avatarEmoji}>{avatar.emoji}</Text>
@@ -368,23 +372,47 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
 
-  // 티츄
+  // 티츄 — 상주 표시를 명확하게. 라지 = 빨강 펄스, 스몰 = 골드.
   tichuBadge: {
-    backgroundColor: 'rgba(243,156,18,0.2)',
-    borderWidth: 1,
+    backgroundColor: 'rgba(243,156,18,0.35)',
+    borderWidth: 1.5,
     borderColor: '#f39c12',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    shadowColor: '#f39c12',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 6,
   },
   tichuLarge: {
-    backgroundColor: 'rgba(231,76,60,0.2)',
+    backgroundColor: 'rgba(231,76,60,0.4)',
     borderColor: '#e74c3c',
+    shadowColor: '#e74c3c',
   },
   tichuText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '900',
+    letterSpacing: 0.3,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  // 티츄 선언자 아바타 글로우 — 라운드 내내 지속
+  avatarTichuGlow: {
+    shadowColor: '#f39c12',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 12,
+    elevation: 10,
+    borderWidth: 3,
+    borderColor: '#f39c12',
+  },
+  avatarTichuGlowLarge: {
+    shadowColor: '#e74c3c',
+    borderColor: '#e74c3c',
   },
 
   // 트릭 승리 말풍선

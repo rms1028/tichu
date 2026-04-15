@@ -83,6 +83,9 @@ export function PlayerHand() {
   const isMyTurn = useGameStore((s) => s.isMyTurn);
   const tableCards = useGameStore((s) => s.tableCards);
   const phase = useGameStore((s) => s.phase);
+  const mySeat = useGameStore((s) => s.mySeat);
+  const tichuDeclarations = useGameStore((s) => s.tichuDeclarations);
+  const myTichu = tichuDeclarations[mySeat] ?? null;
 
   const sorted = sortHand(myHand);
   const bombGroups = useMemo(() => findBombGroups(myHand), [myHand]);
@@ -150,7 +153,7 @@ export function PlayerHand() {
     const calcOverlap = (count: number) => count > 1 ? -Math.max(14, 56 - (370 - 56) / (count - 1)) : 0;
 
     return (
-      <View style={styles.twoRowWrap}>
+      <View style={[styles.twoRowWrap, myTichu && styles.tichuGlowWrap, myTichu === 'large' && styles.tichuGlowLarge]}>
         <View key="row-top">{renderSingleRow(topRow, calcOverlap(topRow.length))}</View>
         <View key="row-bot">{renderSingleRow(botRow, calcOverlap(botRow.length))}</View>
       </View>
@@ -164,7 +167,12 @@ export function PlayerHand() {
   const cardOverlap = isMobile ? autoOverlap : -28;
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.container} style={styles.scroll}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.container}
+      style={[styles.scroll, myTichu && styles.tichuGlowWrap, myTichu === 'large' && styles.tichuGlowLarge]}
+    >
       {normalCards.map((card, i) => {
         const isSelected = selectedCards.some(c => cardEquals(c, card));
         const isBombMember = bombCardKeys.has(cardKey(card));
@@ -216,6 +224,21 @@ const styles = StyleSheet.create({
   twoRowWrap: {
     paddingHorizontal: 4,
     paddingVertical: 2,
+  },
+  // 내가 티츄 선언 중일 때 핸드에 글로우 테두리
+  tichuGlowWrap: {
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#f39c12',
+    shadowColor: '#f39c12',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 14,
+    elevation: 12,
+  },
+  tichuGlowLarge: {
+    borderColor: '#e74c3c',
+    shadowColor: '#e74c3c',
   },
   rowContainer: {
     flexDirection: 'row',
