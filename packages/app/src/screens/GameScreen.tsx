@@ -99,6 +99,11 @@ export function GameScreen({
   const [showTichuConfirm, setShowTichuConfirm] = useState(false);
   // 파트너 위에 카드 낼 때 경고 모달 (팀원 트릭 막기 방지)
   const [pendingPartnerBlock, setPendingPartnerBlock] = useState<{ cards: Card[]; phoenixAs?: Rank; wish?: Rank } | null>(null);
+  // "다시 표시하지 않기" 체크박스 로컬 상태 — 모달이 열릴 때마다 초기화
+  const [tichuDontShowAgain, setTichuDontShowAgain] = useState(false);
+  const [partnerDontShowAgain, setPartnerDontShowAgain] = useState(false);
+  useEffect(() => { if (showTichuConfirm) setTichuDontShowAgain(false); }, [showTichuConfirm]);
+  useEffect(() => { if (pendingPartnerBlock) setPartnerDontShowAgain(false); }, [pendingPartnerBlock]);
   // 설정: 두 안내 힌트의 on/off — in-game "다시 표시하지 않기" 가 저장됨
   const smallTichuHintOn = useUserStore((s) => s.smallTichuHintOn);
   const partnerBlockHintOn = useUserStore((s) => s.partnerBlockHintOn);
@@ -636,15 +641,21 @@ export function GameScreen({
             </View>
             <TouchableOpacity
               style={styles.hintDontShowRow}
-              onPress={() => setSetting('smallTichuHintOn', false)}
+              onPress={() => setTichuDontShowAgain(v => !v)}
               activeOpacity={0.7}
             >
-              <Text style={styles.hintDontShowText}>{'✕ 다시 표시하지 않기'}</Text>
+              <View style={[styles.hintCheckbox, tichuDontShowAgain && styles.hintCheckboxOn]}>
+                {tichuDontShowAgain && <Text style={styles.hintCheckMark}>{'✓'}</Text>}
+              </View>
+              <Text style={styles.hintDontShowText}>{'다시 표시하지 않기'}</Text>
             </TouchableOpacity>
             <View style={styles.tichuConfirmBtns}>
               <TouchableOpacity
                 style={[styles.tichuConfirmBtn, styles.tichuConfirmBtnCancel]}
-                onPress={() => setShowTichuConfirm(false)}
+                onPress={() => {
+                  if (tichuDontShowAgain) setSetting('smallTichuHintOn', false);
+                  setShowTichuConfirm(false);
+                }}
                 activeOpacity={0.7}
               >
                 <Text style={styles.tichuConfirmBtnCancelText}>{'취소'}</Text>
@@ -652,6 +663,7 @@ export function GameScreen({
               <TouchableOpacity
                 style={[styles.tichuConfirmBtn, styles.tichuConfirmBtnOk]}
                 onPress={() => {
+                  if (tichuDontShowAgain) setSetting('smallTichuHintOn', false);
                   setShowTichuConfirm(false);
                   onDeclareTichu('small');
                 }}
@@ -676,15 +688,21 @@ export function GameScreen({
             </Text>
             <TouchableOpacity
               style={styles.hintDontShowRow}
-              onPress={() => setSetting('partnerBlockHintOn', false)}
+              onPress={() => setPartnerDontShowAgain(v => !v)}
               activeOpacity={0.7}
             >
-              <Text style={styles.hintDontShowText}>{'✕ 다시 표시하지 않기'}</Text>
+              <View style={[styles.hintCheckbox, partnerDontShowAgain && styles.hintCheckboxOn]}>
+                {partnerDontShowAgain && <Text style={styles.hintCheckMark}>{'✓'}</Text>}
+              </View>
+              <Text style={styles.hintDontShowText}>{'다시 표시하지 않기'}</Text>
             </TouchableOpacity>
             <View style={styles.tichuConfirmBtns}>
               <TouchableOpacity
                 style={[styles.tichuConfirmBtn, styles.tichuConfirmBtnCancel]}
-                onPress={() => setPendingPartnerBlock(null)}
+                onPress={() => {
+                  if (partnerDontShowAgain) setSetting('partnerBlockHintOn', false);
+                  setPendingPartnerBlock(null);
+                }}
                 activeOpacity={0.7}
               >
                 <Text style={styles.tichuConfirmBtnCancelText}>{'취소'}</Text>
@@ -692,6 +710,7 @@ export function GameScreen({
               <TouchableOpacity
                 style={[styles.tichuConfirmBtn, styles.tichuConfirmBtnOk]}
                 onPress={() => {
+                  if (partnerDontShowAgain) setSetting('partnerBlockHintOn', false);
                   const p = pendingPartnerBlock;
                   setPendingPartnerBlock(null);
                   onPlay(p.cards, p.phoenixAs, p.wish);
@@ -1272,13 +1291,36 @@ const styles = StyleSheet.create({
   tichuConfirmRewardLabelFail: { color: '#ef4444', fontSize: 11, fontWeight: '700', marginBottom: 4 },
   tichuConfirmRewardValFail: { color: '#ef4444', fontSize: 20, fontWeight: '900' },
   hintDontShowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     alignSelf: 'center',
     marginBottom: 10,
     paddingVertical: 6,
     paddingHorizontal: 12,
+    gap: 8,
+  },
+  hintCheckbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  hintCheckboxOn: {
+    backgroundColor: '#F59E0B',
+    borderColor: '#F59E0B',
+  },
+  hintCheckMark: {
+    color: '#0a1910',
+    fontSize: 12,
+    fontWeight: '900',
+    lineHeight: 14,
   },
   hintDontShowText: {
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(255,255,255,0.7)',
     fontSize: 12,
     fontWeight: '600',
   },
