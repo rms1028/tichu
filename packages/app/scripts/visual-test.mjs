@@ -310,20 +310,24 @@ const FILTER = filterIdx >= 0 ? args[filterIdx + 1] : null;
 // from scratch by default (`relaunch: true`) so failures in one don't
 // cascade. Set `relaunch: false` to chain steps from the previous state.
 //
-// IMPORTANT — coordinates are device-specific (this set is for a Samsung
-// Galaxy with 2340x1080 landscape). For a different device, recapture
-// each baseline, find button centers, and update the tap [x,y] entries.
+// IMPORTANT — 2026-04-15 portrait lock 이후 기존 landscape (2340×1080)
+// baseline 10개 전부 무효화. 이 파일은 portrait (1080×2340) 기준으로
+// 01-splash / 02-login 두 개만 유지 — 이 둘은 ADB tap 이 필요 없어
+// 안정적. 03~10 은 portrait 좌표 재튜닝 필요해서 제거 (향후 device
+// 있는 세션에서 재추가).
+//
+// 좌표 기준: Samsung 1080×2340 portrait. 기기 다르면 screenshot 받아
+// 픽셀 좌표 재측정 필요.
 //
 // React Native + Reanimated views are NOT exposed to UIAutomator so
 // `adb shell uiautomator dump` won't surface inner buttons. Use the
 // PNG screenshots from `npm run android:dev` and read pixel coords off
 // the image with any image viewer.
 //
-// HOST PREREQ for scenarios beyond `02-login`:
-//   1. Local server running:  cd packages/server && npm run dev
-//   2. ADB reverse:           adb reverse tcp:3001 tcp:3001
-//   3. .env points to:        EXPO_PUBLIC_SERVER_URL=http://localhost:3001
-//   4. Rebuild + install:     npm run android:dev
+// 첫 실행 시:
+//   1. `npm run android:dev` 로 APK 설치 (현재 base.apk)
+//   2. `npm run android:visual -- --update-baselines` 로 baseline 생성
+//   3. 이후 `npm run android:visual` 로 회귀 체크
 const SCENARIOS = [
   {
     name: '01-splash',
@@ -337,161 +341,8 @@ const SCENARIOS = [
     settle: 500,
     steps: [{ wait: 5000 }], // wait for splash → login transition
   },
-  {
-    name: '03-lobby',
-    resetData: true,
-    settle: 1500,
-    // Login screen → type nickname → tap guest start → arrive at lobby →
-    // dismiss attendance popup ("보상 받기") so the baseline captures the
-    // lobby proper and not the daily-reward overlay.
-    //
-    // NOTE: coords tuned for Samsung 2340x1080 landscape 2026-04-13. Old
-    // coords (1144,434 / 1144,625 / 1170,780) drifted off-target because
-    // login-screen layout subtly shifted, which caused the guest tap to
-    // miss and the scenario to end on the system Google account picker —
-    // baselines captured in that state were garbage. Re-run
-    // `npm run android:visual -- --update-baselines` to re-capture with
-    // these corrected coords.
-    steps: [
-      { wait: 5000 },               // wait for login screen
-      { tap: [1170, 378] },         // tap nickname input
-      { wait: 800 },
-      { text: 'Tester' },
-      { wait: 300 },
-      { key: 'KEYCODE_BACK' },      // dismiss keyboard
-      { wait: 600 },
-      { tap: [1170, 562] },         // tap "게스트로 시작"
-      { wait: 6000 },               // guest_login round-trip + lobby render
-      { tap: [1170, 788] },         // dismiss attendance popup ("보상 받기")
-      { wait: 1000 },
-    ],
-  },
-  {
-    // 로비 터치 회귀 차단 — 로비 카드 탭이 customMatch 화면으로 네비되는지.
-    // 2026-04-13 의 <Modal> touch-lockout 버그 (commit 05fabec / 05cd04a)
-    // 재발 시 이 시나리오가 제일 먼저 빨간불을 켜게 된다.
-    name: '04-custom-match',
-    resetData: true,
-    settle: 1500,
-    steps: [
-      { wait: 5000 },
-      { tap: [1170, 378] },
-      { wait: 800 },
-      { text: 'Tester' },
-      { wait: 300 },
-      { key: 'KEYCODE_BACK' },
-      { wait: 600 },
-      { tap: [1170, 562] },         // "게스트로 시작"
-      { wait: 6000 },
-      { tap: [1170, 788] },         // 출석 팝업 "보상 받기"
-      { wait: 1000 },
-      // 커스텀 모드 card (right card). 2026-04-14 commit 60019c3 이후 빠른
-      // 매칭도 disabled 아니지만, 커스텀 쪽이 socket 없이도 페이지 이동이
-      // 확실해서 시나리오 안정성을 위해 유지.
-      { tap: [1200, 540] },
-      { wait: 2500 },               // setPage('customMatch') + 화면 mount
-    ],
-  },
-  // ── 05~10: 로비 하위 화면 landscape 회귀 차단 ───────────────────────────
-  //
-  // 좌표는 03-lobby baseline PNG (2340x1080 landscape) 에서 픽셀 분석으로
-  // 추출한 값. 2026-04-14 에 추가:
-  //   - 게임 규칙 버튼  : (1170, 720)  — rulesBtn 세로 중앙
-  //   - 랭킹 nav (tab 1): (1144, 1020) — nav:space-around 의 2번째 탭 중앙
-  //   - 설정 nav (tab 2): (1845, 1020) — nav:space-around 의 3번째 탭 중앙
-  //   - 🛒 shop 아이콘  : (1911, 100)  — topRight 의 shop 버튼 중앙
-  //   - profile 버튼    : (240, 90)    — topBar 좌측 profileBtn 중앙
-  // 좌표가 미세하게 어긋나면 `--filter <이름>` + baseline 갱신으로 재캡처.
-  {
-    name: '05-rules',
-    resetData: true,
-    settle: 1500,
-    steps: [
-      { wait: 5000 },
-      { tap: [1170, 378] }, { wait: 800 },
-      { text: 'Tester' }, { wait: 300 },
-      { key: 'KEYCODE_BACK' }, { wait: 600 },
-      { tap: [1170, 562] }, { wait: 6000 },
-      { tap: [1170, 788] }, { wait: 1000 },  // attendance dismiss
-      { tap: [1170, 720] }, { wait: 1500 },  // 게임 규칙 button → RulesScreen
-    ],
-  },
-  {
-    name: '06-ranking',
-    resetData: true,
-    settle: 1500,
-    steps: [
-      { wait: 5000 },
-      { tap: [1170, 378] }, { wait: 800 },
-      { text: 'Tester' }, { wait: 300 },
-      { key: 'KEYCODE_BACK' }, { wait: 600 },
-      { tap: [1170, 562] }, { wait: 6000 },
-      { tap: [1170, 788] }, { wait: 1000 },
-      { tap: [1144, 1020] }, { wait: 2000 }, // 랭킹 nav tab → RankingScreen
-    ],
-  },
-  {
-    name: '07-settings',
-    resetData: true,
-    settle: 1500,
-    steps: [
-      { wait: 5000 },
-      { tap: [1170, 378] }, { wait: 800 },
-      { text: 'Tester' }, { wait: 300 },
-      { key: 'KEYCODE_BACK' }, { wait: 600 },
-      { tap: [1170, 562] }, { wait: 6000 },
-      { tap: [1170, 788] }, { wait: 1000 },
-      { tap: [1845, 1020] }, { wait: 1500 }, // 설정 nav tab → settings page
-    ],
-  },
-  {
-    name: '08-shop',
-    resetData: true,
-    settle: 1500,
-    steps: [
-      { wait: 5000 },
-      { tap: [1170, 378] }, { wait: 800 },
-      { text: 'Tester' }, { wait: 300 },
-      { key: 'KEYCODE_BACK' }, { wait: 600 },
-      { tap: [1170, 562] }, { wait: 6000 },
-      { tap: [1170, 788] }, { wait: 1000 },
-      { tap: [1911, 100] }, { wait: 2000 },  // 🛒 top-right → ShopScreen
-    ],
-  },
-  {
-    name: '09-profile',
-    resetData: true,
-    settle: 1500,
-    steps: [
-      { wait: 5000 },
-      { tap: [1170, 378] }, { wait: 800 },
-      { text: 'Tester' }, { wait: 300 },
-      { key: 'KEYCODE_BACK' }, { wait: 600 },
-      { tap: [1170, 562] }, { wait: 6000 },
-      { tap: [1170, 788] }, { wait: 1000 },
-      { tap: [240, 90] }, { wait: 2000 },    // profile button → ProfilePage
-    ],
-  },
-  {
-    // 업적 카드는 ProfilePage 스크롤 하단에 있어서 먼저 위로 스와이프.
-    // "더보기 ›" 텍스트 좌표는 스크롤 후 baseline 에서 amber 픽셀로 확정 (1944, 780).
-    name: '10-achievements',
-    resetData: true,
-    settle: 1500,
-    steps: [
-      { wait: 5000 },
-      { tap: [1170, 378] }, { wait: 800 },
-      { text: 'Tester' }, { wait: 300 },
-      { key: 'KEYCODE_BACK' }, { wait: 600 },
-      { tap: [1170, 562] }, { wait: 6000 },
-      { tap: [1170, 788] }, { wait: 1000 },
-      { tap: [240, 90] }, { wait: 2000 },        // profile button → ProfilePage
-      { swipe: [1170, 900, 1170, 200, 400] }, { wait: 800 },   // first scroll
-      { swipe: [1170, 700, 1170, 500, 300] }, { wait: 1500 },  // second small scroll to fully reveal 업적 card
-      { tap: [1936, 774] }, { wait: 2500 },      // mint "더보기 ›" → AchievementsScreen
-    ],
-  },
 ];
+
 
 // ── Main ──────────────────────────────────────────────────────────────
 const filtered = FILTER
