@@ -75,7 +75,10 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
   const hostPlayerId = useGameStore((s) => s.hostPlayerId);
   const myPlayerId = useGameStore((s) => s.playerId);
   const isHost = (hostPlayerId && myPlayerId) ? hostPlayerId === myPlayerId : (mySeat === 0 || (!hasJoinedRoom && mode === 'custom'));
-  const canStart = filledCount === 4;
+  // 커스텀 방 시작 조건 완화: 2명 이상이면 시작 허용.
+  // 서버 start_game 핸들러가 빈 자리를 기본 봇으로 자동 채움 (socket-handlers.ts:724).
+  // 기존엔 === 4 만 허용해서 봇 제거 후 버튼이 비활성화되어 "안 눌림" 체감 버그.
+  const canStart = filledCount >= 2;
 
   // 경과 시간
   useEffect(() => {
@@ -295,7 +298,9 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
                 disabled={!canStart}
               >
                 <Text style={[S.startGameText, !canStart && { opacity: 0.5 }]}>
-                  {canStart ? '🎮 시작' : `🎮 시작 (${filledCount}/4)`}
+                  {canStart
+                    ? (filledCount === 4 ? '🎮 시작' : `🎮 시작 (${filledCount}/4 — 나머지 자동 봇)`)
+                    : `🎮 최소 2명 필요 (${filledCount}/4)`}
                 </Text>
               </TouchableOpacity>
             </View>

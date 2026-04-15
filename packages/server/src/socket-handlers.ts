@@ -799,11 +799,16 @@ export function registerSocketHandlers(io: Server): void {
       if (!isValidSeat(data.seat)) { socket.emit('error', { message: 'invalid_seat' }); return; }
       if (!playerRoomId && loginPromise) await loginPromise;
       const room = getRoom();
-      if (!room) return;
-      if (room.phase !== 'WAITING_FOR_PLAYERS') return;
+      if (!room) { socket.emit('error', { message: 'room_not_found' }); return; }
+      if (room.phase !== 'WAITING_FOR_PLAYERS') {
+        socket.emit('error', { message: 'game_already_started' }); return;
+      }
       if (room.settings.isCustom && !isRoomHost(room)) { socket.emit('error', { message: 'not_room_host' }); return; }
       const s = data.seat;
-      if (room.players[s] !== null) return;
+      if (room.players[s] !== null) {
+        // 이전엔 silent return 이라 클라 디버깅이 어려웠음. 이제 명시적 에러.
+        socket.emit('error', { message: 'seat_occupied' }); return;
+      }
 
       const diff = data.difficulty ?? room.settings.botDifficulty ?? 'hard';
       room.settings.botDifficulty = diff;
