@@ -14,6 +14,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { useGameStore } from '../stores/gameStore';
+import { useUserStore } from '../stores/userStore';
 import { useTeamInfo } from '../hooks/useGame';
 import { PlayerHand } from '../components/PlayerHand';
 import { OpponentHand } from '../components/OpponentHand';
@@ -96,6 +97,36 @@ export function GameScreen({
   // 스몰 티츄 확인 모달 — 실수로 누르면 -100 손해라 중요. RN 0.76 touch-lock
   // 버그 회피 위해 native Modal 금지, absolute overlay View 사용 (CLAUDE.md §14.2).
   const [showTichuConfirm, setShowTichuConfirm] = useState(false);
+  // 파트너 위에 카드 낼 때 경고 모달 (팀원 트릭 막기 방지)
+  const [pendingPartnerBlock, setPendingPartnerBlock] = useState<{ cards: Card[]; phoenixAs?: Rank; wish?: Rank } | null>(null);
+  // 설정: 두 안내 힌트의 on/off — in-game "다시 표시하지 않기" 가 저장됨
+  const smallTichuHintOn = useUserStore((s) => s.smallTichuHintOn);
+  const partnerBlockHintOn = useUserStore((s) => s.partnerBlockHintOn);
+  const setSetting = useUserStore((s) => s.setSetting);
+  const tableCards = useGameStore((s) => s.tableCards);
+  // onPlay 인터셉터 — 파트너가 마지막으로 낸 카드 위에 내가 카드를 내려 하면
+  // "팀원 트릭 막기" 경고 모달. 설정 off 거나 이미 "다시 표시하지 않기" 누른
+  // 경우 바로 통과.
+  const handlePlayWithGuard = (cards: Card[], phoenixAs?: Rank, wish?: Rank) => {
+    if (
+      partnerBlockHintOn &&
+      tableCards !== null &&
+      lastPlayEvent &&
+      lastPlayEvent.seat === partnerSeat &&
+      !lastPlayEvent.hand.cards.some(c => c.type === 'special' && c.specialType === 'dragon')
+    ) {
+      setPendingPartnerBlock({ cards, phoenixAs, wish });
+      return;
+    }
+    onPlay(cards, phoenixAs, wish);
+  };
+
+  // 스몰 티츄 버튼: 힌트 on 이면 확인 모달, off 면 바로 선언
+  const handleSmallTichuPress = () => {
+    if (smallTichuHintOn) setShowTichuConfirm(true);
+    else onDeclareTichu('small');
+  };
+
   // 폭탄이 실제로 플레이됐을 때만 화면 흔들림
   useEffect(() => {
     if (lastPlayEvent?.hand?.type === 'four_bomb' || lastPlayEvent?.hand?.type === 'straight_flush_bomb') {
@@ -515,7 +546,7 @@ export function GameScreen({
             </View>
           ) : (
             <View>
-              <TichuPulseButton onPress={() => setShowTichuConfirm(true)} />
+              <TichuPulseButton onPress={handleSmallTichuPress} />
             </View>
           )}
           <EmoteButton onSend={(emoji, label) => onSendEmote?.(emoji, label)} />
@@ -545,7 +576,7 @@ export function GameScreen({
             {/* 액션 버튼 */}
             <View style={styles.actionRow}>
               <ActionBar
-                onPlay={onPlay}
+                onPlay={handlePlayWithGuard}
                 onPass={onPass}
                 onDeclareTichu={(type) => onDeclareTichu(type)}
                 onSubmitBomb={onSubmitBombCards ?? (() => {})}
@@ -603,6 +634,13 @@ export function GameScreen({
                 <Text style={styles.tichuConfirmRewardValFail}>{'−100'}</Text>
               </View>
             </View>
+            <TouchableOpacity
+              style={styles.hintDontShowRow}
+              onPress={() => setSetting('smallTichuHintOn', false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.hintDontShowText}>{'✕ 다시 표시하지 않기'}</Text>
+            </TouchableOpacity>
             <View style={styles.tichuConfirmBtns}>
               <TouchableOpacity
                 style={[styles.tichuConfirmBtn, styles.tichuConfirmBtnCancel]}
@@ -620,6 +658,47 @@ export function GameScreen({
                 activeOpacity={0.7}
               >
                 <Text style={styles.tichuConfirmBtnOkText}>{'선언'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* 파트너 트릭 막기 경고 모달 — 팀원이 방금 낸 카드 위에 내가 또 낼 때.
+          일반적으로 파트너가 이기게 놔두는 게 팀에 유리하므로 실수 방지용 안내. */}
+      {pendingPartnerBlock && (
+        <View style={styles.tichuConfirmOverlay}>
+          <View style={styles.tichuConfirmBox}>
+            <Text style={styles.tichuConfirmIcon}>{'⚠️'}</Text>
+            <Text style={styles.tichuConfirmTitle}>{'팀원 트릭 막기'}</Text>
+            <Text style={styles.tichuConfirmDesc}>
+              {'파트너가 이기고 있는 트릭에\n카드를 내시겠습니까?'}
+            </Text>
+            <TouchableOpacity
+              style={styles.hintDontShowRow}
+              onPress={() => setSetting('partnerBlockHintOn', false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.hintDontShowText}>{'✕ 다시 표시하지 않기'}</Text>
+            </TouchableOpacity>
+            <View style={styles.tichuConfirmBtns}>
+              <TouchableOpacity
+                style={[styles.tichuConfirmBtn, styles.tichuConfirmBtnCancel]}
+                onPress={() => setPendingPartnerBlock(null)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.tichuConfirmBtnCancelText}>{'취소'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tichuConfirmBtn, styles.tichuConfirmBtnOk]}
+                onPress={() => {
+                  const p = pendingPartnerBlock;
+                  setPendingPartnerBlock(null);
+                  onPlay(p.cards, p.phoenixAs, p.wish);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.tichuConfirmBtnOkText}>{'내기'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1192,6 +1271,17 @@ const styles = StyleSheet.create({
   tichuConfirmRewardValOk: { color: '#10b981', fontSize: 20, fontWeight: '900' },
   tichuConfirmRewardLabelFail: { color: '#ef4444', fontSize: 11, fontWeight: '700', marginBottom: 4 },
   tichuConfirmRewardValFail: { color: '#ef4444', fontSize: 20, fontWeight: '900' },
+  hintDontShowRow: {
+    alignSelf: 'center',
+    marginBottom: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  hintDontShowText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   tichuConfirmBtns: { flexDirection: 'row', gap: 12, width: '100%' },
   tichuConfirmBtn: {
     flex: 1,

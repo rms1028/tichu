@@ -121,6 +121,9 @@ interface UserState {
   notifyOn: boolean;
   friendNotify: boolean;
   gameNotify: boolean;
+  // 게임 중 안내 팝업 — 사용자 실수 방지용 힌트. on/off + in-game "다시 표시하지 않기"
+  smallTichuHintOn: boolean;   // 스몰 티츄 선언 확인 모달 표시 여부
+  partnerBlockHintOn: boolean; // 파트너 위에 카드 낼 때 경고 모달 표시 여부
 
   // 최근 전적 (RP 추적 포함)
   recentGames: { won: boolean; myScore: number; opScore: number; date: string; rp: number }[];
@@ -153,7 +156,7 @@ interface UserState {
   setProfileBg: (id: string) => void;
   syncRecentGames: (games: { won: boolean; myScore: number; opScore: number; date: string; rp: number }[]) => void;
   setNickname: (name: string) => void;
-  setSetting: (key: 'soundOn' | 'musicOn' | 'ttsOn' | 'notifyOn' | 'friendNotify' | 'gameNotify', value: boolean) => void;
+  setSetting: (key: 'soundOn' | 'musicOn' | 'ttsOn' | 'notifyOn' | 'friendNotify' | 'gameNotify' | 'smallTichuHintOn' | 'partnerBlockHintOn', value: boolean) => void;
   setPlayerId: (id: string) => void;
   isGuest: () => boolean;
   applyServerRewards: (xp: number, coins: number, won: boolean, tichuSuccess: boolean) => void;
@@ -247,6 +250,8 @@ export const useUserStore = create<UserState>((set, get) => ({
   notifyOn: saved.notifyOn ?? true,
   friendNotify: saved.friendNotify ?? true,
   gameNotify: saved.gameNotify ?? true,
+  smallTichuHintOn: saved.smallTichuHintOn ?? true,
+  partnerBlockHintOn: saved.partnerBlockHintOn ?? true,
 
   addCoins: (amount) => set(s => { const ns = { ...s, coins: s.coins + amount }; saveState(ns); return ns; }),
   addXp: (amount) => set(s => { const ns = { ...s, xp: s.xp + amount }; saveState(ns); return ns; }),

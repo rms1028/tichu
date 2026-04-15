@@ -132,6 +132,8 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
   const notifyOn = useUserStore((s) => s.notifyOn);
   const friendNotify = useUserStore((s) => s.friendNotify);
   const gameNotify = useUserStore((s) => s.gameNotify);
+  const smallTichuHintOn = useUserStore((s) => s.smallTichuHintOn);
+  const partnerBlockHintOn = useUserStore((s) => s.partnerBlockHintOn);
   const setSetting = useUserStore((s) => s.setSetting);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const connected = useGameStore((s) => s.connected);
@@ -203,6 +205,11 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
             <View style={S.menuRow}><Text style={S.menuIcon}>{'🔊'}</Text><Text style={S.menuText}>{'효과음'}</Text><TouchableOpacity onPress={() => setSetting('soundOn', !soundOn)}><Text style={[S.toggle, soundOn && S.toggleOn]}>{soundOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
             <View style={S.menuRow}><Text style={S.menuIcon}>{'🎵'}</Text><Text style={S.menuText}>{'배경음악'}</Text><TouchableOpacity onPress={() => setSetting('musicOn', !musicOn)}><Text style={[S.toggle, musicOn && S.toggleOn]}>{musicOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
             <View style={S.menuRow}><Text style={S.menuIcon}>{'🗣️'}</Text><Text style={S.menuText}>{'음성 안내 (TTS)'}</Text><TouchableOpacity onPress={() => setSetting('ttsOn', !ttsOn)}><Text style={[S.toggle, ttsOn && S.toggleOn]}>{ttsOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
+          </View>
+          <View style={S.section}>
+            <Text style={S.secTitle}>{'💡 게임 중 안내'}</Text>
+            <View style={S.menuRow}><Text style={S.menuIcon}>{'⭐'}</Text><Text style={S.menuText}>{'스몰 티츄 선언 확인'}</Text><TouchableOpacity onPress={() => setSetting('smallTichuHintOn', !smallTichuHintOn)}><Text style={[S.toggle, smallTichuHintOn && S.toggleOn]}>{smallTichuHintOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
+            <View style={S.menuRow}><Text style={S.menuIcon}>{'⚠️'}</Text><Text style={S.menuText}>{'팀원 트릭 막기 경고'}</Text><TouchableOpacity onPress={() => setSetting('partnerBlockHintOn', !partnerBlockHintOn)}><Text style={[S.toggle, partnerBlockHintOn && S.toggleOn]}>{partnerBlockHintOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
           </View>
           <View style={S.section}>
             <Text style={S.secTitle}>{'📖 정보'}</Text>
