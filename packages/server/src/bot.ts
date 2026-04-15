@@ -1086,6 +1086,22 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
     return plays.sort((a, b) => a.value - b.value)[0]!;
   }
 
+  // Hard: 중반 싱글 계단 오르기 (climb) — 인간 상급자 행동 모사.
+  // 사용자 피드백 2026-04-15: "A를 내고 9를 낸 뒤 싱글 패스" 비일관성 해결.
+  // 핸드 5장 이상 + 낮은 non-top 싱글이 ≥2개 + 큰 조합 (≥4장) 리드 가능 수단 없음
+  // → 가장 낮은 non-top 싱글로 리드. A/K 는 엔드게임 대비 보존.
+  if (diff === 'hard' && hand.length >= 5) {
+    const singles = plays.filter(p => p.type === 'single' && isNormalCard(p.cards[0]!));
+    const nonTopSingles = singles
+      .filter(p => !isTopSingle(p.cards[0]!, hand, room))
+      .sort((a, b) => a.value - b.value);
+    // 4장 이상 조합 (스트레이트/풀하우스/연속페어) 이 있으면 조합 리드 우선
+    const hasBigCombo = plays.some(p => !isBomb(p) && p.length >= 4 && p.type !== 'single');
+    if (!hasBigCombo && nonTopSingles.length >= 2) {
+      return nonTopSingles[0]!;
+    }
+  }
+
   // 팀원 티츄 + 파트너 아직 활성: 개로 선 넘기기
   if (partnerTichu && active.includes(partner)) {
     const dogPlay = plays.find(p => p.cards.length === 1 && isDog(p.cards[0]!));
@@ -1124,8 +1140,15 @@ function pickLeadPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat: n
 
     // 확실히 이기는 싱글로 리드 (컨트롤 확보)
     if (p.type === 'single' && isTopSingle(p.cards[0]!, hand, room)) {
-      score += 50;
-      // 약한 탑싱글 약간 선호 (강한 것은 나중을 위해)
+      // 핸드 여유 있으면 탑 싱글 보존 — 엔드게임 대비. 이전엔 +50 무조건 줘서
+      // 초반부터 A 를 리드하는 비일관성이 있었음.
+      if (hand.length <= 5) {
+        score += 50;  // 엔드게임 근처 — 탑 싱글로 컨트롤 확보
+      } else if (hand.length <= 7) {
+        score += 10;  // 중반 — 약한 선호
+      } else {
+        score -= 35;  // 초반 — 탑 싱글 리드는 낭비
+      }
       score -= Math.floor(p.value * 0.5);
     }
 
@@ -1353,9 +1376,16 @@ function pickFollowPlay(plays: PlayedHand[], hand: Card[], room: GameRoom, seat:
     // 장수 보너스 (같은 수면 카드 많이 소모)
     score += p.length * 5;
 
-    // 확실히 이기는 카드 (탑 싱글) → 높은 점수
+    // 확실히 이기는 카드 (탑 싱글) → 상황에 따라 가점/감점
     if (p.type === 'single' && isTopSingle(p.cards[0]!, hand, room)) {
-      score += 25;
+      // 초중반 + 싱글 이외 조합 남음 → 탑 싱글 follow 는 낭비
+      if (hand.length >= 6) {
+        score -= 20;
+      } else if (hand.length <= 3) {
+        score += 25;  // 엔드게임 — 탑 싱글은 즉시 사용
+      } else {
+        score += 5;
+      }
     }
 
     // 봉황 활용: 싱글이면 직전+0.5라 약함, 조합이면 가치있음
