@@ -136,10 +136,12 @@ import { isMobile, mob } from '../utils/responsive';
 
 const SIZE_MAP = isMobile ? {
   small: { width: 42, height: 59 },
+  medium: { width: 50, height: 70 },
   normal: { width: 56, height: 78 },
   large: { width: 70, height: 98 },
 } : {
   small: { width: 62, height: 87 },
+  medium: { width: 72, height: 100 },
   normal: { width: 80, height: 112 },
   large: { width: 96, height: 134 },
 };

@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, TextInput, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, TextInput, Dimensions, Platform, StatusBar } from 'react-native';
+
+const ANDROID_TOP_INSET = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
 import Animated, {
   FadeInUp, useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, Easing,
 } from 'react-native-reanimated';
@@ -392,7 +394,7 @@ export function ProfilePage({ onBack, onEdit, onStartGame, onAchievements, showN
 
 // ── 스타일 ──────────────────────────────────────────────────
 const $ = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg },
+  root: { flex: 1, backgroundColor: C.bg, paddingTop: ANDROID_TOP_INSET },
   scrollMob: { paddingHorizontal: 8, paddingBottom: 16, maxWidth: 600, alignSelf: 'center', width: '100%' },
   scrollPC: { paddingHorizontal: 24, paddingBottom: 20, maxWidth: 1200, alignSelf: 'center', width: '100%' },
 

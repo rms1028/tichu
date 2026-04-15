@@ -1,5 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Platform, StatusBar } from 'react-native';
+
+// Android 카메라홀/노치 회피용 top inset. react-native-safe-area-context 는
+// Bridgeless + New Arch 에서 duplicate-view 에러를 내서 사용 불가 → 수동 계산.
+const ANDROID_TOP_INSET = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
 import { isMobile, mob } from '../utils/responsive';
 import Animated, {
   useSharedValue,
@@ -670,12 +674,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...(isMobile ? {} : { maxWidth: 900, width: '100%', alignSelf: 'center' as const }),
   },
+  // 카메라홀 회피를 container paddingTop 으로 주면 아래가 밀려서 내 패 / 파트너가
+  // 화면 밖으로 잘림 (container 는 flex:1 + overflow:hidden). 상단 topBar 에만
+  // margin 으로 inset 을 먹여서 실제 레이아웃 높이는 그대로 유지.
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: mob(4, 8),
-    paddingTop: mob(1, 2),
+    paddingTop: mob(1, 2) + ANDROID_TOP_INSET,
     paddingBottom: mob(0, 1),
   },
   partnerCenter: {

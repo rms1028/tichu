@@ -804,3 +804,50 @@ Railway (서버): https://accomplished-purpose-production-9135.up.railway.app/he
 
 **감사에서 확인된 안전한 섹션** (현재 정확): §1 기술 스택, §2 디렉토리 (축약 후), §7.2 GameRoom 필드/RoomSettings 기본값, §8.1 이벤트 리스너, §9.1 엔트리 구조, §14.2 Bridgeless 모달 규칙.
 
+### 10차 작업 (2026-04-15) — 모바일 앱 대규모 UI 회귀 픽스
+
+사용자가 실물 Samsung 기기 (1080×2340, 카메라홀 portrait) 에서 테스트하며 보고한 앱 전용 버그 7종 + 자동화 루프 방법론 박제. Vercel 웹 (`tichu-app.vercel.app`) 은 전부 정상 작동 중, **RN 모바일 빌드에서만** 드리프트가 누적됐던 이슈들.
+
+**버그 / 수정 요약:**
+
+1. **흰 화면 부팅 실패** — `expo-router` "No routes found" 런타임 에러. 원인: monorepo + 커스텀 entry(`index.js`) 조합에서 `babel-preset-expo` 의 `getExpoRouterAbsoluteAppRoot` 가 `caller.projectRoot` 를 workspace root 로 hoist 한 후 `./app` 과 join → `<monorepo_root>/app` (존재 안 함) → require.context 0 routes → production 번들에서 throw. 수정: `app.json` 의 `extra.router.root` 에 절대경로 명시 (@expo/cli `getRouterDirectoryModuleIdWithManifest` 가 이 값을 최우선 읽음) + `android-dev.mjs` 의 `expo export` 호출에 `EXPO_ROUTER_APP_ROOT` env 주입 + `babel.config.js` 안전망.
+
+2. **Android 카메라홀/노치 가림** — 13개 화면 (Lobby, Matchmaking, CustomMatch, Game topBar, Exchange, Profile, Ranking, Shop, Achievements, GameResult, Rules, Terms + 친구 사이드 패널) 에서 상단 컨텐츠가 카메라홀에 가림. 원인: `react-native` 의 `SafeAreaView` 는 iOS 전용 (Android no-op). `react-native-safe-area-context` 시도했으나 Bridgeless + New Arch 에서 `Invariant Violation: Tried to register two views with the same name RNCSafeAreaProvider` 크래시 → **사용 금지**. 대체: `Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0` 로 수동 계산한 `ANDROID_TOP_INSET` 을 각 화면 root 스타일 `paddingTop` 으로 적용. GameScreen 은 `styles.container` 가 아닌 `topBar.paddingTop` 에 합산 (container 에 주면 아래 영역이 밀려 손패가 잘림). ExchangeView 는 `root.paddingTop` 에 추가. 친구 패널 (`S.fp`) 은 absolute overlay 라 부모 padding 무시 → 자체 paddingTop 에 inset.
+
+3. **카드 문양이 검정/빨강 2색으로만 보임** — Samsung OneUI 시스템 폰트가 `♠♥♦♣` (U+2660/2665/2666/2663) 을 컬러 이모지로 렌더링해서 `color` 스타일이 무시됨 (♣=검정, ♦=빨강). 수정: `getSuitSymbol()` 반환값에 유니코드 text variation selector `\uFE0E` 부착 → "텍스트 표현" 강제. 웹(Vercel) 은 브라우저 폰트가 text glyph 로 그려 영향 없음.
+
+4. **봇 채우기 버튼 "안 눌림"** — 원인은 버튼 자체 아님 (터치 레이어 정상, `[DIAG]` 로그로 onPress 발화 확인). `.env` 가 로컬 개발용 `localhost:3001` 로 되어 있어 모바일 기기 관점에서 자기 자신 loopback 을 가리켜 socket.io 연결 실패 (`xhr poll error`). 수정: `.env` 를 Railway HTTPS URL 로 복원 (gitignored 파일이라 로컬 전용). 디바이스 → Railway 직통 HTTPS 로 연결. `add_bot_to_seat` 이벤트 정상 emit 및 서버 처리 확인. `adb reverse tcp:3001` 도 시도했으나 RN 의 `xhr poll` 이 Android cleartext traffic 차단 (targetSdk 34) 에 걸려 실패.
+
+5. **카드 교환 화면 레이아웃 깨짐 (손패 1줄만 보임 + 스몰 티츄 버튼 사라짐)** — 원인 2개: (a) `ScrollView contentContainerStyle={flexGrow:1, justifyContent:'center'}` 가 모바일 portrait 에서 content > viewport 일 때 **위아래 동시 clip** → 타이틀/아바타 상단 잘림 + 손패 하단 잘림. (b) 중첩 `<ScrollView horizontal>` 이 부모 column flex 안에서 세로로 `flex:1` 확장되어 다른 요소를 화면 밖으로 밀어냄 (RN 특유의 quirk, 웹에서는 재현 안 됨). 수정: (a) `S.root.justifyContent` 를 `isMobile ? 'flex-start' : 'center'` 로 분기, (b) `renderCardRow` 의 `<ScrollView horizontal>` 에 `style={{ flexGrow: 0, height: cardHeight + 8 }}` 명시. JSX 순서 (players → 티츄 → 손패 → 버튼) 는 원본 유지. 카드 크기는 `slotSize='normal'` (버셀과 동일).
+
+6. **커스텀 매치 뒤로가기 버튼 밋밋함** — 무색 텍스트 스타일. 수정: 반투명 흰 배경 + 흰 테두리 + bold 흰 텍스트로 버튼 형태 부여.
+
+7. **GameScreen topBar 카메라홀 inset** — `styles.container` 전체에 paddingTop 을 주면 middleArea/bottomArea 가 밀려 손패가 잘림. `topBar.paddingTop` 에만 `+ ANDROID_TOP_INSET` 합산해서 상단 파트너 영역만 안전하게 내림.
+
+**자동화 루프 방법론 박제** (`feedback_auto_iteration_loop.md` 메모리):
+
+사용자가 ExchangeView 레이아웃 디버깅 중 "자동화로 반복해서 고쳐" 요청. ADB tap 이 RN `TextInput` 에 focus 못 꽂는 문제로 수동 재현이 비효율 → AppRoot 의 `splash.onFinish` 에 **임시 DEV_AUTOSTART 분기** 주입해서 앱이 스스로 로그인 → 커스텀 방 생성 → 봇 3개 → 시작 → 교환 진입까지 자동 진행하게 함. 그 위에서 `rebuild → screencap → 분석 → fix` 루프를 사용자 개입 없이 돌림. 주의점:
+- `setScreen('lobby')` 건너뛰고 바로 `'matchmaking'` — 로비의 알림 퍼미션 + 출석 팝업이 터치 막는 문제 회피
+- `--no-smoke` 로 android-dev 스모크 테스트 끄기 (정상 UI 인데 white% 오판 가능)
+- `passTichu()` 자동 호출로 LARGE_TICHU_WINDOW 15초 타임아웃 회피
+- ADB tap 안 먹는 버튼은 `onPress` 대신 store action 직접 호출 (예: MatchmakingScreen 봇 채우기 → `addBotToSeat(seat)` 직접)
+- 해결 후 DEV_AUTOSTART + diag `console.log` 전부 revert 후 `git diff` 로 최소 실질 수정만 남기기
+
+**변경 파일 (17개, +124/-49)**:
+- `packages/app/app.json` — `extra.router.root` 절대경로
+- `packages/app/babel.config.js` — `EXPO_ROUTER_APP_ROOT` 선주입 안전망
+- `packages/app/scripts/android-dev.mjs` — `expo export` env 주입
+- `packages/app/src/components/CardView.tsx` — medium 사이즈 추가 (unused, 추후 사용 가능성)
+- `packages/app/src/components/ExchangeView.tsx` — flex-start + ScrollView height + 카메라홀 inset
+- `packages/app/src/hooks/useGame.ts` — suit 심볼 `\uFE0E` 부착 + 주석
+- `packages/app/src/screens/LobbyScreen.tsx` — root inset + 친구 패널 (`S.fp`) inset
+- `packages/app/src/screens/MatchmakingScreen.tsx` — root inset + 봇 fill 버튼 layout 정리 (flex wrap → column)
+- `packages/app/src/screens/CustomMatchScreen.tsx` — root inset + sheetRoot inset + 뒤로가기 버튼 스타일
+- `packages/app/src/screens/GameScreen.tsx` — topBar.paddingTop inset
+- `packages/app/src/screens/{Achievements,GameResult,Profile,Ranking,Rules,Shop,Terms}Screen.tsx` — 각각 root paddingTop
+
+**다음 세션 남은 숙제**:
+- 사용자 UI 검증 계속 진행 예정 (사용자 표명 "UI 검증하면서 기능들 추가할거 알려줄게")
+- `.env` 는 gitignored 라 Railway URL 복원은 커밋 안 됨 — 로컬 dev 환경만 영향
+- Vercel 웹은 이번 수정과 무관 (웹은 정상 작동 중, 모바일 RN quirk 만 수정)
+

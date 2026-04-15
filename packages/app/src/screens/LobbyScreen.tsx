@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Pressable } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Pressable, Platform, StatusBar } from 'react-native';
+
+// Android 카메라홀/노치 회피용 top inset. react-native-safe-area-context 는
+// Bridgeless + New Arch 에서 duplicate-view 에러를 내서 사용 불가 → 수동 계산.
+const ANDROID_TOP_INSET = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
 import { useResponsive } from '../utils/responsive';
 import Animated, {
   FadeIn, ZoomIn, SlideInRight, SlideOutRight,
@@ -556,7 +560,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
 }
 
 const S = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg, overflow: 'hidden' },
+  root: { flex: 1, backgroundColor: COLORS.bg, overflow: 'hidden', paddingTop: ANDROID_TOP_INSET },
   particleLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 },
 
   // 상단 바 — 모바일 풀폭. desktop 은 desktopContent (inline) 이 contentWidth
@@ -629,7 +633,7 @@ const S = StyleSheet.create({
 
   // 오버레이+친구패널
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 30, flexDirection: 'row', justifyContent: 'flex-end' },
-  fp: { width: 280, height: '100%', backgroundColor: 'rgba(10,25,15,0.95)', paddingHorizontal: 16, paddingVertical: 14 },
+  fp: { width: 280, height: '100%', backgroundColor: 'rgba(10,25,15,0.95)', paddingHorizontal: 16, paddingTop: 14 + ANDROID_TOP_INSET, paddingBottom: 14 },
   fpHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   fpTitle: { color: '#fff', fontSize: 16, fontWeight: '800' },
   fpX: { color: 'rgba(255,255,255,0.5)', fontSize: 18 },

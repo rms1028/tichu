@@ -1,10 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Pressable, Platform,
-  TextInput, ScrollView, useWindowDimensions, SafeAreaView,
+  TextInput, ScrollView, useWindowDimensions, SafeAreaView, StatusBar,
   KeyboardAvoidingView, Animated as RNAnimated, Easing, LayoutAnimation,
   UIManager,
 } from 'react-native';
+
+// Android 카메라홀 회피용 top inset. react-native-safe-area-context 는 이 프로젝트의
+// Bridgeless 조합에서 duplicate-view 등록 에러를 냈음 → StatusBar 기반 수동 계산.
+const ANDROID_TOP_INSET = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, cmLayout } from '../utils/theme';
@@ -391,7 +395,7 @@ export function CustomMatchScreen({
   );
 
   return (
-    <SafeAreaView style={S.root}>
+    <SafeAreaView style={[S.root, { paddingTop: ANDROID_TOP_INSET }]}>
       {/* 배경: 로비와 동일한 BackgroundWatermark (splash.png) 재사용 */}
       <BackgroundWatermark />
 
@@ -810,7 +814,7 @@ function CreateRoomModal({
   if (!visible) return null;
   return isMobile ? (
     <View style={[S.sheetRoot, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000 }]}>
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1, paddingTop: ANDROID_TOP_INSET }}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
@@ -973,10 +977,12 @@ const S = StyleSheet.create({
     alignItems: 'center', gap: 16,
   },
   backBtn: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
-    minHeight: 44, justifyContent: 'center',
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10,
+    minHeight: 44, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
   },
-  backText: { color: COLORS.cmInkDim, fontSize: 14, fontWeight: '500' },
+  backText: { color: '#fff', fontSize: 14, fontWeight: '700', letterSpacing: 0.3 },
   spacer: { flex: 1 },
 
   // Main

@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Clipboard, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Clipboard, Platform, StatusBar } from 'react-native';
+
+// RN 'SafeAreaView' 는 iOS notch 만 처리 (Android no-op). Android 카메라홀/노치를
+// 피하려면 StatusBar.currentHeight 로 직접 top padding 을 넣어야 함.
+// react-native-safe-area-context 는 Bridgeless + New Arch 에서 RNCSafeAreaProvider
+// duplicate-view-registration 으로 터진 이력 있음 → 사용 금지, 수동 계산 유지.
+const ANDROID_TOP_INSET = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence,
   Easing, ZoomIn, FadeIn,
@@ -189,7 +195,7 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
   };
 
   return (
-    <SafeAreaView style={S.root}>
+    <SafeAreaView style={[S.root, { paddingTop: ANDROID_TOP_INSET }]}>
       <BackgroundWatermark />
       {/* 카운트다운 오버레이 */}
       {countdown !== null && countdown > 0 && (
@@ -244,14 +250,15 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
                 <Text style={S.shuffleBtnText}>{'🔀 셔플'}</Text>
               </TouchableOpacity>
               {filledCount < 4 && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <>
                   <View style={{ flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 8, overflow: 'hidden' }}>
                     {(['easy', 'medium', 'hard'] as const).map((d) => (
                       <TouchableOpacity
                         key={d}
                         onPress={() => setBotDifficulty(d)}
+                        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                         style={{
-                          paddingHorizontal: 10, paddingVertical: 6,
+                          paddingHorizontal: 14, paddingVertical: 8,
                           backgroundColor: botDifficulty === d ? (d === 'easy' ? '#22c55e' : d === 'medium' ? '#f59e0b' : '#ef4444') : 'transparent',
                         }}
                       >
@@ -261,15 +268,19 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
                       </TouchableOpacity>
                     ))}
                   </View>
-                  <TouchableOpacity style={S.botFillBtn} onPress={() => {
-                    // 빈 자리에 선택한 난이도로 봇 추가
-                    for (let s = 0; s < 4; s++) {
-                      if (!players[s] && onAddBotToSeat) onAddBotToSeat(s, botDifficulty);
-                    }
-                  }} activeOpacity={0.7}>
+                  <TouchableOpacity
+                    style={S.botFillBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    onPress={() => {
+                      for (let s = 0; s < 4; s++) {
+                        if (!players[s] && onAddBotToSeat) onAddBotToSeat(s, botDifficulty);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
                     <Text style={S.botFillText}>{'🤖 봇 채우기'}</Text>
                   </TouchableOpacity>
-                </View>
+                </>
               )}
               <TouchableOpacity
                 style={[S.startGameBtn, !canStart && S.startGameBtnDisabled]}

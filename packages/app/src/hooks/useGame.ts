@@ -86,14 +86,18 @@ export function getCardDisplayName(card: Card): string {
   return card.rank;
 }
 
-/** 문양 심볼 */
+/** 문양 심볼 — `\uFE0E` (text variation selector) 로 이모지 렌더링 강제 억제.
+ * Android/Samsung 시스템 폰트가 ♠♥♦♣ 를 컬러 이모지로 그리면 `color` 스타일이
+ * 무시되고 ♠♣ 는 검정, ♥♦ 는 빨강으로 고정됨 → jade(초록)/pagoda(파랑) 가 사라짐.
+ * `\uFE0E` 는 "이 문자는 일반 텍스트로 그려" 라는 유니코드 표준 힌트.
+ */
 export function getSuitSymbol(card: Card): string {
   if (card.type !== 'normal') return '';
   switch (card.suit) {
-    case 'sword': return '\u2660'; // ♠
-    case 'star': return '\u2665';  // ♥
-    case 'jade': return '\u2666';  // ♦
-    case 'pagoda': return '\u2663'; // ♣
+    case 'sword': return '\u2660\uFE0E'; // ♠
+    case 'star': return '\u2665\uFE0E';  // ♥
+    case 'jade': return '\u2666\uFE0E';  // ♦
+    case 'pagoda': return '\u2663\uFE0E'; // ♣
   }
 }
 

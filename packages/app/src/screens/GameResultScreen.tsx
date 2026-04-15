@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Platform, StatusBar } from 'react-native';
+
+const ANDROID_TOP_INSET = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
 import { ParticleEffect } from '../components/ParticleEffect';
 import { SFX } from '../utils/sound';
 import Animated, {
@@ -229,7 +231,7 @@ export function GameResultScreen({
 }
 
 const S = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg },
+  root: { flex: 1, backgroundColor: COLORS.bg, paddingTop: ANDROID_TOP_INSET },
   content: { flex: 1, justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, zIndex: 5 },
 
   // 배너

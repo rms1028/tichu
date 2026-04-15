@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, StatusBar } from 'react-native';
+
+const ANDROID_TOP_INSET = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
 import type { Card } from '@tichu/shared';
 import { useGameStore } from '../stores/gameStore';
 import { sortHand } from '../hooks/useGame';
@@ -184,10 +186,21 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
     );
   };
 
+  // normal 카드 높이 (SIZE_MAP 의 normal 과 일치: 모바일 78, 데스크톱 112)
+  const cardHeight = isMobile ? 78 : 112;
+
   const renderCardRow = (cards: Card[]) => {
     const ov = cards.length > 1 ? -Math.max(isMobile ? 12 : 16, cardW - (rowWidth - cardW) / (cards.length - 1)) : 0;
     return (
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.hand}>
+      // style 에 명시적 height + flexGrow:0. 이게 없으면 RN 에서 horizontal
+      // ScrollView 가 parent column flex 의 세로 공간을 잠식해 다른 요소를
+      // 화면 밖으로 밀어낸다 (2026-04-15 실측 — 버셀 웹에서는 안 나던 버그).
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={S.hand}
+        style={{ flexGrow: 0, height: cardHeight + 8 }}
+      >
         {cards.map((card, i) => {
           const isAssigned = assignedCards.some(c => cardEquals(c, card));
           return (
@@ -195,7 +208,7 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
               <CardView
                 card={card}
                 selected={!isAssigned && activeTarget !== null}
-                size={isMobile ? 'normal' : 'normal'}
+                size={slotSize}
                 onPress={() => handleCardPress(card)}
                 disabled={isAssigned}
               />
@@ -214,7 +227,6 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
       showsVerticalScrollIndicator={false}
       bounces={false}
     >
-      {/* 타이틀 + 타이머 */}
       <View style={S.titleRow}>
         <Text style={S.title}>카드 교환</Text>
         <View style={[S.timerBadge, remaining <= 10 && S.timerUrgent]}>
@@ -226,7 +238,6 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
           ? `${activeTarget === 'left' ? '← 왼쪽' : activeTarget === 'partner' ? '↑ 파트너' : '→ 오른쪽'}에게 줄 카드를 선택하세요`
           : '플레이어를 터치하고 카드를 배정하세요'}
       </Text>
-
       {/* 3명의 플레이어 + 카드 슬롯 */}
       <View style={S.playersArea}>
         {/* 파트너 (상단 중앙) */}
@@ -313,9 +324,12 @@ const S = StyleSheet.create({
   root: {
     flexGrow: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    // 모바일: flex-start 로 상단부터 쌓음. center 를 쓰면 content > viewport 일 때
+    // 위아래가 동시에 잘려 아바타/타이틀 상단 + 핸드 하단이 잘려 나감.
+    justifyContent: isMobile ? 'flex-start' : 'center',
     paddingHorizontal: mob(4, 24),
-    paddingVertical: mob(8, 16),
+    paddingTop: mob(8, 16) + ANDROID_TOP_INSET,
+    paddingBottom: mob(8, 16),
     gap: mob(6, 10),
   },
   titleRow: {

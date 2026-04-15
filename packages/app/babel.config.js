@@ -6,6 +6,13 @@
 //
 // 플러그인은 반드시 `plugins` 배열의 **마지막**에 위치해야 한다.
 
+// monorepo + 커스텀 entry(index.js) 조합에서 babel-preset-expo 가
+// EXPO_ROUTER_APP_ROOT 를 자동 주입하지 못해 expo-router v4 의
+// require.context 가 빈 라우트로 번들링되고 "No routes found" 로
+// 죽는다. 절대경로로 선주입해 고정한다.
+const path = require('path');
+process.env.EXPO_ROUTER_APP_ROOT = path.resolve(__dirname, 'app');
+
 module.exports = function (api) {
   api.cache(true);
   return {

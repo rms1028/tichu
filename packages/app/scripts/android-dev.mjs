@@ -157,9 +157,14 @@ if (!existsSync(KEYSTORE)) {
 // ── Step 1: expo export ───────────────────────────────────────────────
 log('Building Hermes bundle (expo export)...');
 const exportDir = join(tmpdir(), `tichu-export-${Date.now()}`);
+// monorepo + custom entry(index.js): babel-preset-expo가 EXPO_ROUTER_APP_ROOT를
+// 자동 감지 못해 production 번들의 require.context가 0 routes로 컴파일되고,
+// 런타임에 expo-router가 "No routes found" 를 throw → 흰 화면.
+// expo export 시점에 강제 주입한다.
 sh(`npx expo export --platform android --output-dir "${exportDir}"`, {
   cwd: PROJECT,
   silent: true,
+  env: { ...process.env, EXPO_ROUTER_APP_ROOT: join(PROJECT, 'app') },
   captureStderr: true,
 });
 const hbcDir = join(exportDir, '_expo', 'static', 'js', 'android');

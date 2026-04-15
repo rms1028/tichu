@@ -57,7 +57,8 @@
     ],
     "extra": {
       "router": {
-        "origin": false
+        "origin": false,
+        "root": "C:/Users/82108/Desktop/tichu-test1/packages/app/app"
       },
       "eas": {
         "projectId": "14dad48b-5cd4-41b3-a05b-eb3ee73db858"
