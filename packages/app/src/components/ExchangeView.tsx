@@ -162,8 +162,11 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
 
   const makePanResponder = (card: Card) => PanResponder.create({
     onStartShouldSetPanResponder: () => false,
-    // 실제 움직임(≥4px)이 있을 때만 드래그로 캡처. 탭은 자식 TouchableOpacity 로 통과.
-    onMoveShouldSetPanResponder: (_, g) => !submitted && (Math.abs(g.dx) > 4 || Math.abs(g.dy) > 4),
+    onStartShouldSetPanResponderCapture: () => false,
+    // capture 단계에서 가로채야 자식 TouchableOpacity 가 responder 를 먼저 잡는
+    // 것을 막을 수 있음. 4px 이상 실제 움직임이 있을 때만 드래그로 전환.
+    onMoveShouldSetPanResponder: (_, g) => !submitted && (Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3),
+    onMoveShouldSetPanResponderCapture: (_, g) => !submitted && (Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3),
     onPanResponderGrant: () => {
       measureAllSlots();
       setDraggingKey(cardKeyOf(card));
@@ -184,6 +187,7 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
       pan.setValue({ x: 0, y: 0 });
       setDraggingKey(null);
     },
+    onPanResponderTerminationRequest: () => false,
   });
   // 카드별 pan responder 캐시 — 카드 목록이 바뀔 때만 재생성
   const panResponders = useMemo(() => {
@@ -275,6 +279,7 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={S.hand}
         style={{ flexGrow: 0, height: cardHeight + 8 }}
+        scrollEnabled={draggingKey === null}
       >
         {cards.map((card, i) => {
           const isAssigned = assignedCards.some(c => cardEquals(c, card));
@@ -318,6 +323,7 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
       contentContainerStyle={S.root}
       showsVerticalScrollIndicator={false}
       bounces={false}
+      scrollEnabled={draggingKey === null}
     >
       <View style={S.titleRow}>
         <Text style={S.title}>카드 교환</Text>
