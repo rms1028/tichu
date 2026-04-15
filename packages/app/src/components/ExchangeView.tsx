@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, StatusBar } from 'react-native';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, StatusBar, PanResponder, Animated as RNAnimated } from 'react-native';
 
 const ANDROID_TOP_INSET = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
 import type { Card } from '@tichu/shared';
@@ -13,6 +13,10 @@ function cardEquals(a: Card, b: Card): boolean {
   if (a.type === 'special' && b.type === 'special') return a.specialType === b.specialType;
   if (a.type === 'normal' && b.type === 'normal') return a.suit === b.suit && a.rank === b.rank;
   return false;
+}
+
+function cardKeyOf(c: Card): string {
+  return c.type === 'special' ? `s:${c.specialType}` : `n:${c.suit}:${c.rank}`;
 }
 
 type Target = 'left' | 'partner' | 'right';
@@ -122,6 +126,73 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
     setActiveTarget(null);
   };
 
+  // ── 드래그 앤 드롭 ───────────────────────────────────────
+  // PanResponder 로 카드를 플레이어 슬롯에 드래그해서 배정. 탭 (onPress) 은
+  // 그대로 동작 — onMoveShouldSetPanResponder 로 실제 움직임이 있을 때만
+  // 캡처. 웹+앱 공통 (react-native-web 이 PanResponder 지원).
+  const slotRefs = {
+    partner: useRef<View>(null),
+    left: useRef<View>(null),
+    right: useRef<View>(null),
+  };
+  const slotBoundsRef = useRef<Record<Target, { x: number; y: number; w: number; h: number } | null>>({
+    partner: null, left: null, right: null,
+  });
+  const measureAllSlots = () => {
+    (['partner', 'left', 'right'] as const).forEach(t => {
+      slotRefs[t].current?.measureInWindow((x, y, w, h) => {
+        slotBoundsRef.current[t] = { x, y, w, h };
+      });
+    });
+  };
+  useEffect(() => {
+    // 레이아웃 안정된 후 한 번 더 측정 (초기 마운트 시점 측정은 0이 나올 수 있음)
+    const id = setTimeout(measureAllSlots, 200);
+    return () => clearTimeout(id);
+  }, []);
+  const hitTest = (absX: number, absY: number): Target | null => {
+    for (const t of ['partner', 'left', 'right'] as const) {
+      const b = slotBoundsRef.current[t];
+      if (b && absX >= b.x && absX <= b.x + b.w && absY >= b.y && absY <= b.y + b.h) return t;
+    }
+    return null;
+  };
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
+  const pan = useRef(new RNAnimated.ValueXY()).current;
+
+  const makePanResponder = (card: Card) => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    // 실제 움직임(≥4px)이 있을 때만 드래그로 캡처. 탭은 자식 TouchableOpacity 로 통과.
+    onMoveShouldSetPanResponder: (_, g) => !submitted && (Math.abs(g.dx) > 4 || Math.abs(g.dy) > 4),
+    onPanResponderGrant: () => {
+      measureAllSlots();
+      setDraggingKey(cardKeyOf(card));
+      pan.setValue({ x: 0, y: 0 });
+    },
+    onPanResponderMove: RNAnimated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
+    onPanResponderRelease: (_, g) => {
+      const target = hitTest(g.moveX, g.moveY);
+      if (target) {
+        setAssignments(prev => ({ ...prev, [target]: card }));
+        pan.setValue({ x: 0, y: 0 });
+      } else {
+        RNAnimated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false, bounciness: 8 }).start();
+      }
+      setDraggingKey(null);
+    },
+    onPanResponderTerminate: () => {
+      pan.setValue({ x: 0, y: 0 });
+      setDraggingKey(null);
+    },
+  });
+  // 카드별 pan responder 캐시 — 카드 목록이 바뀔 때만 재생성
+  const panResponders = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof PanResponder.create>>();
+    sorted.forEach(card => { map.set(cardKeyOf(card), makePanResponder(card)); });
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sorted.length, submitted]);
+
   const n = sorted.length;
   const useTwoRows = n >= 9;
   const cardW = isMobile ? 56 : 80;
@@ -138,14 +209,18 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
 
     const tichuColor = decl === 'large' ? '#e74c3c' : '#f39c12';
 
+    const isDropTarget = draggingKey !== null;
     return (
       <TouchableOpacity
         key={target}
+        ref={slotRefs[target]}
+        onLayout={() => measureAllSlots()}
         style={[
           S.playerSlot,
           isActive && S.playerSlotActive,
           decl && S.playerSlotTichu,
           decl && { borderColor: tichuColor, shadowColor: tichuColor },
+          isDropTarget && S.playerSlotDropHint,
         ]}
         onPress={() => handleTargetPress(target)}
         activeOpacity={0.7}
@@ -203,17 +278,34 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
       >
         {cards.map((card, i) => {
           const isAssigned = assignedCards.some(c => cardEquals(c, card));
+          const ck = cardKeyOf(card);
+          const pr = panResponders.get(ck);
+          const isDragging = draggingKey === ck;
+          // 드래그 중인 카드는 현재 pan 만큼 translate + 최상위 zIndex.
+          // 나머지 카드는 translate 없음.
+          const dragTransform = isDragging
+            ? { transform: pan.getTranslateTransform() }
+            : null;
           return (
-            <View key={i} style={[{ marginLeft: i === 0 ? 0 : ov, zIndex: i }, isAssigned && S.cardAssigned]}>
+            <RNAnimated.View
+              key={i}
+              {...(pr?.panHandlers ?? {})}
+              style={[
+                { marginLeft: i === 0 ? 0 : ov, zIndex: isDragging ? 9999 : i },
+                isAssigned && S.cardAssigned,
+                dragTransform,
+                isDragging && { elevation: 20, shadowColor: '#F59E0B', shadowOpacity: 0.6, shadowRadius: 12 },
+              ]}
+            >
               <CardView
                 card={card}
-                selected={!isAssigned && activeTarget !== null}
+                selected={!isAssigned && (activeTarget !== null || isDragging)}
                 size={slotSize}
                 onPress={() => handleCardPress(card)}
                 disabled={isAssigned}
               />
               {isAssigned && <View style={S.cardAssignedOverlay} />}
-            </View>
+            </RNAnimated.View>
           );
         })}
       </ScrollView>
@@ -361,6 +453,10 @@ const S = StyleSheet.create({
   playerSlotActive: {
     borderColor: '#F59E0B',
     backgroundColor: 'rgba(245,158,11,0.1)',
+  },
+  playerSlotDropHint: {
+    // 드래그 중 모든 슬롯에 은은한 하이라이트 — 드롭 가능한 곳임을 시각화
+    borderColor: 'rgba(245,158,11,0.35)',
   },
   playerSlotTichu: {
     borderWidth: 2,
