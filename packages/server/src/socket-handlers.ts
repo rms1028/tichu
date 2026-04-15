@@ -112,7 +112,7 @@ setInterval(() => {
 
 const rooms = new Map<string, GameRoom>();
 const MAX_TOTAL_ROOMS = 500;
-const MAX_ROOMS_PER_USER = 3;
+const MAX_ROOMS_PER_USER = 100;  // 넉넉히 — cleanupRoom 에서 누수 차단하니 실질적으로 남아있는 방만 카운트
 const ROOM_LIST_SOCKET_ROOM = '__lobby__';
 
 // 유저별 활성 방 수 추적
@@ -949,6 +949,10 @@ export function registerSocketHandlers(io: Server): void {
 
       if (room && savedSeat >= 0) {
         const player = room.players[savedSeat];
+        // 떠나는 본인의 방 카운트 즉시 감소 (아래 슬롯이 null 처리되기 전).
+        // 이후 cleanupRoom 은 남은 슬롯만 대상으로 감소하므로 중복 없음.
+        const leavingPid = player?.playerId ?? player?.originalPlayer?.playerId;
+        if (leavingPid && !player?.isBot) decrementUserRoomCount(leavingPid);
         // 봇 대체 타이머 취소
         if (player?.botReplaceTimer) {
           clearTimeout(player.botReplaceTimer);
@@ -1016,11 +1020,6 @@ export function registerSocketHandlers(io: Server): void {
         }
       }
 
-      // 유저 방 카운트 감소
-      if (room && savedSeat >= 0) {
-        const pid = room.players[savedSeat]?.playerId ?? room.players[savedSeat]?.originalPlayer?.playerId;
-        if (pid) decrementUserRoomCount(pid);
-      }
       playerRoomId = null;
       playerSeat = -1;
       notifyLobby(io);
@@ -1950,13 +1949,8 @@ export function registerSocketHandlers(io: Server): void {
         }
         // WAITING 상태 방 30분 자동 만료 (좀비 방 방지)
         if (room.phase === 'WAITING_FOR_PLAYERS' && now - room.createdAt > 30 * 60_000) {
-          // 연결된 플레이어에게 알림
           io.to(id).emit('room_closed', { reason: 'room_expired' });
-          for (let s = 0; s < 4; s++) {
-            const p = room.players[s];
-            if (p?.playerId) decrementUserRoomCount(p.playerId);
-          }
-          cleanupRoom(room);
+          cleanupRoom(room);  // cleanupRoom 이 userRoomCount 감소까지 처리
           rooms.delete(id);
           deleted++;
           continue;
@@ -1971,10 +1965,6 @@ export function registerSocketHandlers(io: Server): void {
             .map(s => room.players[s]?.disconnectedAt ?? 0)
             .reduce((a, b) => Math.max(a, b), 0);
           if (lastDisconnect > 0 && now - lastDisconnect > 300_000) {
-            for (let s = 0; s < 4; s++) {
-              const p = room.players[s];
-              if (p?.playerId) decrementUserRoomCount(p.playerId);
-            }
             cleanupRoom(room);
             rooms.delete(id);
             deleted++;
@@ -2243,6 +2233,14 @@ function scheduleBotAction(io: Server, room: GameRoom, seat: number, turnId: num
 // ── 모듈 레벨 헬퍼 함수 ─────────────────────────────────────
 
 function cleanupRoom(room: GameRoom): void {
+  // 방 폐기 시 모든 좌석의 playerId 기준으로 userRoomCount 감소.
+  // 여러 delete 경로 (disconnect / leave / idle / force close) 에서 일관되게
+  // 카운트가 정리되어야 유저별 한도가 leak 되지 않음.
+  for (let s = 0; s < 4; s++) {
+    const p = room.players[s];
+    const pid = p?.playerId ?? p?.originalPlayer?.playerId;
+    if (pid && !p?.isBot) decrementUserRoomCount(pid);
+  }
   clearTimers(room);
   if ((room as any)._bombWindowTimer) {
     clearTimeout((room as any)._bombWindowTimer);
