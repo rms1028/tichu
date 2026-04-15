@@ -246,30 +246,36 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
         <View style={S.bottom}>
           {mode === 'custom' && isHost && (
             <View style={S.hostActions}>
-              <TouchableOpacity style={S.shuffleBtn} onPress={onShuffleTeams} activeOpacity={0.7}>
-                <Text style={S.shuffleBtnText}>{'🔀 셔플'}</Text>
-              </TouchableOpacity>
+              {/* Row 1: 난이도 선택 (4인 미만일 때만) */}
               {filledCount < 4 && (
-                <>
-                  <View style={{ flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 8, overflow: 'hidden' }}>
-                    {(['easy', 'medium', 'hard'] as const).map((d) => (
-                      <TouchableOpacity
-                        key={d}
-                        onPress={() => setBotDifficulty(d)}
-                        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                        style={{
-                          paddingHorizontal: 14, paddingVertical: 8,
-                          backgroundColor: botDifficulty === d ? (d === 'easy' ? '#22c55e' : d === 'medium' ? '#f59e0b' : '#ef4444') : 'transparent',
-                        }}
-                      >
-                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: botDifficulty === d ? '700' : '400' }}>
-                          {d === 'easy' ? '쉬움' : d === 'medium' ? '보통' : '어려움'}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                <View style={S.difficultyRow}>
+                  {(['easy', 'medium', 'hard'] as const).map((d) => (
+                    <TouchableOpacity
+                      key={d}
+                      onPress={() => setBotDifficulty(d)}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                      style={[
+                        S.difficultyBtn,
+                        botDifficulty === d && {
+                          backgroundColor: d === 'easy' ? '#22c55e' : d === 'medium' ? '#f59e0b' : '#ef4444',
+                        },
+                      ]}
+                    >
+                      <Text style={[S.difficultyText, botDifficulty === d && S.difficultyTextActive]}>
+                        {d === 'easy' ? '쉬움' : d === 'medium' ? '보통' : '어려움'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              {/* Row 2: 셔플 + 봇 채우기 (2개 나란히) */}
+              <View style={S.actionRow}>
+                <TouchableOpacity style={[S.secondaryBtn, S.rowBtnFlex]} onPress={onShuffleTeams} activeOpacity={0.7}>
+                  <Text style={S.secondaryBtnText}>{'🔀 셔플'}</Text>
+                </TouchableOpacity>
+                {filledCount < 4 && (
                   <TouchableOpacity
-                    style={S.botFillBtn}
+                    style={[S.secondaryBtn, S.rowBtnFlex]}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     onPress={() => {
                       for (let s = 0; s < 4; s++) {
@@ -278,10 +284,11 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={S.botFillText}>{'🤖 봇 채우기'}</Text>
+                    <Text style={S.secondaryBtnText}>{'🤖 봇 채우기'}</Text>
                   </TouchableOpacity>
-                </>
-              )}
+                )}
+              </View>
+              {/* Row 3: 시작 (풀폭, 강조) */}
               <TouchableOpacity
                 style={[S.startGameBtn, !canStart && S.startGameBtnDisabled]}
                 onPress={onStartGame}
@@ -304,7 +311,7 @@ export function MatchmakingScreen({ mode, roomCode, nickname, onCancel, onStart,
 
 const S = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
-  content: { flex: 1, justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, zIndex: 5 },
+  content: { flex: 1, justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 14, paddingBottom: 40, zIndex: 5 },
 
   // 상단
   header: { alignItems: 'center', gap: 8 },
@@ -363,17 +370,42 @@ const S = StyleSheet.create({
   cdGo: { color: '#FFD700', fontSize: 36, fontWeight: '900', textShadowColor: 'rgba(255,215,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 16 },
 
   // 하단 — flexShrink:0 으로 slotsArea 가 이 영역을 밀어내지 못하게.
-  bottom: { alignItems: 'center', gap: 10, flexShrink: 0 },
+  bottom: { alignItems: 'stretch', gap: 10, flexShrink: 0, width: '100%' },
   // portrait 고정 이후: 가로 한 줄에 셔플/봇/시작 3개를 담기엔 모바일 폭이 부족.
   // column 으로 세로 stack — 3개 버튼이 각자 한 줄 씩 차지해서 잘림 없음.
-  hostActions: { flexDirection: 'column', gap: 10, alignItems: 'center' },
+  // 3단 row 레이아웃: 난이도 / (셔플+봇채우기) / 시작
+  hostActions: { flexDirection: 'column', gap: 8, alignItems: 'stretch', width: '100%' },
+  difficultyRow: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  difficultyBtn: { paddingHorizontal: 18, paddingVertical: 8 },
+  difficultyText: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600' },
+  difficultyTextActive: { color: '#fff', fontWeight: '800' },
+  actionRow: { flexDirection: 'row', gap: 8, width: '100%' },
+  rowBtnFlex: { flex: 1 },
+  secondaryBtn: {
+    backgroundColor: 'rgba(99,102,241,0.15)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.35)',
+    alignItems: 'center',
+  },
+  secondaryBtnText: { color: '#A5B4FC', fontSize: 13, fontWeight: '800' },
   shuffleBtn: { backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)' },
   shuffleBtnText: { color: '#818CF8', fontSize: 14, fontWeight: '800' },
-  startGameBtn: { backgroundColor: '#2ecc71', borderRadius: 12, paddingHorizontal: 32, paddingVertical: 12, shadowColor: '#2ecc71', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6 },
+  startGameBtn: { backgroundColor: '#2ecc71', borderRadius: 12, paddingHorizontal: 32, paddingVertical: 14, alignItems: 'center', shadowColor: '#2ecc71', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6 },
   startGameBtnDisabled: { backgroundColor: 'rgba(46,204,113,0.25)', shadowOpacity: 0 },
   startGameText: { color: '#fff', fontSize: 16, fontWeight: '900' },
   botFillBtn: { backgroundColor: 'rgba(99,102,241,0.15)', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(99,102,241,0.3)' },
   botFillText: { color: '#818CF8', fontSize: 15, fontWeight: '700' },
-  cancelBtn: { borderRadius: 12, paddingHorizontal: 28, paddingVertical: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  cancelBtn: { borderRadius: 12, paddingHorizontal: 28, paddingVertical: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center' },
   cancelText: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '600' },
 });
