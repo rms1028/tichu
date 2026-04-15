@@ -51,20 +51,25 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
   }, [phase]);
 
   // 타이머 만료 시 배정된 카드가 있으면 자동 제출
+  // 서버 API 의 left/right 는 GameScreen 의 시각적 좌우와 반대 방향이라
+  // 보낼 때 좌우를 스왑한다 (UI.left = 시각 좌 = 서버의 right, 그 반대도 동일).
   useEffect(() => {
     if (remaining > 2 || remaining === 0 || submitted) return;
     const { left, partner, right } = assignments;
     if (left && partner && right) {
       setSubmitted(true);
-      onExchange(left, partner, right);
+      onExchange(right, partner, left);
     }
   }, [remaining, assignments, submitted]);
 
   if (phase !== 'PASSING') return null;
 
-  const leftSeat = (mySeat + 3) % 4;
+  // GameScreen/useGame.ts 와 동일한 좌우 매핑:
+  // leftOpponent = (mySeat+1)%4 (시계반대 = 다음 턴 방향), rightOpponent = (mySeat+3)%4.
+  // 이전엔 좌우가 뒤바뀌어 있어 게임 플레이 방향과 카드 교환 UI가 어긋났음.
+  const leftSeat = (mySeat + 1) % 4;
   const partnerSeat = (mySeat + 2) % 4;
-  const rightSeat = (mySeat + 1) % 4;
+  const rightSeat = (mySeat + 3) % 4;
   const avatars = ['🐲', '🦁', '🐻', '🦊'];
 
   const sorted = sortHand(myHand);
@@ -118,7 +123,8 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
   const handleConfirm = () => {
     if (!allAssigned || submitted) return;
     setSubmitted(true);
-    onExchange(assignments.left!, assignments.partner!, assignments.right!);
+    // UI.left (시각 좌 = seat+1) → 서버 right, UI.right (시각 우 = seat+3) → 서버 left
+    onExchange(assignments.right!, assignments.partner!, assignments.left!);
   };
 
   const handleReset = () => {
@@ -379,9 +385,10 @@ export function ExchangeView({ onExchange, onDeclareTichu }: ExchangeViewProps) 
           <Text style={S.receivedTitle}>받은 카드</Text>
           <View style={S.receivedRow}>
             {[
-              { l: '← 왼쪽', c: exchangeReceived.fromLeft },
+              // 서버 fromLeft = seat+3 = 시각 우, fromRight = seat+1 = 시각 좌
+              { l: '← 왼쪽', c: exchangeReceived.fromRight },
               { l: '↑ 파트너', c: exchangeReceived.fromPartner },
-              { l: '→ 오른쪽', c: exchangeReceived.fromRight },
+              { l: '→ 오른쪽', c: exchangeReceived.fromLeft },
             ].map((r, i) => (
               <View key={i} style={S.receivedSlot}>
                 <Text style={S.receivedSlotLabel}>{r.l}</Text>
