@@ -427,7 +427,8 @@ const S = StyleSheet.create({
     justifyContent: isMobile ? 'flex-start' : 'center',
     paddingHorizontal: mob(4, 24),
     paddingTop: mob(8, 16) + ANDROID_TOP_INSET,
-    paddingBottom: mob(8, 16),
+    // 모바일 웹 브라우저 하단 주소창 + home indicator 여유까지 포함해 큰 여백.
+    paddingBottom: mob(48, 16),
     gap: mob(6, 10),
   },
   titleRow: {
