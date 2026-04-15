@@ -119,11 +119,14 @@ export function GameScreen({
   // "팀원 트릭 막기" 경고 모달. 설정 off 거나 이미 "다시 표시하지 않기" 누른
   // 경우 바로 통과.
   const handlePlayWithGuard = (cards: Card[], phoenixAs?: Rank, wish?: Rank) => {
+    // 파트너가 이미 나간 상태 (finishOrder 포함) 면 경고 안 띄움 — 마지막
+     // 패 털고 나간 카드를 막는 건 정상 플레이. 경고 노이즈 제거.
     if (
       partnerBlockHintOn &&
       tableCards !== null &&
       lastPlayEvent &&
       lastPlayEvent.seat === partnerSeat &&
+      !finishOrder.includes(partnerSeat) &&
       !lastPlayEvent.hand.cards.some(c => c.type === 'special' && c.specialType === 'dragon')
     ) {
       setPendingPartnerBlock({ cards, phoenixAs, wish });
