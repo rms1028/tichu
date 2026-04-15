@@ -143,7 +143,7 @@ export function OpponentHand({
           <Text style={[styles.nickname, !connected && styles.nicknameDimmed, nickColor ? { color: nickColor } : undefined]} numberOfLines={1} ellipsizeMode="tail">{nickname}</Text>
           {tichu && (
             <View style={[styles.tichuBadge, tichu === 'large' && styles.tichuLarge]}>
-              <Text style={styles.tichuText}>{tichu === 'large' ? '🔥 라지' : '⭐ 스몰'}</Text>
+              <Text style={styles.tichuText} numberOfLines={1}>{tichu === 'large' ? '🔥 라지' : '⭐ 스몰'}</Text>
             </View>
           )}
         </View>
@@ -224,8 +224,8 @@ export function OpponentHand({
         <>
           {tichu && (
             <View style={[styles.tichuBadge, tichu === 'large' && styles.tichuLarge]}>
-              <Text style={styles.tichuText}>
-                {tichu === 'large' ? '🔥 라지!' : '⭐ 스몰'}
+              <Text style={styles.tichuText} numberOfLines={1}>
+                {tichu === 'large' ? '🔥 라지' : '⭐ 스몰'}
               </Text>
             </View>
           )}
@@ -373,7 +373,13 @@ const styles = StyleSheet.create({
   },
 
   // 티츄 — 상주 표시를 명확하게. 라지 = 빨강 펄스, 스몰 = 골드.
+  // alignSelf:center + flexShrink:0 로 부모 sideOpponent 의 좁은 컬럼 폭 (56-72dp)
+  // 안에서 텍스트가 세로로 잘리지 않게 함. 부모 overflow visible 로 좌우 overflow 허용.
   tichuBadge: {
+    alignSelf: 'center',
+    flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(243,156,18,0.35)',
     borderWidth: 1.5,
     borderColor: '#f39c12',
