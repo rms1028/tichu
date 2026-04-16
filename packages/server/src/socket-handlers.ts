@@ -108,6 +108,29 @@ setInterval(() => {
   }
 }, 30_000);
 
+// ── 입력 검증 ──────────────────────────────────────────────────
+
+const VALID_SUITS = new Set(['sword', 'star', 'jade', 'pagoda']);
+const VALID_SPECIAL_TYPES = new Set(['mahjong', 'dog', 'phoenix', 'dragon']);
+const VALID_RANKS = new Set(['2','3','4','5','6','7','8','9','10','J','Q','K','A']);
+
+function isValidCard(c: unknown): c is Card {
+  if (c == null || typeof c !== 'object') return false;
+  const obj = c as Record<string, unknown>;
+  if (obj.type === 'normal') {
+    return VALID_SUITS.has(obj.suit as string) && VALID_RANKS.has(obj.rank as string)
+      && typeof obj.value === 'number';
+  }
+  if (obj.type === 'special') {
+    return VALID_SPECIAL_TYPES.has(obj.specialType as string);
+  }
+  return false;
+}
+
+function isValidCardArray(arr: unknown): arr is Card[] {
+  return Array.isArray(arr) && arr.length > 0 && arr.length <= 14 && arr.every(isValidCard);
+}
+
 // ── 방 관리 ──────────────────────────────────────────────────
 
 const rooms = new Map<string, GameRoom>();
@@ -1034,6 +1057,8 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── rejoin_room ────────────────────────────────────────
     socket.on('rejoin_room', (data: { roomId: string; playerId: string }) => {
+      if (!requireAuth(data.playerId)) { socket.emit('rejoin_failed', { reason: 'auth_failed' }); return; }
+
       const room = rooms.get(data.roomId);
       if (!room) { socket.emit('rejoin_failed', { reason: 'room_not_found' }); return; }
 
@@ -1110,6 +1135,8 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── declare_tichu ──────────────────────────────────────
     socket.on('declare_tichu', (data: { type: 'large' | 'small' }) => {
+      if (!rateLimitCheck(socket.id, 10)) return;
+      if (data?.type !== 'large' && data?.type !== 'small') { socket.emit('invalid_play', { reason: 'invalid_tichu_type' }); return; }
       const room = getRoom();
       if (!room) return;
       const result = declareTichu(room, playerSeat, data.type);
@@ -1135,6 +1162,10 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── exchange_cards ─────────────────────────────────────
     socket.on('exchange_cards', (data: { left: Card; partner: Card; right: Card }) => {
+      if (!rateLimitCheck(socket.id, 10)) return;
+      if (!isValidCard(data?.left) || !isValidCard(data?.partner) || !isValidCard(data?.right)) {
+        socket.emit('invalid_play', { reason: 'invalid_card_data' }); return;
+      }
       const room = getRoom();
       if (!room) return;
       const result = submitExchange(room, playerSeat, data.left, data.partner, data.right);
@@ -1155,6 +1186,10 @@ export function registerSocketHandlers(io: Server): void {
     // ── play_cards ─────────────────────────────────────────
     socket.on('play_cards', (data: { cards: Card[]; phoenixAs?: Rank; wish?: Rank }) => {
       try {
+        if (!rateLimitCheck(socket.id, 10)) return;
+        if (!isValidCardArray(data?.cards)) { socket.emit('invalid_play', { reason: 'invalid_card_data' }); return; }
+        if (data.phoenixAs !== undefined && !VALID_RANKS.has(data.phoenixAs)) { socket.emit('invalid_play', { reason: 'invalid_phoenix_rank' }); return; }
+        if (data.wish !== undefined && !VALID_RANKS.has(data.wish)) { socket.emit('invalid_play', { reason: 'invalid_wish_rank' }); return; }
         const room = getRoom();
         if (!room) return;
         const result = playCards(room, playerSeat, data.cards, data.phoenixAs, data.wish);
@@ -1167,6 +1202,7 @@ export function registerSocketHandlers(io: Server): void {
     // ── pass_turn ──────────────────────────────────────────
     socket.on('pass_turn', () => {
       try {
+        if (!rateLimitCheck(socket.id, 10)) return;
         const room = getRoom();
         if (!room) return;
         const result = passTurn(room, playerSeat);
@@ -1179,7 +1215,8 @@ export function registerSocketHandlers(io: Server): void {
     // ── dragon_give ────────────────────────────────────────
     socket.on('dragon_give', (data: { targetSeat: number }) => {
       try {
-        if (!isValidSeat(data.targetSeat)) { socket.emit('invalid_play', { reason: 'invalid_seat' }); return; }
+        if (!rateLimitCheck(socket.id, 10)) return;
+        if (!isValidSeat(data?.targetSeat)) { socket.emit('invalid_play', { reason: 'invalid_seat' }); return; }
         const room = getRoom();
         if (!room) return;
         if (!room.dragonGivePending) { socket.emit('invalid_play', { reason: 'no_dragon_pending' }); return; }
@@ -1193,6 +1230,8 @@ export function registerSocketHandlers(io: Server): void {
 
     // ── submit_bomb ────────────────────────────────────────
     socket.on('submit_bomb', (data: { cards: Card[] }) => {
+      if (!rateLimitCheck(socket.id, 10)) return;
+      if (!isValidCardArray(data?.cards)) { socket.emit('invalid_play', { reason: 'invalid_card_data' }); return; }
       const room = getRoom();
       if (!room) return;
       if (room.phase !== 'TRICK_PLAY') {
