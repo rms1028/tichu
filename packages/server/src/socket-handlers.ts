@@ -1975,7 +1975,26 @@ export function registerSocketHandlers(io: Server): void {
             cleanupRoom(room);
             rooms.delete(id);
             deleted++;
+            continue;
           }
+        }
+        // 3시간 이상 된 방 강제 삭제 (좀비 게임 방지)
+        if (now - room.createdAt > 3 * 60 * 60_000) {
+          io.to(id).emit('room_closed', { reason: 'room_expired' });
+          cleanupRoom(room);
+          rooms.delete(id);
+          deleted++;
+          continue;
+        }
+        // 인간 없이 봇만 남은 진행 중 방 삭제
+        const hasHuman = [0, 1, 2, 3].some(s => {
+          const p = room.players[s];
+          return p && !p.isBot && p.connected;
+        });
+        if (!hasHuman) {
+          cleanupRoom(room);
+          rooms.delete(id);
+          deleted++;
         }
       }
       if (deleted > 0) notifyLobby(io);

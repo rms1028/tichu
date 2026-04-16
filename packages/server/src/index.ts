@@ -11,6 +11,7 @@ import http from 'node:http';
 import { Server } from 'socket.io';
 import { registerSocketHandlers, getRoomCount } from './socket-handlers.js';
 import { startScheduler, stopScheduler } from './scheduler.js';
+import { prisma } from './db.js';
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
 const START_TIME = Date.now();
@@ -19,9 +20,11 @@ const MIN_APP_VERSION = process.env['MIN_APP_VERSION'] ?? '1.0.0';
 
 const httpServer = http.createServer((req, res) => {
   if (req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    const status = isShuttingDown ? 'shutting_down' : 'ok';
+    const code = isShuttingDown ? 503 : 200;
+    res.writeHead(code, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
-      status: 'ok',
+      status,
       timestamp: Date.now(),
       startedAt: START_TIME,
       uptime: Math.floor((Date.now() - START_TIME) / 1000),
@@ -47,6 +50,8 @@ const io = new Server(httpServer, {
   pingInterval: 25_000,
   pingTimeout: 60_000,
   connectTimeout: 30_000,
+  maxHttpBufferSize: 1e6,
+  transports: ['websocket', 'polling'],
 });
 
 registerSocketHandlers(io);
@@ -57,7 +62,12 @@ httpServer.listen(PORT, () => {
 });
 
 // ── Graceful Shutdown ─────────────────────────────────────────
+let isShuttingDown = false;
+
 function gracefulShutdown(signal: string) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
   logger.info('server', `Graceful shutdown started (${signal})`);
 
   // 글로벌 타이머 정리
@@ -65,21 +75,35 @@ function gracefulShutdown(signal: string) {
   if ((globalThis as any).__matchmakingTimer) clearInterval((globalThis as any).__matchmakingTimer);
   if ((globalThis as any).__roomCleanupTimer) clearInterval((globalThis as any).__roomCleanupTimer);
 
+  // 새 연결 거부 (health check는 shutting_down 반환)
+  httpServer.on('request', (_req, res) => {
+    res.writeHead(503);
+    res.end();
+  });
+
   // 모든 클라이언트에게 서버 재시작 알림
   io.emit('server_restarting');
 
-  // 1초 대기 후 연결 종료 (클라이언트가 이벤트 수신할 시간)
-  setTimeout(() => {
+  // 2초 대기 후 연결 종료 (클라이언트가 이벤트 수신 + 재접속 준비할 시간)
+  setTimeout(async () => {
     io.close(() => {
       logger.info('server', 'Socket.IO closed');
-      httpServer.close(() => {
-        console.log('[shutdown] HTTP server closed');
-        process.exit(0);
-      });
     });
-    // 5초 후 강제 종료
-    setTimeout(() => process.exit(1), 5000);
-  }, 1000);
+    httpServer.close(() => {
+      logger.info('server', 'HTTP server closed');
+    });
+
+    // DB 커넥션 정리
+    try {
+      await prisma.$disconnect();
+      logger.info('server', 'Prisma disconnected');
+    } catch { /* ignore */ }
+
+    process.exit(0);
+  }, 2000);
+
+  // 10초 후 강제 종료 (안전장치)
+  setTimeout(() => process.exit(1), 10_000);
 }
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

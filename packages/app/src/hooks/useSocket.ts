@@ -111,6 +111,7 @@ export function useSocket() {
     socket.on('server_restarting', () => {
       serverRestarting = true;
       rejoinRetryCount = 0;
+      useGameStore.setState({ toastMsg: '서버 업데이트 중입니다. 잠시 후 자동 재접속됩니다.' });
     });
 
     // rejoin 실패 → 재시도 (서버가 아직 방을 로드하지 않았을 수 있음)

@@ -2,7 +2,16 @@ import { PrismaClient } from '@prisma/client';
 
 console.log('[DB] DATABASE_URL:', process.env['DATABASE_URL'] ? 'SET' : 'NOT SET');
 
-export const prisma = new PrismaClient();
+export const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env['DATABASE_URL'],
+    },
+  },
+  log: process.env['NODE_ENV'] === 'production'
+    ? ['error']
+    : ['query', 'error', 'warn'],
+});
 
 // ── 유저 ────────────────────────────────────────────────────
 
