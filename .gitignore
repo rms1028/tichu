@@ -12,5 +12,9 @@ dist/
 serviceAccountKey.json
 firebase-adminsdk-*.json
 
+# Firebase 클라이언트 설정 (API 키 포함)
+google-services.json
+GoogleService-Info.plist
+
 # Claude Code 로컬 설정 (세션 상태 · 메모리 · 프로젝트별 설정)
 .claude/
