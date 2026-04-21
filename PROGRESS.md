@@ -897,3 +897,114 @@ Railway (서버): https://accomplished-purpose-production-9135.up.railway.app/he
 
 **주의**: 이번 차수부터 서버 코드 변경은 Railway 자동 배포 필수. 커밋 후 push → Railway webhook → ~1분 deploy → 웹 + 앱 양쪽 live.
 
+### 12차 작업 (2026-04-15) — 게임 핵심 UX 정제: CCW · 교환 드래그 · 힌트 · 티츄 표시 · 라운드 종료 지연
+
+11차 이후 같은 날 긴 세션으로 게임 코어 UX 대량 개선. 웹 라우터 핫픽스 포함.
+
+**1. 웹 라우터 하드코드 경로 제거 (`46dc5c8`)** — 10차에서 Android 흰 화면 수정용으로 `app.json.extra.router.root` 에 절대 경로 (`C:\...\app`) 를 박은 것이 웹 빌드에서도 그대로 사용돼 Vercel 에서 라우트 0개. 상대경로 `./app` 으로 복원.
+
+**2. 카드 교환 드래그 앤 드롭 (`4c8951b`, `34589a1`, `44b78c7`)** — `ExchangeView.tsx` 에 PanResponder 기반 드래그 도입. 손패 카드를 세 슬롯 (좌/파트너/우) 에 드롭해 배정. 2차 수정:
+- `34589a1` — 드래그 시작 시 자식 TouchableOpacity 의 `onPress` 가 먼저 먹는 race 해결 (PanResponder `onStartShouldSetPanResponderCapture`)
+- `44b78c7` — 드래그 중 카드 fly-away 가 ScrollView clip 경계 바깥으로 나가 안 보이는 문제. `overflow: visible` + 절대 위치 오버레이로 분리
+
+**3. 턴 방향 시계반대(CCW) 전환 (`3e3812f`)** — 기존 티츄 관례에 맞춰 턴 진행 방향을 CCW 로 변경. `turnStep = 1 → 3` (seat+3 mod 4). 서버 `game-engine.ts` + 클라 `useGame.ts` 양쪽 동기화. 관련 파생 변경:
+- 개(Dog) 리드 시 파트너 나갔을 때 "파트너 seat 기준 다음 활성" 도 CCW 방향 (§5.4)
+- 교환 좌우 방향도 CCW 일치 (14차 `ccd13da` 에서 UI 좌표 스왑으로 최종 수정)
+
+**4. 힌트 모달 시스템 (`30a824f`, `fac21f5`)** — 초보 보호용 2종 경고 모달:
+- **스몰 티츄 선언 확인** — 선언 버튼 누르면 "마지막 한 장까지 선언권 있음. 지금 선언해도 되나요?" 확인
+- **팀원 트릭 막기 경고** — 파트너가 방금 낸 카드 위에 본인이 override 할 때 "팀원이 가져갈 트릭인데 가로채시겠어요?" 확인
+- 설정 화면에서 각각 on/off (`userStore.smallTichuHintOn` / `partnerBlockHintOn`)
+- `fac21f5` — 모달 안에서 직접 "다시 표시하지 않기" 체크박스로 끌 수 있게 (설정 화면 안 가도 됨)
+
+**5. 티츄 선언자 지속 표시 (`1c637fc`, `1c2a129`)** — 선언 직후 1회성 플래시만 있던 기존 UX → 라운드 내내 선언자 식별 가능하게:
+- 아바타 옆 "🂡 TICHU" / "🂠 라지" 배지 유지
+- 아바타 + 본인 핸드 영역에 주황/보라 글로우 애니메이션
+- `1c2a129` — 배지 텍스트가 세로 잘려 보이던 문제 (padding/lineHeight 조정)
+
+**6. 매치메이킹 호스트 액션 레이아웃 (`d10b11f`, `43583b4`)** — 모바일 웹에서 난이도/셔플/봇채우기/시작 4버튼이 세로 나열돼 화면 잡아먹는 문제:
+- 3단 row 재구성: (1) 난이도 칩 (쉬움/보통/어려움) 중앙, (2) 셔플 + 봇채우기 나란히, (3) 시작 full-width 초록
+- `43583b4` — 팀 슬롯 높이 140 → 110 축소 + `slotsArea.marginBottom` 12 추가 (호스트 액션과 시각 분리)
+
+**7. 모바일 웹 교환 버튼 잘림 (`1dfdfc6`)** — 하단 주소창/home indicator 가 `paddingBottom:8` 을 덮어 확정 버튼 일부 잘림. 모바일 한정 48 로 확대, 데스크톱 16 유지.
+
+**8. 라운드 종료 3초 지연 (`727c342`)** — 마지막 플레이어 손패 비울 때 `card_played → round_result` 가 같은 프레임 emit 돼 유저가 마지막 카드 못 봄. `broadcastEvents` 래퍼 도입:
+- 이벤트 배치에 `phase_changed(ROUND_END)` 포함되면 split
+- 앞 절반 (card_played / trick_won / player_finished) 즉시 emit
+- 뒤 절반 (ROUND_END + round_result) 3초 지연 emit
+- 모든 호출 경로 (play_cards / pass_turn / submit_bomb / bot / timeout) 자동 적용
+
+**9. userRoomCount 누수 수정 (`053da85`)** — 방 생성/참가/나감 시 카운터가 비대칭으로 증감해 IP당 3개 한도 도달 후 영구 차단. 정리 + 테스트 한도 완화.
+
+### 13차 작업 (2026-04-15 저녁~밤) — Hard 봇 2회 개선 + 업적 복구 + 신고 UI + 튜토리얼 재작성
+
+같은 날 저녁 세션. AI/콘텐츠/피처 측면.
+
+**1. Hard 봇 리드 싱글 계단 오르기 + A/K 보존 (`d1f8138`)** — 사용자 피드백 "A 내고 9 내더니 싱글 패스". Hard 봇이 A/K 를 초반 낭비하는 비일관성 해결:
+- 리드 싱글 "climb": 중반 (hand ≥5) non-top 싱글 ≥2개 + 큰 조합 없으면 "가장 낮은 non-top 싱글" 리드. 낮은 것부터 털고 A/K 는 엔드게임까지 보존
+- 리드 탑 싱글 보너스 조건부화: hand ≤5 +50, ≤7 +10, >7 -35
+- Follow 탑 싱글 억제: hand ≥6 -20, ≤3 +25
+- 50게임 self-play 티츄 성공률 62% → 65%
+
+**2. Hard 봇 audit 후 6개 추가 개선 (`69d8909`)** — Explore 서브에이전트 감사 기반:
+- HIGH: A/K 보존 윈도우 경계 상향 (≤4/≤6/≤8/>8 단계화), climb vs isOnlySingles 경로 충돌 해결 (climb 은 hand ≥7 부터), 봉황 싱글 보존 조건 [c] 경계 <12 → <13 + [e] 가점 +28 → +40
+- MEDIUM: `shouldPass` 에 파트너 선행 + 트릭 고점수 (15+) 체크 (팀 이익 가로채지 않음), `estimateRemainingBombs` threshold ≥1 → ≥2 (과보존 억제), endgame minimax 에 폭탄 포함 (2인 엔드게임 역전 감지)
+- 131/131 tests pass, 티츄 성공률 65% → 66%
+
+**3. Dead 업적 4종 복구 (`de485e9`)** — `achievementStore.ts` 에 정의만 있고 트리거 없던 업적들: 폭탄 사용 / 원투피니시 / 용 3회 획득 / (기타 1종) 의 실제 이벤트 훅 연결.
+
+**4. 게임 중 신고 UI + dbUserId 전파 (`b5d1358`)** — 게임 화면에서 플레이어 신고 기능. `ReportModal.tsx` 신규 + `reportedId` 가 DB `User.id` (cuid) 로 전달되게 전체 경로 정합 (11차 친구 시스템 정합성과 동일한 이슈). 채팅 / 욕설 / 부정행위 3종 사유 + 선택적 코멘트.
+
+**5. Visual-test baseline 축소 (`e9f7476`)** — 8차 portrait lock 이후 기존 10개 landscape baseline (2340×1080) 전부 좌표 무효화된 상태. 정리:
+- baselines/ 전체 PNG 삭제
+- SCENARIOS 를 `01-splash` + `02-login` 2개로 축소 (둘 다 ADB tap 불필요, wait 만)
+- 03~10 은 장비 있는 세션에서 portrait 좌표 재측정 후 복구 예정 (git history 복원 가능)
+
+**6. 인터랙티브 10단계 튜토리얼 재작성 (`04a7cbe`)** — 기존 영어 1-화면 스크롤 → 한국어 10단계 step-by-step:
+- 단계: 환영 → 목표 → 좌석/팀 (CCW 강조) → 카드 구성 → 서열 → 족보 7종 → 특수 카드 4종 → 티츄 선언 → 소원 → 실전 팁
+- UI: 진행 점 10개, n/10 카운터, 이전/다음, 마지막 "완료 🎉", 각 단계 아이콘 + 제목 + 본문 + 선택적 highlight 박스
+- 골드 테마 + Android 카메라홀 회피 + CLAUDE.md §14.2 준수 (absolute overlay)
+
+### 14차 작업 (2026-04-16) — 프로덕션 안정화 + 보안 3 CRITICAL + 게임 UX 미세 수정
+
+Google Play 출시 준비 차원에서 안정성/보안 집중. 같은 날 게임 내 버그 4건 동시 처리.
+
+**1. 매치메이킹 시작 버튼 + 봇 채우기 에러 가시화 (`aa6cc31`)** — `canStart: === 4 → >= 2` (서버 `start_game` 이 빈 자리 자동 봇 채우므로 2인부터 가능). 버튼 라벨 "🎮 시작 (n/4 — 나머지 자동 봇)". `add_bot_to_seat` silent return 제거, `room_not_found` / `game_already_started` / `seat_occupied` 명시 에러 emit.
+
+**2. 스트레이트 표시 순서 정렬 + 봉황 슬롯 보정 (`7d6ab35`)** — 서버가 플레이어 선택 순서로 cards 배열 emit → 테이블에 스트레이트가 뒤죽박죽. `TableArea.tsx` 의 `sortTableCards()` 로 렌더 단 값 오름차순 + 문양순 정렬. 봉황 위치 계산:
+- straight: `[max-len+1..max]` 중 빠진 슬롯에 삽입
+- steps: 부족한 페어 위치
+- pair/triple/full_house: 해당 값 그룹 옆
+
+**3. 카드 교환 좌우 방향 CCW 일치 (`ccd13da`)** — 12차 CCW 전환 이후 교환 화면의 좌/우 라벨이 여전히 구 방향이라 실제 게임 좌석과 어긋남. `ExchangeView.tsx` 에서 `leftSeat/rightSeat` 을 `useGame.ts` 와 동일 공식 (+1=좌, +3=우) 으로 재정의. 서버 `exchange_cards` API 는 구 좌표 유지 — I/O 경계에서 `onExchange(UI.right, partner, UI.left)` 로 스왑. `exchange_received` 표시도 `fromLeft↔fromRight` 교차. **서버/엔진/테스트 불변**.
+
+**4. 파트너 나간 후 override 시 경고 스킵 (`70ec957`)** — 파트너가 마지막 패 털고 나간 카드 위에 override 하는 건 정상인데 13차 "팀원 막기 경고 모달" 이 떠서 노이즈. `handlePlayWithGuard` 에 `!finishOrder.includes(partnerSeat)` 조건 추가.
+
+**5. 서버 프로덕션 안정화 Phase 1 (`ea51b5e`)** — 출시 대비 안정성 강화:
+- **Graceful shutdown**: 중복 호출 방지, Prisma disconnect, drain 2초, 강제 종료 10초
+- **Health check**: shutdown 중 503 반환 (LB가 새 요청 안 보내게)
+- **Socket.IO**: `maxHttpBufferSize: 1MB` (DoS 방지), transports 명시
+- **DB**: PrismaClient 로그 설정, schema 에 `directUrl` 추가 (커넥션 풀러 대비)
+- **좀비 방 정리**: 3시간 초과 방 강제 삭제, 봇만 남은 방 즉시 삭제
+- **클라이언트**: `server_restarting` 이벤트 수신 시 토스트 알림
+- CLAUDE.md 드리프트 수정도 같이 (CCW, portrait lock, visual test)
+
+**6. 개인정보처리방침 URL + Firebase 설정 git 추적 해제 (`eaa96a5`, `ce89be3`)** — Google Play 출시 필수 대응:
+- `.gitignore` 에 `google-services.json`, `GoogleService-Info.plist` 추가 + git 추적 해제 (로컬 파일은 EAS 빌드용 유지)
+- `app.json` 에 `privacyUrl` 필드 추가
+- `ce89be3` — 실제 GitHub Pages URL (`https://rms1028.github.io/tichu-privacy/`) 로 수정
+
+**7. 3가지 CRITICAL 보안 취약점 수정 (`f6dd01f`)** — `socket-handlers.ts` 에 다음 3층 방어 추가:
+- **`rejoin_room` 인증**: `requireAuth(playerId)` 검증 없이 아무나 위장 재접속 가능하던 문제 차단
+- **카드 입력 런타임 검증**: `play_cards`/`exchange_cards`/`submit_bomb` 에 `isValidCard`/`isValidCardArray` 추가. null/잘못된 타입/비정상 객체로 서버 크래시 유발 차단. `phoenixAs`/`wish` 의 Rank 값도 검증
+- **게임 액션 Rate Limit**: `play_cards`/`pass_turn`/`exchange_cards`/`submit_bomb`/`dragon_give`/`declare_tichu` 에 초당 10회 제한. `declare_tichu` `type` 값 검증 (`'large'|'small'` 외 거부)
+
+---
+
+## 전체 현황 요약 (2026-04-22 기준)
+
+- **브랜치**: `master` (clean)
+- **배포**: Railway (서버) + Vercel (웹) + EAS/Google Play 준비 단계 (Android 앱)
+- **기술 부채**: visual-test baseline 8개 (03~10) portrait 재구축 남음
+- **다음 우선순위 후보**: Google Play 스토어 제출, 10차에서 남긴 UI 검증 계속, 사용자 신규 기능 요청 수렴
+
