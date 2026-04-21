@@ -328,7 +328,80 @@ const FILTER = filterIdx >= 0 ? args[filterIdx + 1] : null;
 //   1. `npm run android:dev` 로 APK 설치 (현재 base.apk)
 //   2. `npm run android:visual -- --update-baselines` 로 baseline 생성
 //   3. 이후 `npm run android:visual` 로 회귀 체크
+// ⚠️ 시나리오 순서는 중요: resetData:true (pm clear) 를 쓰는 01-splash /
+// 02-login 은 nickname 을 날리므로 **맨 뒤**에 둬야 한다. 그렇지 않으면
+// 03+ 가 전부 login 화면을 찍는다. 3~10 은 tester 로그인 + 오늘 출석
+// claim 된 상태를 전제. 초기 셋업 1회:
+//   1. 수동으로 tester 닉네임 guest 로그인
+//   2. 출석 모달의 '보상 받기' 탭 (or `adb shell input tap 540 1290`)
+//   3. adb shell pm grant com.tichu.app android.permission.POST_NOTIFICATIONS
+// 이후 `npm run android:visual -- --update-baselines` 로 전체 생성.
 const SCENARIOS = [
+  {
+    name: '03-lobby-home',
+    settle: 1500,
+    steps: [{ wait: 6000 }], // splash → lobby 렌더
+  },
+  {
+    name: '04-ranking',
+    settle: 1500,
+    steps: [
+      { wait: 6000 },
+      { tap: [540, 2120] },  // bottom nav 랭킹 탭 (center)
+      { wait: 2000 },
+    ],
+  },
+  {
+    name: '05-settings',
+    settle: 1500,
+    steps: [
+      { wait: 6000 },
+      { tap: [905, 2120] },  // bottom nav 설정 탭 (right)
+      { wait: 2000 },
+    ],
+  },
+  {
+    name: '06-shop',
+    settle: 1500,
+    steps: [
+      { wait: 6000 },
+      { tap: [840, 205] },   // top-right 🛒 shop icon
+      { wait: 2000 },
+    ],
+  },
+  {
+    name: '07-friends-panel',
+    settle: 1500,
+    steps: [
+      { wait: 6000 },
+      { tap: [970, 205] },   // top-right 👥 friends icon
+      { wait: 2000 },
+    ],
+  },
+  // 08-profile: SKIP — LobbyScreen.profileBtn 는 flexDirection:row 의
+  // TouchableOpacity 라 CLAUDE.md §4.4 의 ADB tap hit-test 버그에 걸림.
+  // 좌표 여러 곳 시도했으나 전부 앱 바깥으로 튕김. test-mode deeplink
+  // 구현 (§2단계 미완) 후 복구 예정.
+  {
+    name: '09-custom-match',
+    settle: 2000,
+    steps: [
+      { wait: 6000 },
+      { tap: [760, 1180] },  // 커스텀 모드 card 의 플레이 버튼
+      { wait: 2500 },
+    ],
+  },
+  {
+    name: '10-rules',
+    settle: 1500,
+    steps: [
+      { wait: 6000 },
+      { tap: [540, 1592] },  // 게임 규칙 row
+      { wait: 2000 },
+    ],
+  },
+  // ⚠️ 여기서부터는 resetData:true — **마지막**에 실행해야 앞 시나리오가
+  // 쓸 tester 세션을 보존.
   {
     name: '01-splash',
     resetData: true,    // 매 실행 cold start 해야 splash → login 전환이 재현 가능
