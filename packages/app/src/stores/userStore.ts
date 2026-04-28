@@ -123,6 +123,7 @@ interface UserState {
   soundOn: boolean;
   musicOn: boolean;
   ttsOn: boolean;
+  vibrationOn: boolean;
   notifyOn: boolean;
   friendNotify: boolean;
   gameNotify: boolean;
@@ -155,13 +156,14 @@ interface UserState {
   claimMission: (missionId: string) => number; // returns coins rewarded
   resetDailyMissions: () => void;
   buyItem: (item: ShopItem) => boolean; // returns success
+  logout: () => void; // 계정 식별 정보 리셋 (settings 는 보존)
   equipAvatar: (id: string) => void;
   equipCardBack: (id: string) => void;
   setTitle: (id: string) => void;
   setProfileBg: (id: string) => void;
   syncRecentGames: (games: { won: boolean; myScore: number; opScore: number; date: string; rp: number }[]) => void;
   setNickname: (name: string) => void;
-  setSetting: (key: 'soundOn' | 'musicOn' | 'ttsOn' | 'notifyOn' | 'friendNotify' | 'gameNotify' | 'smallTichuHintOn' | 'partnerBlockHintOn', value: boolean) => void;
+  setSetting: (key: 'soundOn' | 'musicOn' | 'ttsOn' | 'vibrationOn' | 'notifyOn' | 'friendNotify' | 'gameNotify' | 'smallTichuHintOn' | 'partnerBlockHintOn', value: boolean) => void;
   incrementBomb: (isStraightFlush: boolean) => void;
   incrementDragonSteal: () => void;
   setPlayerId: (id: string) => void;
@@ -257,6 +259,7 @@ export const useUserStore = create<UserState>((set, get) => ({
   soundOn: saved.soundOn ?? true,
   musicOn: saved.musicOn ?? true,
   ttsOn: saved.ttsOn ?? true,
+  vibrationOn: saved.vibrationOn ?? true,
   notifyOn: saved.notifyOn ?? true,
   friendNotify: saved.friendNotify ?? true,
   gameNotify: saved.gameNotify ?? true,
@@ -335,6 +338,41 @@ export const useUserStore = create<UserState>((set, get) => ({
       }
     } catch { /* */ }
   },
+
+  logout: () => set(s => {
+    const ns: UserState = {
+      ...s,
+      playerId: generatePlayerId(),
+      nickname: '',
+      coins: 500,
+      xp: 0,
+      totalGames: 0,
+      wins: 0,
+      losses: 0,
+      tichuSuccess: 0,
+      tichuFail: 0,
+      largeTichuSuccess: 0,
+      largeTichuFail: 0,
+      oneTwoFinish: 0,
+      winStreak: 0,
+      bombUsed: 0,
+      bombSFUsed: 0,
+      dragonSteals: 0,
+      attendanceStreak: 0,
+      lastAttendanceDate: '',
+      missions: createDailyMissions(),
+      lastMissionDate: '',
+      recentGames: [],
+      selectedTitle: '',
+      profileBg: 'default',
+      ownedAvatars: ['dragon'],
+      ownedCardBacks: ['classic'],
+      equippedAvatar: 'dragon',
+      equippedCardBack: 'classic',
+    };
+    saveState(ns);
+    return ns;
+  }),
 
   updateMissionProgress: (missionId, progress) => set(s => {
     const missions = s.missions.map(m => m.id === missionId ? { ...m, progress, completed: progress >= m.target } : m);

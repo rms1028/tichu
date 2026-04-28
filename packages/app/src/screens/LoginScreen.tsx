@@ -4,6 +4,7 @@ import {
   SafeAreaView, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
+import { containsProfanity } from '@tichu/shared';
 import { COLORS } from '../utils/theme';
 import { BackgroundWatermark } from '../components/BackgroundWatermark';
 import { useResponsive } from '../utils/responsive';
@@ -17,7 +18,17 @@ interface LoginScreenProps {
 
 export function LoginScreen({ onGuestLogin, onGoogleLogin, loading, error }: LoginScreenProps) {
   const [nickname, setNickname] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
   const { isLandscape, isShort, isDesktop } = useResponsive();
+
+  const trySubmit = (nick: string) => {
+    if (containsProfanity(nick)) {
+      setLocalError('부적절한 닉네임은 사용할 수 없습니다');
+      return;
+    }
+    setLocalError(null);
+    onGuestLogin(nick);
+  };
   // 가로 + 세로 공간 부족할 때 로고를 축소하고 카드 옆에 배치 (모바일 레거시)
   const compact = isLandscape || isShort;
 
@@ -59,21 +70,22 @@ export function LoginScreen({ onGuestLogin, onGoogleLogin, loading, error }: Log
               autoCapitalize="none"
               returnKeyType="go"
               onSubmitEditing={() => {
-                if (nickname.trim().length >= 2) onGuestLogin(nickname.trim());
+                const t = nickname.trim();
+                if (t.length >= 2) trySubmit(t);
               }}
               // Android landscape: disable OS extract-view fullscreen keyboard
               // so the input stays in place and only the on-screen keyboard
               // slides up from the bottom.
               disableFullscreenUI
             />
-            {error && <Text style={S.error}>{error}</Text>}
+            {(localError || error) && <Text style={S.error}>{localError ?? error}</Text>}
             {loading ? (
               <ActivityIndicator color="#F59E0B" size="large" style={{ marginVertical: 20 }} />
             ) : (
               <>
                 <TouchableOpacity
                   style={[S.btn, S.guestBtn, isDesktop && S.guestBtnDesktop, !nickname.trim() && S.btnDisabled]}
-                  onPress={() => nickname.trim().length >= 2 && onGuestLogin(nickname.trim())}
+                  onPress={() => { const t = nickname.trim(); if (t.length >= 2) trySubmit(t); }}
                   disabled={nickname.trim().length < 2}
                   activeOpacity={0.7}
                 >

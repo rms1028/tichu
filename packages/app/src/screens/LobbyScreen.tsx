@@ -10,6 +10,7 @@ import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing,
 } from 'react-native-reanimated';
 import { useGameStore } from '../stores/gameStore';
+import { containsProfanity } from '@tichu/shared';
 import { COLORS } from '../utils/theme';
 import { BackgroundWatermark } from '../components/BackgroundWatermark';
 import { RulesScreen } from './RulesScreen';
@@ -33,6 +34,9 @@ interface LobbyScreenProps {
   onGetGameHistory?: () => void;
   onClaimAttendance?: () => void;
   onDeleteAccount?: () => void;
+  onLogout?: () => void;
+  onGetBlockedList?: () => void;
+  onUnblockUser?: (targetId: string) => void;
 }
 
 // 티어
@@ -66,8 +70,9 @@ import { ShopScreen } from './ShopScreen';
 import { AchievementsScreen } from './AchievementsScreen';
 import { TermsScreen } from './TermsScreen';
 import { CustomMatchScreen } from './CustomMatchScreen';
+import { BlockListScreen } from './BlockListScreen';
 
-type Page = 'main' | 'profile' | 'rules' | 'ranking' | 'shop' | 'achievements' | 'settings' | 'terms' | 'customMatch';
+type Page = 'main' | 'profile' | 'rules' | 'ranking' | 'shop' | 'achievements' | 'settings' | 'terms' | 'customMatch' | 'blocked';
 
 function FloatingSymbol({ symbol, x, delay }: { symbol: string; x: number; delay: number }) {
   const ty = useSharedValue(0);
@@ -78,7 +83,7 @@ function FloatingSymbol({ symbol, x, delay }: { symbol: string; x: number; delay
   return <Animated.Text style={[{ position: 'absolute', left: `${x}%` as any, top: `${20 + delay * 7}%` as any, fontSize: 22, color: '#fff', opacity: 0.04 }, s]}>{symbol}</Animated.Text>;
 }
 
-export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRooms, onGetLeaderboard, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite, onBuyShopItem, onEquipShopItem, onChangeNickname, onGetGameHistory, onClaimAttendance, onDeleteAccount }: LobbyScreenProps) {
+export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRooms, onGetLeaderboard, onFriendInit, onFriendSearch, onFriendRequest, onFriendAccept, onFriendReject, onFriendRemove, onFriendInvite, onBuyShopItem, onEquipShopItem, onChangeNickname, onGetGameHistory, onClaimAttendance, onDeleteAccount, onLogout, onGetBlockedList, onUnblockUser }: LobbyScreenProps) {
   const { isDesktop } = useResponsive();
   // 18차: desktop 은 완전히 다른 구조 (AppBar + Hero + Cards + Footer). 1-17차의
   // 모든 desktop 실험 (contentWidth 계산, outerWrapper, cardDesktop 고정 width,
@@ -129,6 +134,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
   const soundOn = useUserStore((s) => s.soundOn);
   const musicOn = useUserStore((s) => s.musicOn);
   const ttsOn = useUserStore((s) => s.ttsOn);
+  const vibrationOn = useUserStore((s) => s.vibrationOn);
   const notifyOn = useUserStore((s) => s.notifyOn);
   const friendNotify = useUserStore((s) => s.friendNotify);
   const gameNotify = useUserStore((s) => s.gameNotify);
@@ -179,6 +185,13 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
   if (page === 'shop') return <ShopScreen onBack={() => setPage('main')} onBuyItem={onBuyShopItem} onEquipItem={onEquipShopItem} />;
   if (page === 'achievements') return <AchievementsScreen onBack={() => setPage('profile')} />;
   if (page === 'terms') return <TermsScreen onBack={() => setPage('settings')} />;
+  if (page === 'blocked') return (
+    <BlockListScreen
+      onBack={() => setPage('settings')}
+      onRefresh={() => onGetBlockedList?.()}
+      onUnblock={(id) => onUnblockUser?.(id)}
+    />
+  );
   if (page === 'customMatch') return (
     <CustomMatchScreen
       onBack={() => setPage('main')}
@@ -205,6 +218,7 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
             <View style={S.menuRow}><Text style={S.menuIcon}>{'🔊'}</Text><Text style={S.menuText}>{'효과음'}</Text><TouchableOpacity onPress={() => setSetting('soundOn', !soundOn)}><Text style={[S.toggle, soundOn && S.toggleOn]}>{soundOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
             <View style={S.menuRow}><Text style={S.menuIcon}>{'🎵'}</Text><Text style={S.menuText}>{'배경음악'}</Text><TouchableOpacity onPress={() => setSetting('musicOn', !musicOn)}><Text style={[S.toggle, musicOn && S.toggleOn]}>{musicOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
             <View style={S.menuRow}><Text style={S.menuIcon}>{'🗣️'}</Text><Text style={S.menuText}>{'음성 안내 (TTS)'}</Text><TouchableOpacity onPress={() => setSetting('ttsOn', !ttsOn)}><Text style={[S.toggle, ttsOn && S.toggleOn]}>{ttsOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
+            <View style={S.menuRow}><Text style={S.menuIcon}>{'📳'}</Text><Text style={S.menuText}>{'진동'}</Text><TouchableOpacity onPress={() => setSetting('vibrationOn', !vibrationOn)}><Text style={[S.toggle, vibrationOn && S.toggleOn]}>{vibrationOn ? 'ON' : 'OFF'}</Text></TouchableOpacity></View>
           </View>
           <View style={S.section}>
             <Text style={S.secTitle}>{'💡 게임 중 안내'}</Text>
@@ -219,6 +233,23 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
           </View>
           <View style={S.section}>
             <Text style={S.secTitle}>{'계정'}</Text>
+            <TouchableOpacity style={S.menuRow} onPress={() => setPage('blocked')}>
+              <Text style={S.menuIcon}>{'🚫'}</Text><Text style={S.menuText}>{'차단된 사용자'}</Text><Text style={S.menuArrow}>{'>'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={S.menuRow} onPress={() => {
+              if (typeof globalThis.confirm === 'function') {
+                if (globalThis.confirm('로그아웃 하시겠습니까?\n다시 로그인하려면 닉네임을 다시 입력해야 합니다.')) {
+                  onLogout?.();
+                }
+              } else {
+                const { Alert } = require('react-native');
+                Alert.alert('로그아웃', '로그아웃 하시겠습니까?\n다시 로그인하려면 닉네임을 다시 입력해야 합니다.',
+                  [{ text: '취소', style: 'cancel' }, { text: '로그아웃', onPress: () => onLogout?.() }]
+                );
+              }
+            }}>
+              <Text style={S.menuIcon}>{'🚪'}</Text><Text style={S.menuText}>{'로그아웃'}</Text><Text style={S.menuArrow}>{'>'}</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={S.menuRow} onPress={() => {
               if (typeof globalThis.confirm === 'function') {
                 if (globalThis.confirm('정말 계정을 삭제하시겠습니까?\n모든 데이터가 영구 삭제되며 복구할 수 없습니다.')) {
@@ -249,7 +280,15 @@ export function LobbyScreen({ onJoin, onTutorial, onCreateCustomRoom, onListRoom
         setShowNickEdit={setShowNickEdit}
         nick={nick}
         setNick={setNick}
-        onSaveNick={() => { if (nick.trim()) { userSetNickname(nick.trim()); onChangeNickname?.(nick.trim()); setShowNickEdit(false); } }}
+        onSaveNick={() => {
+          const t = nick.trim();
+          if (!t) return;
+          if (containsProfanity(t)) {
+            useGameStore.setState({ toastMsg: '부적절한 닉네임은 사용할 수 없습니다' });
+            return;
+          }
+          userSetNickname(t); onChangeNickname?.(t); setShowNickEdit(false);
+        }}
       />
     );
   }

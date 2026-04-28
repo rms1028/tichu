@@ -140,11 +140,13 @@ export interface GameState {
   friendInvite: { fromNickname: string; roomId: string } | null;
   pendingInviteRoomId: string | null;
   forceUpdate: boolean;
+  minAppVersion: string | null;
   emoteEvent: { seat: number; emoji: string; label: string; ts: number } | null;
   dbUserId: string | null;
   leaderboard: { id: string; nickname: string; xp: number; wins: number; totalGames: number }[];
   gameHistory: { won: boolean; myScore: number; opScore: number; tichu: string | null; tichuSuccess: boolean; rank: number; date: string }[];
   blockedIds: string[];
+  blockedUsers: { id: string; nickname: string; equippedAvatar: string | null }[];
   toastMsg: string | null;
   customRoomList: { roomId: string; roomName: string; playerCount: number; hasPassword: boolean }[];
   hostPlayerId: string | null;
@@ -242,11 +244,13 @@ const INITIAL_STATE = {
   friendInvite: null as { fromNickname: string; roomId: string } | null,
   pendingInviteRoomId: null as string | null,
   forceUpdate: false,
+  minAppVersion: null as string | null,
   emoteEvent: null as { seat: number; emoji: string; label: string; ts: number } | null,
   dbUserId: null as string | null,
   leaderboard: [] as { id: string; nickname: string; xp: number; wins: number; totalGames: number }[],
   gameHistory: [] as { won: boolean; myScore: number; opScore: number; tichu: string | null; tichuSuccess: boolean; rank: number; date: string }[],
   blockedIds: [] as string[],
+  blockedUsers: [] as { id: string; nickname: string; equippedAvatar: string | null }[],
   toastMsg: null as string | null,
   customRoomList: [] as { roomId: string; roomName: string; playerCount: number; hasPassword: boolean }[],
   hostPlayerId: null as string | null,

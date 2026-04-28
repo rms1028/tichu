@@ -999,12 +999,117 @@ Google Play 출시 준비 차원에서 안정성/보안 집중. 같은 날 게�
 - **카드 입력 런타임 검증**: `play_cards`/`exchange_cards`/`submit_bomb` 에 `isValidCard`/`isValidCardArray` 추가. null/잘못된 타입/비정상 객체로 서버 크래시 유발 차단. `phoenixAs`/`wish` 의 Rank 값도 검증
 - **게임 액션 Rate Limit**: `play_cards`/`pass_turn`/`exchange_cards`/`submit_bomb`/`dragon_give`/`declare_tichu` 에 초당 10회 제한. `declare_tichu` `type` 값 검증 (`'large'|'small'` 외 거부)
 
+### 15차 작업 (2026-04-22) — Google Play 출시 직전 마무리: 스모크 / baseline / 스토어 자산
+
+14차의 보안·안정화 위에 출시 제출용 마지막 정합성 작업.
+
+**1. Railway prod 보안 회귀 스모크 테스트 (`c0bfd51`)** — 14차 `f6dd01f` 의 3 CRITICAL 수정 (rejoin_room 인증 / 카드 입력 검증 / rate limit) 이 정상 플레이를 깨지 않는지 prod 에서 직접 검증하는 스크립트. `scripts/smoke-test-security.mjs` 에 7개 시나리오:
+- `guest_login` → `login_success`
+- `create_custom_room` → `room_joined`
+- 15회 `pass_turn` 버스트 → rate limiter 작동 + 서버 생존
+- `play_cards` 쓰레기 페이로드 4종 → `invalid_card_data` 거부
+- `declare_tichu type='HUGE'` → `invalid_tichu_type` 거부
+- 로그인 없이 `rejoin_room` → `auth_failed`
+- 남의 ID 스푸핑 `rejoin_room` → `auth_failed`
+
+향후 서버 배포 후 회귀 체크에 재사용.
+
+**2. portrait baseline 9종 재구축 + 시나리오 추가 (`0aa2a6f`)** — 8차 portrait lock 전환 후 폐기됐던 baseline 03~10 을 1080×2340 기준으로 재구축. Samsung S25 (SM-S931N) 실물 + 9개 시나리오 9/9 pass (diff 0.000~0.082%).
+
+복구된 baseline (9/10):
+- `01-splash`, `02-login` — cold reset (pm clear) 기반 재생성
+- `03-lobby-home` — tester 로그인 + 출석 claim 후
+- `04-ranking` (540, 2120) / `05-settings` (905, 2120) — 하단 탭
+- `06-shop` (840, 205) / `07-friends-panel` (970, 205) — 상단 아이콘
+- `09-custom-match` (760, 1180) / `10-rules` (540, 1592)
+
+**제외 1종 (`08-profile`)** — `LobbyScreen.profileBtn` 의 flexDirection:row TouchableOpacity 가 CLAUDE.md §4.4 의 ADB tap hit-test 버그에 걸림. 좌표 여러 개 전부 앱 바깥 (홈 드로어) 으로 튕겨서 실패. test-mode deeplink (§4.4 2단계 미완) 구현 후 복구.
+
+**시나리오 순서 주의:** 03~10 먼저, `01-splash`/`02-login` (resetData:true) 맨 뒤. 안 그러면 02 의 pm clear 가 tester 닉네임을 wipe 해서 03+ 가 전부 login 화면을 찍는다.
+
+**초기 셋업 (최초 1회 or 02-login 실행 후):**
+1. 수동으로 tester 닉네임 guest 로그인
+2. 출석 모달 '보상 받기' 탭 (or `adb shell input tap 540 1290`)
+3. `adb shell pm grant com.tichu.app android.permission.POST_NOTIFICATIONS`
+
+**3. Play Store 스크린샷 8장 + URL 정합성 (`3e16aeb`)** — Google Play 심사 제출용 portrait 1080×2340 PNG 8장 + `docs/store-listing.md` privacy URL 드리프트 정리.
+
+스크린샷 구성:
+- 1~5 정적 (lobby / custom-match / ranking / shop / rules) — visual-test baselines 재사용
+- 6 카드 교환 + Bot-A 라지 티츄 선언 배지 (실제 게임플레이)
+- 7 트릭 플레이 — A 풀하우스 제출 + 봉황/용 손패
+- 8 스몰 티츄 선언 확인 모달 ±100 스코어
+
+Samsung Galaxy S25 실물 캡처. Play Store 요구사항 (2~8장, 320~3840px/변, 9:19.5 허용) 전부 충족. `store-listing.md` 의 privacy URL 을 `app.json.privacyUrl` 의 정식 값 (`https://rms1028.github.io/tichu-privacy/`) 과 일치시킴 (기존엔 `tichu/privacy.html` 드리프트).
+
 ---
 
-## 전체 현황 요약 (2026-04-22 기준)
+### 16차 작업 (2026-04-27) — Google Play 콘솔 계정 생성 후 EAS 빌드 인프라 정리
 
-- **브랜치**: `master` (clean)
-- **배포**: Railway (서버) + Vercel (웹) + EAS/Google Play 준비 단계 (Android 앱)
-- **기술 부채**: visual-test baseline 8개 (03~10) portrait 재구축 남음
-- **다음 우선순위 후보**: Google Play 스토어 제출, 10차에서 남긴 UI 검증 계속, 사용자 신규 기능 요청 수렴
+15차 자산 준비 후 첫 production AAB 빌드를 시도했더니 두 가지 BLOCKER 발견. 정리해서 5월 1일 EAS quota 리셋 직후 깨끗하게 빌드 가능한 상태로 만듦.
+
+**0. 첫 production 빌드 시도 결과 (`eas build -p android --profile production --non-interactive --no-wait`)**
+- ⚠️ "This account has used its Android builds from the Free plan this month, which will reset in 3 days (on Fri May 01 2026)" — 무료 플랜 Android 빌드 한도 소진. 13차의 preview 빌드 다회 실행 잔재.
+- ⚠️ "File specified via android.googleServicesFile is not checked in to your repository and won't be uploaded" — 14차의 `.gitignore` 추가가 EAS 클라우드 빌드와 충돌.
+- ⚠️ 업로드 archive **1.5 GB** — 로컬 `android/app/build` (3.7 GB), `node_modules`, `dist` 등이 다 포함되고 있었음.
+- ✅ versionCode 1 → 2 자동 증가 (`eas.json autoIncrement: true` + `appVersionSource: remote`). 첫 출시 versionCode 가 2 가 되는 건 무관 — Play Store 는 단조 증가만 요구.
+- ✅ 키스토어는 EAS 가 보유한 기존 기본 키 (`Build Credentials 30E6RZVkh1`) 자동 재사용 — preview 빌드 등과 동일 키. 별도 생성 불필요.
+
+**1. `.easignore` 작성** — `node_modules/` (모든 위치), `android/app/build/` (3.7 GB), `android/build/`, `android/.gradle/`, `.android-dev/` (503 MB), `dist/`, `visual-tests/current/`, `.git/` 등 빌드와 무관한 산출물 전부 제외. 1.5 GB → 수십 MB 수준으로 압축 예상.
+
+**2. Firebase 설정 EAS Secret File 등록**
+- `npx eas-cli env:create --scope project --environment production --visibility secret --type file --name GOOGLE_SERVICES_JSON --value ./google-services.json`
+- 동일하게 `GOOGLE_SERVICE_INFO_PLIST` (iOS 용)
+- `app.json` → `app.config.js` 로 전환. 정적 `app.json` 의 `expo` 블록을 base 로 두고, `process.env.GOOGLE_SERVICES_JSON ?? base.android.googleServicesFile` 로 폴백. 로컬 dev / preview 빌드는 env var 없이 정적 경로 그대로 사용 — 회귀 없음.
+
+**3. `app.json` versionCode / buildNumber 필드 제거** — `appVersionSource: remote` 와 충돌해 EAS 가 경고. 정리.
+
+**4. `docs/store-listing.md` 보강** — Play 콘솔 입력 시 그대로 붙여넣을 수 있게 누락 섹션 추가:
+- **데이터 안전 섹션** — Firebase Auth (이메일/UID), 닉네임, Expo Push Token, Sentry 크래시 로그. HTTPS 암호화, 삭제 요청 가능, 광고/판매 없음
+- **권한 정당화** — INTERNET / VIBRATE / POST_NOTIFICATIONS / ACCESS_NETWORK_STATE / RECEIVE_BOOT_COMPLETED 각 사용 이유
+- **타겟 연령** — 13세 이상 (COPPA 비대상), 광고 없음, 인앱 결제 없음
+- **타겟 SDK / 빌드 정보** — Expo SDK 52 (API 35), 64-bit ✅, AAB ✅
+- **Play 콘솔 입력 순서 15단계** — 앱 만들기 → 등록정보 → 콘텐츠 등급 → 데이터 안전 → 내부 테스트 → 프로덕션
+- **체크리스트 갱신** — 출시 전 코드/자산 vs Play Console 항목 분리, 완료 항목 `[x]` 표시
+
+**5. 앱 아이콘 512×512 PNG 생성 (`docs/store-assets/icon-512.png`)** — `assets/icon.png` (1536×1536) 을 PowerShell `System.Drawing` HighQualityBicubic 으로 다운스케일. Play Store 메인 아이콘 슬롯용 (130 KB).
+
+**다음 단계 (5월 1일 Fri 이후):**
+1. `cd packages/app && npx eas-cli build --platform android --profile production --non-interactive` 실행
+2. 빌드 완료 후 `eas credentials` 로 키스토어 백업 받아 안전한 곳에 보관
+3. Play 콘솔 → 앱 만들기 → AAB 업로드 → 위 store-listing.md 항목들 입력 → 내부 테스트 트랙 → 프로덕션 출시 신청
+
+---
+
+### 17차 작업 (2026-04-27 저녁) — Play Store 출시 전 사용자 첫인상 6개 기능
+
+16차 인프라 정비 직후 같은 날 진행. 출시 감사 결과를 토대로 사용자 첫인상 + Google Play 정책 권장 항목 6개 일괄 처리.
+
+**1. 로그아웃 기능** — `userStore.logout()` 액션 + Firebase `signOutUser()` 연동 + 설정 메뉴 "계정" 섹션에 로그아웃 버튼 추가. 닉네임/유저ID 등 영속 상태를 MMKV 에서 비우고 로그인 화면으로 복귀.
+
+**2. 진동 토글** — `userStore` 에 `vibrationOn` flag (기본 true) + `haptics.ts` 모든 함수에 가드 추가. 설정 메뉴에서 사용자가 끌 수 있도록 토글 노출.
+
+**3. 블록 리스트 UI (`BlockListScreen.tsx`)** — 신고/차단 시스템의 "내가 차단한 사용자" 목록을 사용자가 볼 수 있도록 신규 화면 추가. 서버 `dbGetBlockedUsers` 가 enriched payload (닉네임 / 차단일시) 를 반환하도록 확장.
+
+**4. 강제 업데이트 화면 (`ForceUpdateScreen.tsx`)** — 클라/서버 버전 불일치 감지 시 표시되는 차단 화면. 현재 버전 / 필요 버전 표시 + Play Store 딥링크 (`market://details?id=com.tichu.app`). `useSocket` 의 `version_mismatch` 이벤트와 연결.
+
+**5. 재접속 UX 개선** — `DisconnectOverlay` 영문 → 한국어로 정리 + 끊김 후 경과 시간 카운터 + 재접속 성공/실패 토스트 (⚠️/✅). `useSocket` 에 재접속 사이클 이벤트 훅 추가.
+
+**6. 닉네임 욕설 필터** — 신규 `packages/shared/src/profanity.ts` (한/영/leetspeak 단어 사전 + 정규화기) + 7개 단위 테스트. 서버 3 entry point (login / nickname change / friend request 등) 에서 거부 + 클라 `LoginScreen` 에서 입력 즉시 검증.
+
+**테스트 결과:**
+- shared 170/170 ✅ (7 신규 profanity 테스트 추가)
+- server 131/135 (실패 4건은 CLAUDE.md 명시된 CI 제외 만성 socket-sim 플레이크)
+- app `tsc --noEmit` ✅
+
+**실물 디바이스 검증 미완** — EAS quota 막힘 (5/1까지). `npm run android:dev` 한 사이클은 빌드 전에 필수 (CLAUDE.md §14.5).
+
+---
+
+## 전체 현황 요약 (2026-04-28 기준)
+
+- **브랜치**: `master` (16+17차 일괄 커밋)
+- **배포**: Railway (서버) + Vercel (웹) + Google Play 콘솔 **계정 생성 완료** + 빌드 인프라 정비 완료. 5월 1일 EAS quota 리셋 후 첫 production AAB 빌드 → Play 콘솔 업로드
+- **기술 부채**: `08-profile` baseline 1종만 미복구 (ADB tap hit-test 버그, test-mode deeplink 후 복구 예정)
+- **다음 우선순위**: 5/1 전 `npm run android:dev` 로 17차 6 기능 실물 검증 → production AAB 빌드 → 키스토어 백업 → Play 콘솔 앱 만들기 + 등록정보 입력 + 내부 테스트 트랙 → 프로덕션 출시 신청
 

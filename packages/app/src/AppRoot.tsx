@@ -55,6 +55,7 @@ import { GOOGLE_OAUTH, isGoogleOAuthConfigured } from './utils/googleOAuth';
 // import * as WebBrowser from 'expo-web-browser';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { FriendInviteBanner } from './components/FriendInviteBanner';
+import { ForceUpdateScreen } from './components/ForceUpdateScreen';
 
 // WebBrowser.maybeCompleteAuthSession() 도 일시 비활성 (위 import 제거의 일부)
 import { playBgm, setBgmEnabled, stopAll as stopBgm } from './utils/bgm';
@@ -91,6 +92,7 @@ function AppInner() {
     friendInit, friendSearch, friendRequest, friendAccept, friendReject, friendRemove, friendInvite,
     guestLogin, firebaseLogin, getLeaderboard, getGameHistory, sendEmote, buyShopItem, equipShopItem, changeNickname,
     leaveRoom, moveSeat, shuffleTeams, claimAttendance, deleteAccount, reportUser,
+    getBlockedList, unblockUser,
   } = useSocket();
 
   const connected = useGameStore((s) => s.connected);
@@ -227,17 +229,10 @@ function AppInner() {
     setLoginLoading(false);
   };
 
-  // 스플래시
   // 강제 업데이트 필요 시
   if (forceUpdate) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#1a1a2e', justifyContent: 'center', alignItems: 'center', padding: 40 }}>
-        <Text style={{ color: '#FFD700', fontSize: 24, fontWeight: '900', marginBottom: 16 }}>{'업데이트 필요'}</Text>
-        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, textAlign: 'center', lineHeight: 22 }}>
-          {'새로운 버전이 출시되었습니다.\n앱을 업데이트한 후 다시 시작해주세요.'}
-        </Text>
-      </View>
-    );
+    const minVersion = useGameStore.getState().minAppVersion;
+    return <ForceUpdateScreen minVersion={minVersion} />;
   }
 
   if (screen === 'splash') {
@@ -303,6 +298,15 @@ function AppInner() {
         onGetGameHistory={getGameHistory}
         onClaimAttendance={claimAttendance}
         onDeleteAccount={() => { deleteAccount(); clearSentryUser(); addBreadcrumb('account deleted', 'auth'); setScreen('login'); }}
+        onLogout={async () => {
+          try { await signOutUser(); } catch { /* 게스트는 Firebase 세션이 없을 수 있음 */ }
+          useUserStore.getState().logout();
+          clearSentryUser();
+          addBreadcrumb('logout', 'auth');
+          setScreen('login');
+        }}
+        onGetBlockedList={getBlockedList}
+        onUnblockUser={unblockUser}
       />
       <TutorialModal visible={showTutorial} onClose={() => setShowTutorial(false)} />
       <FriendInviteBanner

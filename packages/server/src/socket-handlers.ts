@@ -3,6 +3,7 @@ import type { Card, Rank, PlayedHand } from '@tichu/shared';
 import {
   isNormalCard, isBomb,
   validateHand, canBeat,
+  containsProfanity,
 } from '@tichu/shared';
 import { logger } from './logger.js';
 import type { GameRoom, PlayerInfo } from './game-room.js';
@@ -32,7 +33,7 @@ import {
   recordGameResult as dbRecordGameResult, getLeaderboard, getGameHistory,
   dbSendFriendRequest, dbAcceptFriendRequest, dbRejectFriendRequest,
   dbRemoveFriend, dbGetFriendsWithNickname, dbGetPendingRequests,
-  dbFindUserByCode, dbReportUser, dbBlockUser, dbUnblockUser, dbGetBlockedIds, dbGetBlockedFirebaseUids,
+  dbFindUserByCode, dbReportUser, dbBlockUser, dbUnblockUser, dbGetBlockedIds, dbGetBlockedUsers, dbGetBlockedFirebaseUids,
 } from './db.js';
 import {
   getSeasonInfo, getSeasonLeaderboard, updateSeasonRating,
@@ -58,6 +59,10 @@ function isValidSeat(seat: unknown): seat is number {
 
 function isValidNickname(nickname: unknown): nickname is string {
   return typeof nickname === 'string' && nickname.length > 0 && nickname.length <= 20;
+}
+
+function isProfanityFreeName(nickname: string): boolean {
+  return !containsProfanity(nickname);
 }
 
 function isValidRoomName(name: unknown): name is string {
@@ -311,6 +316,14 @@ export function registerSocketHandlers(io: Server): void {
     socket.on('guest_login', async (data: { guestId: string; nickname: string }) => {
       const doLogin = async () => {
       try {
+        if (!isValidNickname(data.nickname)) {
+          socket.emit('login_error', { error: 'invalid_nickname' });
+          return;
+        }
+        if (!isProfanityFreeName(data.nickname)) {
+          socket.emit('login_error', { error: 'profanity' });
+          return;
+        }
         const user = await findOrCreateGuestUser(data.guestId, data.nickname);
         dbUserId = user.id;
         authenticatedPlayerId = data.guestId;
@@ -347,6 +360,14 @@ export function registerSocketHandlers(io: Server): void {
       const doLogin = async () => {
         if (!data.idToken) {
           socket.emit('login_error', { error: 'missing_credentials' });
+          return;
+        }
+        if (!isValidNickname(data.nickname)) {
+          socket.emit('login_error', { error: 'invalid_nickname' });
+          return;
+        }
+        if (!isProfanityFreeName(data.nickname)) {
+          socket.emit('login_error', { error: 'profanity' });
           return;
         }
 
@@ -1643,6 +1664,7 @@ export function registerSocketHandlers(io: Server): void {
     socket.on('change_nickname', async (data: { nickname: string }) => {
       if (!dbUserId) return;
       if (!isValidNickname(data.nickname)) { socket.emit('nickname_error', { error: 'invalid_nickname' }); return; }
+      if (!isProfanityFreeName(data.nickname)) { socket.emit('nickname_error', { error: 'profanity' }); return; }
       try {
         await prisma.user.update({ where: { id: dbUserId }, data: { nickname: data.nickname } });
         socket.emit('nickname_changed', { nickname: data.nickname });
@@ -1764,8 +1786,11 @@ export function registerSocketHandlers(io: Server): void {
     socket.on('get_blocked_list', async () => {
       if (!dbUserId) return;
       try {
-        const ids = await dbGetBlockedIds(dbUserId);
-        socket.emit('blocked_list', { blockedIds: ids });
+        const users = await dbGetBlockedUsers(dbUserId);
+        socket.emit('blocked_list', {
+          blockedIds: users.map(u => u.id),  // 하위호환
+          users,                              // {id, nickname, equippedAvatar}
+        });
       } catch (err) { console.error('[get_blocked_list] error:', err); }
     });
 

@@ -36,3 +36,6 @@ export { inferPhoenixAs } from './phoenix-utils.js';
 // Scoring
 export { sumPoints, calculateRoundScore } from './scoring.js';
 export type { RoundScoreInput, RoundScoreResult } from './scoring.js';
+
+// Profanity filter
+export { containsProfanity } from './profanity.js';

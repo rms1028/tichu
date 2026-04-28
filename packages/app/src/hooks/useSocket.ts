@@ -77,8 +77,14 @@ export function useSocket() {
     }
 
     // ── 연결 상태 ──────────────────────────────────────────
+    let wasConnected = false;
     socket.on('connect', () => {
+      const wasOffline = wasConnected; // 이전에 연결됐다가 끊겼던 경우만 reconnect 토스트
+      wasConnected = true;
       store.setConnection(true);
+      if (wasOffline) {
+        useGameStore.setState({ toastMsg: '✅ 다시 연결되었습니다' });
+      }
 
       // 앱 버전 체크
       try {
@@ -97,11 +103,17 @@ export function useSocket() {
     });
 
     socket.on('disconnect', () => {
+      const wasOffline = !wasConnected;
       store.setConnection(false);
+      // 첫 연결 실패 / 의도적 disconnect 가 아니라 사용 중 끊긴 경우만 토스트
+      if (!wasOffline && !serverRestarting) {
+        useGameStore.setState({ toastMsg: '⚠️ 연결이 끊겼습니다. 재연결 중...' });
+      }
     });
 
     // 앱 버전 강제 업데이트 필요 시
     socket.on('version_info', (data: { minAppVersion: string; needsUpdate: boolean }) => {
+      useGameStore.setState({ minAppVersion: data.minAppVersion });
       if (data.needsUpdate) {
         useGameStore.setState({ forceUpdate: true });
       }
@@ -493,6 +505,12 @@ export function useSocket() {
 
     socket.on('login_error', (data: { error: string }) => {
       console.warn('Login error:', data.error);
+      const reason = data.error === 'profanity'
+        ? '부적절한 닉네임입니다. 다른 닉네임을 사용해 주세요.'
+        : data.error === 'invalid_nickname'
+        ? '닉네임은 1~20자 사이로 입력해 주세요.'
+        : '로그인에 실패했습니다: ' + data.error;
+      useGameStore.setState({ toastMsg: reason });
     });
 
     // ── 상점 응답 ──────────────────────────────────────────
@@ -513,16 +531,28 @@ export function useSocket() {
       useGameStore.setState({ blockedIds: [...blocked, data.targetId], toastMsg: '차단되었습니다' });
     });
     socket.on('unblock_success', (data: { targetId: string }) => {
-      const blocked = useGameStore.getState().blockedIds ?? [];
-      useGameStore.setState({ blockedIds: blocked.filter(id => id !== data.targetId), toastMsg: '차단이 해제되었습니다' });
+      const state = useGameStore.getState();
+      useGameStore.setState({
+        blockedIds: (state.blockedIds ?? []).filter(id => id !== data.targetId),
+        blockedUsers: (state.blockedUsers ?? []).filter(u => u.id !== data.targetId),
+        toastMsg: '차단이 해제되었습니다',
+      });
     });
-    socket.on('blocked_list', (data: { blockedIds: string[] }) => {
-      useGameStore.setState({ blockedIds: data.blockedIds });
+    socket.on('blocked_list', (data: { blockedIds: string[]; users?: { id: string; nickname: string; equippedAvatar: string | null }[] }) => {
+      useGameStore.setState({
+        blockedIds: data.blockedIds,
+        blockedUsers: data.users ?? [],
+      });
     });
 
     // ── 에러/확인 이벤트 ──────────────────────────────────────
     socket.on('nickname_error', (data: { error: string }) => {
-      useGameStore.setState({ toastMsg: '닉네임 변경 실패: ' + data.error });
+      const reason = data.error === 'profanity'
+        ? '부적절한 닉네임은 사용할 수 없습니다.'
+        : data.error === 'invalid_nickname'
+        ? '닉네임은 1~20자 사이로 입력해 주세요.'
+        : '닉네임 변경 실패: ' + data.error;
+      useGameStore.setState({ toastMsg: reason });
     });
     socket.on('shop_error', (data: { error: string }) => {
       useGameStore.setState({ toastMsg: '상점 오류: ' + data.error });

@@ -231,6 +231,17 @@ export async function dbGetBlockedIds(userId: string): Promise<string[]> {
   return blocks.map(b => b.blockedId);
 }
 
+export async function dbGetBlockedUsers(userId: string): Promise<{ id: string; nickname: string; equippedAvatar: string }[]> {
+  const blocks = await prisma.block.findMany({
+    where: { blockerId: userId },
+    select: { blocked: { select: { id: true, nickname: true, equippedAvatar: true } }, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  return blocks
+    .map(b => b.blocked)
+    .filter((u): u is { id: string; nickname: string; equippedAvatar: string } => !!u);
+}
+
 export async function dbGetBlockedByIds(userId: string): Promise<string[]> {
   const blocks = await prisma.block.findMany({ where: { blockedId: userId }, select: { blockerId: true } });
   return blocks.map(b => b.blockerId);
