@@ -1,18 +1,46 @@
 # EAS Build 업로드 시 제외할 파일
 # .gitignore 를 상속하지 않음 — 여기 명시한 것만 제외됨
+# 1.5GB → 수십 MB 로 줄이기 위함
 
-# 웹 빌드 결과물 (EAS Android/iOS 빌드에 불필요)
+# Node modules — EAS 가 npm install 다시 실행
+node_modules/
+**/node_modules/
+
+# 로컬 Android 빌드 산출물 (npm run android:dev 로 생긴 3.7GB)
+android/build/
+android/app/build/
+android/.gradle/
+android/.cxx/
+.android-dev/
+
+# iOS 빌드 산출물
+ios/build/
+ios/Pods/
+
+# 웹 빌드 결과물 (Android/iOS 빌드에 불필요)
 dist/
 public/
 
-# 로컬 Expo 캐시
+# Expo 캐시 / 익스포트 산출물
 .expo/
 .expo-shared/
 
-# 개발 환경
+# Visual regression test (baseline 은 git 추적 / current 는 임시)
+visual-tests/current/
+
+# 모노레포 다른 패키지 빌드 산출물
+../shared/dist/
+../server/dist/
+
+# 로컬 환경 / 캐시
 .env
 .env.local
+.cache/
+.turbo/
 
 # 에디터/OS
 .DS_Store
 *.log
+
+# Git 메타데이터
+.git/
